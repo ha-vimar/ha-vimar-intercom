@@ -183,3 +183,75 @@ class SRTPContext:
         auth_tag = self._compute_auth_tag(srtp_no_tag, self.roc)
 
         return srtp_no_tag + auth_tag
+
+
+class SRTCPContext:
+    """SRTCP per un verso solo (RFC 3711 §3.4).
+
+    Non è SRTP con un'altra chiave: cambia il formato e cambia cosa si
+    autentica. Le differenze che contano, tutte già costate a qualcuno:
+
+    * le chiavi di sessione nascono da etichette diverse — 3 cifratura,
+      4 autenticazione, 5 sale — dalla stessa chiave madre dell'``a=crypto``;
+    * l'intestazione del primo record resta in chiaro, SSRC compreso: si
+      cifra dall'ottavo byte in poi;
+    * in coda al pacchetto va una parola da 32 bit con il bit E (cifrato) e
+      un indice a 31 bit che cresce di uno a ogni pacchetto mandato e non
+      riparte quando si cambia chiave;
+    * il tag di autenticazione copre anche quella parola, e NON ci si
+      aggiunge il rollover counter come si fa in SRTP;
+    * con ``AES_CM_128_HMAC_SHA1_80`` il tag su RTCP resta di 80 bit anche
+      quando su RTP è di 32 (§5.2).
+    """
+
+    AUTH_TAG_LEN = 10
+    _E_BIT = 0x80000000
+
+    def __init__(self, master_key_b64: str):
+        raw = base64.b64decode(master_key_b64)
+        if len(raw) < 30:
+            raise ValueError(f"SRTCP key too short: {len(raw)} bytes (need 30)")
+        self.master_key = raw[:16]
+        self.master_salt = raw[16:30]
+        self.cipher_key = _kdf(self.master_key, self.master_salt, 0x03, 16)
+        self.auth_key = _kdf(self.master_key, self.master_salt, 0x04, 20)
+        self.salt = _kdf(self.master_key, self.master_salt, 0x05, 14)
+        self.index = 0
+
+    def _compute_iv(self, ssrc: int, index: int) -> bytes:
+        salt_padded = self.salt + b"\x00\x00"
+        ssrc_index = (
+            b"\x00\x00\x00\x00"
+            + ssrc.to_bytes(4, "big")
+            + index.to_bytes(6, "big")
+            + b"\x00\x00"
+        )
+        return bytes(a ^ b for a, b in zip(salt_padded, ssrc_index))
+
+    def unprotect(self, packet: bytes) -> bytes | None:
+        """SRTCP → RTCP in chiaro, oppure ``None`` se non è autentico."""
+        if len(packet) < 8 + 4 + self.AUTH_TAG_LEN:
+            return None
+        tag = packet[-self.AUTH_TAG_LEN:]
+        signed = packet[:-self.AUTH_TAG_LEN]
+        expected = hmac.new(self.auth_key, signed, hashlib.sha1).digest()[:self.AUTH_TAG_LEN]
+        if not hmac.compare_digest(tag, expected):
+            return None
+        e_index = struct.unpack("!I", signed[-4:])[0]
+        header, payload = signed[:8], signed[8:-4]
+        if not e_index & self._E_BIT:
+            return header + payload
+        ssrc = struct.unpack("!I", packet[4:8])[0]
+        iv = self._compute_iv(ssrc, e_index & ~self._E_BIT)
+        return header + _aes_cm_xor(self.cipher_key, iv, payload)
+
+    def protect(self, rtcp_packet: bytes) -> bytes:
+        """RTCP in chiaro → SRTCP, cifrato e autenticato."""
+        self.index = (self.index + 1) & 0x7FFFFFFF
+        ssrc = struct.unpack_from("!I", rtcp_packet, 4)[0]
+        header, payload = rtcp_packet[:8], rtcp_packet[8:]
+        iv = self._compute_iv(ssrc, self.index)
+        encrypted = _aes_cm_xor(self.cipher_key, iv, payload)
+        body = header + encrypted + struct.pack("!I", self._E_BIT | self.index)
+        tag = hmac.new(self.auth_key, body, hashlib.sha1).digest()[:self.AUTH_TAG_LEN]
+        return body + tag

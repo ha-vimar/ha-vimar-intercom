@@ -100,4 +100,5 @@ def test_ulaw_roundtrip_is_close():
 
 
 def test_ulaw_decode_table_len():
-    assert len(mh._ULAW_DECODE) == 256
+    from custom_components.vimar_intercom import g711
+    assert len(g711._ULAW_DECODE) == 256

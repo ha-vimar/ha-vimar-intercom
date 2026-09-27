@@ -76,3 +76,22 @@ def test_non_solleva_mai(monkeypatch):
 @pytest.mark.parametrize("vuoto", ["", None])
 def test_input_vuoto(vuoto):
     assert lr.redact(vuoto) == vuoto
+
+
+# ─── chiavi SRTP (revisione del 26/09) ───────────────────────────────────────
+
+SRTP_KEY = "WVNfX19zZW1jdGwgKCkgewkyMjA7fQp9CnVubGVz"
+
+
+def test_the_srtp_key_in_an_sdp_line_is_hidden():
+    line = f"[SDP <<<]   a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:{SRTP_KEY}"
+    out = lr.redact(line)
+    assert SRTP_KEY not in out
+    assert "AES_CM_128_HMAC_SHA1_80 inline:" in out, "the suite stays readable"
+
+
+@pytest.mark.parametrize("name", ["crypto_key", "a_srtp_key", "v_srtp_key"])
+def test_the_srtp_key_in_a_parsed_sdp_dict_is_hidden(name):
+    out = lr.redact(f"SDP: audio={{'port': 4000, '{name}': '{SRTP_KEY}'}}")
+    assert SRTP_KEY not in out
+    assert "'port': 4000" in out

@@ -23,7 +23,9 @@ Cosa viene oscurato:
   della rubrica va trattato come la password SIP;
 * le stesse chiavi tra virgolette, cioè JSON (`"token": "…"`, come in
   `action=status`) e repr di un dict (`'token': '…'`);
-* un header Authorization finito dentro una riga sola (messaggio loggato con %r).
+* un header Authorization finito dentro una riga sola (messaggio loggato con %r);
+* la chiave SRTP di un SDP (`inline:…`) e le stesse chiavi dentro un dict
+  (`'crypto_key': '…'`).
 
 Il nome della chiave resta visibile — serve a capire cosa stava succedendo —
 mentre il valore diventa `***`.
@@ -36,7 +38,8 @@ import re
 MASK = "***"
 
 # Nomi di campo che nel protocollo Vimar portano un segreto.
-_SECRET_KEYS = ("pwd", "passwd", "password", "secret", "ha1", "token", "pn-tok", "apikey", "api_key")
+_SECRET_KEYS = ("pwd", "passwd", "password", "secret", "ha1", "token", "pn-tok", "apikey", "api_key",
+                "crypto_key", "srtp_key", "a_srtp_key", "v_srtp_key", "key_b64")
 
 # La chiave può essere tra virgolette (JSON `"token": "…"`, repr di un dict
 # `'token': '…'`): la virgoletta di chiusura della chiave fa parte del gruppo 1.
@@ -56,6 +59,10 @@ _AUTH_INLINE = re.compile(
 
 # Digest sparso in una riga che non è un header completo.
 _DIGEST_FIELD = re.compile(r"(?i)\b(response|cnonce)(\s*=\s*)(\"?)([0-9a-fA-F]{8,})\3")
+
+# Chiave master SRTP in un SDP: `a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:<base64>`.
+# Con quella chiave chi legge il registro decifra audio e video della chiamata.
+_SRTP_INLINE = re.compile(r"(?i)(inline:)([A-Za-z0-9+/=]+)")
 
 # GET_INIT_STATUS_REPLY: {"PARAM":"token","VALUE":"..."}
 _PARAM_VALUE = re.compile(
@@ -84,6 +91,7 @@ def redact(text: str) -> str:
         out = _DIGEST_FIELD.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}{MASK}{m.group(3)}", out)
         out = _PARAM_VALUE.sub(lambda m: f"{m.group(1)}{MASK}{m.group(3)}", out)
         out = _VALUE_PARAM.sub(lambda m: f"{m.group(1)}{MASK}{m.group(3)}", out)
+        out = _SRTP_INLINE.sub(lambda m: f"{m.group(1)}{MASK}", out)
         return out
     except Exception:  # noqa: BLE001 - mai far fallire il logging
         return MASK

@@ -29,7 +29,9 @@ from .log_redact import redact
 
 LOGGER_NAME = "custom_components.vimar_intercom"
 LEVEL_PIN = 1
-MAX_LINES = 200
+# Deve contenere una chiamata intera: con 200 righe il traffico per-pacchetto
+# del video espelleva dal buffer proprio ciò che serve per capire un problema.
+MAX_LINES = 3000
 
 debug_log: list[str] = []
 

@@ -46,12 +46,21 @@ def _mod(name: str, **attrs) -> types.ModuleType:
 class _Any:
     """Classe jolly: accetta qualsiasi sottoclasse/attributo/chiamata."""
     def __init__(self, *a, **k): ...
+    # HA dichiara le sottoclassi con argomenti, es. ConfigFlow(domain=DOMAIN).
+    def __init_subclass__(cls, **k): ...
     def __getattr__(self, item):
         return _Any()
     def __call__(self, *a, **k):
         return _Any()
     def __iter__(self):
         return iter(())
+
+
+def _stub_symbol(module, name):
+    cache = module.__dict__.setdefault("_stub_symbols", {})
+    if name not in cache:
+        cache[name] = type(name, (_Any,), {})
+    return cache[name]
 
 
 def _stub_ha() -> None:
@@ -61,12 +70,17 @@ def _stub_ha() -> None:
     for sub in [
         "core", "config_entries", "const", "exceptions", "helpers", "helpers.entity", "helpers.entity_platform",
         "helpers.restore_state", "helpers.device_registry", "helpers.storage", "helpers.event", "helpers.aiohttp_client",
-        "helpers.config_validation", "components", "components.http", "components.camera", "components.sensor",
+        "helpers.config_validation", "helpers.service", "helpers.network", "components", "components.http", "components.http.auth",
+        "components.camera", "components.sensor",
         "components.binary_sensor", "components.switch", "components.button", "components.event", "components.lock",
-        "components.ffmpeg", "util", "util.dt",
+        "components.ffmpeg", "components.file_upload", "helpers.selector",
+        "data_entry_flow", "util", "util.dt",
     ]:
         m = _mod(f"homeassistant.{sub}")
-        m.__getattr__ = lambda name, _m=m: _Any  # type: ignore[attr-defined]
+        # Ogni nome deve dare una classe DIVERSA: restituendo sempre la stessa,
+        # una classe che eredita da due simboli stub (es. SwitchEntity e
+        # RestoreEntity) fallirebbe con "duplicate base class".
+        m.__getattr__ = lambda name, _m=m: _stub_symbol(_m, name)  # type: ignore[attr-defined]
         parent, _, child = f"homeassistant.{sub}".rpartition(".")
         setattr(sys.modules[parent], child, m)
     ha.core.HomeAssistant = _Any
@@ -75,6 +89,7 @@ def _stub_ha() -> None:
     ha.config_entries.ConfigEntry = _Any
     ha.config_entries.ConfigFlow = _Any
     ha.config_entries.OptionsFlow = _Any
+    ha.data_entry_flow.FlowResult = _Any
     ha.const.Platform = _Any()
     _mod("voluptuous", Schema=_Any, Required=_Any, Optional=_Any, All=_Any, Coerce=_Any, In=_Any, Range=_Any)
     _mod("aiohttp", web=_Any(), ClientSession=_Any)

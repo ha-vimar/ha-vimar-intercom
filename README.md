@@ -7,6 +7,8 @@
 Brings the **Vimar Elvox** video intercom (2 Fili Plus / IP / 2FV2) into Home Assistant: get the
 doorbell ring, open the door or gate, view the camera **on demand**, control **voicemail** and
 **do not disturb**, and drive your plant's **actuators** (F1/F2, stair lights, relays) as buttons.
+Optionally it also publishes the intercom to Apple Home as a video doorbell with two-way audio
+(see [HomeKit](#homekit)).
 
 > **How it actually works.** This integration does **not** use RTSP. It implements a **custom SIP
 > stack in Python/asyncio** that emulates the official **Vimar VIEW** app ("TOGA"): same `User-Agent`,
@@ -28,6 +30,7 @@ reported so far.
 | Elvox Tab 7S 2F+ WiFi | 40507 | 2F | — | local UDP | Development platform: ring, call, answer/hang up, door open, on-demand video, actuators |
 | Elvox Tab 5S UP 2 Wire WiFi | 40515 | 2FV2 | 2.1.0203 | cloud TLS | Working, reported by @CPietro — see the notes below |
 | Elvox Tab 5S UP 2 Wire WiFi | 40515 | — | — | cloud TLS | Cloud registration working after the 1.0.1 fix, reported by @gtarraran992 ([#1](../../issues/1)) |
+| Elvox Tab 7S Up | 40517 | 2FV2 | — | cloud TLS | Working, reported by @m4r1k: ring, two-way audio, video, door, HomeKit doorbell. The SGA is `61000` and the door panel is `55001`, so the door target comes from the phonebook |
 
 **What differs between plants.** Both Tab 5S reports, plus the development plant, point at the same
 practical conclusion: *what matters is the address you send to, and how much the Tab tells you back*.
@@ -58,7 +61,8 @@ everything just worked are as useful as the ones where something broke.
 - ffmpeg on the Home Assistant host (declared in the manifest) for the camera.
 - The plant's **pairing QR code** (from the VIEW app) **or** the SIP parameters entered by hand
   (id, password, domain, cloud proxy).
-- Python requirements: only `pycryptodome` and `requests` — no external SIP library, the stack is custom.
+- Python requirements, installed by Home Assistant: `pycryptodome` and `requests`, plus `HAP-python`
+  and `PyQRCode` for the optional HomeKit doorbell. There is no external SIP library; the stack is custom.
 
 ---
 
@@ -72,10 +76,6 @@ everything just worked are as useful as the ones where something broke.
 ### Manual
 Copy `custom_components/vimar_intercom/` into your Home Assistant `config/custom_components/` folder
 and restart.
-
-> **If you reinstall or update by hand**: `__init__.py` and `sip_client.py` carry local logging
-> patches (not present upstream — see the *Logging* section below). If you overwrite those files with
-> a copy from somewhere else, reapply the patches: outside HACS nothing preserves them for you.
 
 ---
 
@@ -98,14 +98,18 @@ Settings → Vimar Intercom → **Configure**:
 | **Use local SIP UDP** (`use_local_udp`) | ON = local UDP; OFF = cloud TLS |
 | **Local UDP port** (`local_udp_port`) | default 5060 |
 | **Actuators (JSON)** (`actuators`) | JSON list of `{name, msg, target, icon}`; creates dynamic buttons. Empty = no buttons |
-| **SGA** (`sga_target`) | Recipient of `VOICEMAIL;`/`DND;` and of the "AUTO" door open. Empty = default `55001` |
+| **SGA** (`sga_target`) | Recipient of `VOICEMAIL;`/`DND;`. Empty = default `55001` |
 | **PICG** (`picg_target`) | Recipient of `GET_INIT_STATUS`. On every plant verified so far it matches the SGA. Empty = default `55001` |
+| **Video panel** (`camera_target`) | Panel called to open the video with no call in progress. Empty = `55100`; if that panel does not exist, the integration tries the panel that last rang and remembers it |
+| **Door panel** (`door_target`) | Panel that receives the door command: the `GID_PE` of the door actuator in the phonebook. Empty = the door actuator's panel if actuators were imported, otherwise the SGA |
 
-The actuator list and the SGA/PICG values come from your plant's **phonebook** (`rubrica.db`): in the
-options menu pick **"Import actuators from rubrica.db"**, upload the file (you can get it through the
-VIEW app or with root access, see `docs/RUBRICA.md`) and confirm — actuators, SGA and PICG are then
-set automatically. You can also enter the values by hand in the "Settings" step, which is handy if you
-already know your plant's SGA or want to tweak the imported actuator list.
+Most of these come from your plant's **phonebook**. In the options menu, **"Download the phonebook
+from the intercom"** asks the Tab for it over the LAN with the SIP credentials you already have;
+**"Import actuators from rubrica.db"** takes a file you extracted yourself (see `docs/RUBRICA.md`).
+Confirming either one sets the actuators, the SGA, the PICG and the door panel. You can still edit the
+values by hand in the "Settings" step.
+
+The **HomeKit** page of the options turns the Apple Home doorbell on or off and picks the video mode.
 
 ---
 
@@ -115,9 +119,9 @@ already know your plant's SGA or want to tweak the imported actuator list.
 |---|---|---|
 | Intercom | `camera` | **On-demand** video: opening the stream makes the hub place the SIP call, and the H.264 RTP video is decoded to MJPEG through ffmpeg (no RTSP) |
 | Doorbell | `event` | `event` entity (device class DOORBELL), event type `ring`, fired on ring (incoming INVITE) |
-| Lock | `lock` | Opens the door (`OPEN_2F` → outdoor unit); auto-relocks after 5 s (there is no physical feedback) |
+| Lock | `lock` | Opens the door (`OPEN_2F` to the door panel); auto-relocks after 5 s (there is no physical feedback) |
 | Call | `button` | SIP call to the default outdoor unit |
-| Call Video (outdoor) / Call Home (indoor) | `button` | Call to 55001 / 55002 |
+| Call Video (outdoor) / Call Home (indoor) | `button` | Call to the SGA / to 55002 |
 | Answer / Hang up | `button` | Answer (200 OK) / end the call (BYE) |
 | Open Door | `button` | `OPEN_2F` to the outdoor unit |
 | *Dynamic actuators* | `button` | One per entry in `options["actuators"]` (F1/F2, stair lights, relays…); sends `MSG` with `Panda: command` |
@@ -143,12 +147,12 @@ already know your plant's SGA or want to tweak the imported actuator list.
 
 | Service | Description | Fields |
 |---|---|---|
-| `vimar_intercom.send_command` | Arbitrary SIP MESSAGE (for testing) | `body`, `target`, `header_name`, `header_value` |
+| `vimar_intercom.send_command` | Arbitrary SIP MESSAGE (for testing). Administrators only | `body`, `target`, `header_name`, `header_value` |
 | `vimar_intercom.call` | SIP call to an outdoor unit or monitor | `target` |
 | `vimar_intercom.answer` | Answers the incoming call | — |
 | `vimar_intercom.hangup` | Ends the active call | — |
 | `vimar_intercom.open_door` | Door open command (`OPEN_2F`) | `target`, `command` |
-| `vimar_intercom.fetch_local` | HTTP Digest GET against the Tab's local interface (home mode) | `path`, `save_as`, `host`, `scheme` |
+| `vimar_intercom.fetch_local` | HTTP Digest GET against the Tab's local interface (home mode). Administrators only; private addresses only; files land in `config/vimar_intercom/` | `path`, `save_as`, `host`, `scheme` |
 
 Example (Developer tools → Actions):
 
@@ -207,15 +211,36 @@ automation:
             image: "/api/camera_proxy/camera.vimar_intercom_intercom"
 ```
 
-⚠ **Don't add `camera.snapshot` to it.** It appears to work — the service call succeeds — but it
-writes no file and logs nothing, because the camera entity cannot produce an image on current code
-([#8](../../issues/8)). `camera.record` doesn't work either: it needs the `stream` integration, which
-an MJPEG camera doesn't provide. And don't work around it with a `camera: platform: ffmpeg` pointed
-at `/api/vimar_intercom/av`: that hangs Home Assistant until the ffmpeg probe times out. The package
-file carries the same warnings, with the details.
+The camera image is the last frame saved during a call, or a placeholder if there has been no call
+since Home Assistant started. At ring time that frame usually comes from the previous call, so
+`camera.snapshot` in a ring automation does not show who is at the door. `camera.record` needs the
+`stream` integration, which this camera does not provide. Don't point a `camera: platform: ffmpeg` at
+`/api/vimar_intercom/av`: the endpoint needs Home Assistant authentication, and without an active call
+the ffmpeg probe hangs until it times out.
 
 `docs/lovelace_example.yaml` has a basic Lovelace card with the answer / open door / hang up buttons.
-Note that the video pane in it stays empty for the same reason as above.
+
+---
+
+## HomeKit
+
+The integration can publish the intercom to Apple Home as its own video doorbell: ring notification,
+live video, two-way audio, and the gate as a lock in the same accessory. It is off by default.
+
+1. Settings → Devices & services → Vimar Intercom → Configure → **HomeKit** → turn on
+   **Publish to HomeKit**.
+2. A notification with a QR code and an 8-digit code appears. In the Home app choose **Add
+   Accessory** and scan it. iOS warns that the accessory is not certified; choose **Add Anyway**.
+3. In the accessory settings, **Show as Separate Tiles** makes the gate reachable from the live view.
+
+**Smoother video (re-encode)** is on by default. The cloud relay drops a few packets in every hundred,
+and the panel ignores keyframe requests, so a direct stream can freeze for up to 3 seconds after a
+loss. With re-encoding on, Home Assistant sends a keyframe every second: opening takes about half a
+second longer and costs some CPU. Turn it off for the fastest opening on a clean local network.
+
+Home Assistant's own HomeKit bridge cannot do the talk direction: its doorbell advertises a speaker
+but never listens on the port it gives the phone. If you exposed the intercom camera through the bridge
+before, remove it from there. `docs/HOMEKIT.md` has the details.
 
 ## Known limitations
 
@@ -241,40 +266,32 @@ Note that the video pane in it stays empty for the same reason as above.
 
 ## Logging
 
-The component keeps an internal circular buffer (`_debug_log`, in `__init__.py`) for its own
-diagnostics, and raises its logger to `DEBUG` to fill it. By default that would propagate every
-`DEBUG` line to the Home Assistant log too, overriding the level set in `logger:` in
-`configuration.yaml` (Python loggers propagate to the root).
+The component keeps its own circular buffer (the last 3000 lines, `DEBUG` included), readable by
+administrators at `/api/vimar_intercom/debug`. The Home Assistant log gets `WARNING` and above by
+default. To see more there, set the level in `configuration.yaml`:
 
-The patch: the `custom_components.vimar_intercom` logger stays at `DEBUG` for the internal buffer, but
-with `propagate = False`; a dedicated handler forwards only `WARNING` and above to the HA log. Result:
-internal diagnostics intact, HA log clean.
+```yaml
+logger:
+  logs:
+    custom_components.vimar_intercom: debug
+```
 
-**"Stale response 407" on the SIP keepalive**: the periodic OPTIONS (`_send_options_ping` in
-`sip_client.py`) did not register its own Call-ID among the expected responses, so the proxy's reply
-(typically a `407`) was logged as `WARNING "Stale response ..."` even though it is the normal outcome
-of the keepalive. `_dispatch_message` now recognises Call-IDs prefixed with `ping-` and logs them at
-`DEBUG` instead. With this fix and the one above, **no** `logger:` filter in `configuration.yaml` is
-needed any more to silence these messages.
-
-**Known limitation**: the trade-off cuts both ways. Because the component keeps its own logger at
-`DEBUG` and forwards only `WARNING` and above, setting
-`logger: logs: custom_components.vimar_intercom: debug` in `configuration.yaml` will *not* put this
-component's `DEBUG` lines in the Home Assistant log — read them from
-`/api/vimar_intercom/debug` instead. Making the forwarded level configurable is on the list.
-
-If you update `__init__.py` or `sip_client.py` from an external source (not HACS, not versioned for
-this component), check that both patches are still in place — see the note under
-*Installation → Manual*.
+Both destinations mask passwords, digest responses, phonebook tokens and SRTP keys before writing.
 
 ---
 
 ## Security
 
-- SIP credentials (password / `ha1`) are stored **encrypted** in the Home Assistant config entry, never
-  in plain text in the repo.
-- Internal HTTP endpoints: `/video` and `/av` are **LAN-only** (`_is_local_request`); the `/audio_ws`
-  WebSocket requires Home Assistant authentication. The QR payload is never logged at INFO level.
+- SIP credentials (password and `ha1`) are stored in the Home Assistant config entry under
+  `.storage`, in plain text like every other integration's secrets. They are never logged.
+- `/av` requires Home Assistant authentication and a request from the local network. Home Assistant's
+  own ffmpeg reaches it through a signed URL. The `/audio_ws` WebSocket requires authentication; its
+  maintenance actions (raw commands, scans, re-registration) are for administrators only.
+- `/api/vimar_intercom/debug`, `send_command` and `fetch_local` are for administrators only.
+- The HomeKit pairing code is stored with mode 0600, and the QR link stops working once the accessory
+  is paired.
+- In local UDP mode the integration only accepts SIP from the configured intercom, and plain RTP only
+  from the other end of the current call.
 - No mandatory cloud dependency when running in local UDP mode.
 
 ---

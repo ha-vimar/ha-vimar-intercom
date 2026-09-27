@@ -57,19 +57,15 @@ automation:
 # =============================================================================
 #  PERCHÉ QUI NON C'È LO SNAPSHOT
 #
-#  Verrebbe naturale aggiungere `camera.snapshot` allo squillo. Non funziona, e
-#  fallisce nel modo peggiore: senza errori. `hub.video_frame` restituisce
-#  sempre None da quando il video viene inviato come NAL H.264 sul WebSocket, e
-#  Home Assistant, quando l'immagine è None, esce senza scrivere il file e senza
-#  loggare niente. Il risultato è un'automazione che sembra funzionare per
-#  settimane e non ha mai salvato un solo file. Vedi issue #8.
+#  `camera.snapshot` scrive l'ultimo fotogramma salvato durante una chiamata.
+#  Allo squillo quel fotogramma è di solito della chiamata precedente: un file
+#  c'è, ma non mostra chi sta suonando adesso.
 #
-#  `camera.record` non funziona per un motivo diverso: richiede l'integrazione
-#  `stream`, che una camera MJPEG non fornisce.
+#  `camera.record` richiede l'integrazione `stream`, che questa camera non
+#  fornisce.
 #
 #  NON aggiungere una `camera: platform: ffmpeg` puntata su
-#  /api/vimar_intercom/av per aggirare il problema: la piattaforma ffmpeg sonda
-#  l'input quando viene caricata, l'endpoint senza una chiamata attiva tiene la
-#  connessione aperta senza mandare dati, e Home Assistant smette di rispondere
-#  finché la sonda non scade (circa un minuto, provato sul campo).
+#  /api/vimar_intercom/av: l'endpoint vuole l'autenticazione di Home Assistant,
+#  e senza una chiamata attiva la sonda di ffmpeg resta appesa finché non
+#  scade (circa un minuto, provato sul campo).
 # =============================================================================

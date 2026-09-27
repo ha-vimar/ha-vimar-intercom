@@ -7,6 +7,8 @@
 Integra il videocitofono **Vimar Elvox** (2 Fili Plus / IP / 2FV2) in Home Assistant: ricevi lo
 squillo, apri la porta/cancello, guarda la camera **su richiesta**, comanda **segreteria** e
 **non disturbare**, e usa gli **attuatori** del tuo impianto (F1/F2, luci scala, relè) come bottoni.
+Se vuoi, pubblica anche il citofono nell'app Casa di Apple come videocitofono con audio nei due sensi
+(vedi [HomeKit](#homekit)).
 
 > **Come funziona davvero.** Questa integrazione **non** usa RTSP. Implementa uno **stack SIP
 > custom in Python/asyncio** che emula l'app ufficiale **Vimar VIEW** ("TOGA"): stesso `User-Agent`,
@@ -27,6 +29,7 @@ riporta quello che è stato effettivamente segnalato finora.
 | Elvox Tab 7S 2F+ WiFi | 40507 | 2F | — | UDP locale | Piattaforma di sviluppo: squillo, chiamata, rispondi/riaggancia, apri porta, video on-demand, attuatori |
 | Elvox Tab 5S UP 2 Wire WiFi | 40515 | 2FV2 | 2.1.0203 | TLS cloud | Funzionante, segnalato da @CPietro — vedi note sotto |
 | Elvox Tab 5S UP 2 Wire WiFi | 40515 | — | — | TLS cloud | Registrazione cloud OK dopo la fix 1.0.1, segnalato da @gtarraran992 ([#1](../../issues/1)) |
+| Elvox Tab 7S Up | 40517 | 2FV2 | — | TLS cloud | Funzionante, segnalato da @m4r1k: squillo, audio nei due sensi, video, porta, videocitofono HomeKit. L'SGA è `61000` e la porta la apre la targa `55001`: la targa della porta si prende dalla rubrica |
 
 **Cosa cambia da impianto a impianto.** Le due segnalazioni sui Tab 5S, messe accanto all'impianto di
 sviluppo, portano alla stessa conclusione pratica: *conta l'indirizzo a cui mandi il comando, e quanto
@@ -59,7 +62,8 @@ i casi in cui ha funzionato tutto al primo colpo sono utili quanto quelli in cui
 - ffmpeg sull'host HA (dipendenza dichiarata nel manifest) per la camera.
 - Il **QR di abbinamento** dell'impianto Vimar (dall'app VIEW) **oppure** i parametri SIP manuali
   (id, password, domain, cloud proxy).
-- Requisiti Python: solo `pycryptodome` e `requests` (nessuna libreria SIP esterna: lo stack è custom).
+- Requisiti Python, installati da Home Assistant: `pycryptodome` e `requests`, più `HAP-python` e
+  `PyQRCode` per il videocitofono HomeKit facoltativo. Nessuna libreria SIP esterna: lo stack è custom.
 
 ---
 
@@ -72,11 +76,6 @@ i casi in cui ha funzionato tutto al primo colpo sono utili quanto quelli in cui
 
 ### Manuale
 Copia `custom_components/vimar_intercom/` nella cartella `config/custom_components/` di HA e riavvia.
-
-> **Nota per chi reinstalla/aggiorna a mano**: `__init__.py` e `sip_client.py` contengono patch
-> locali sul logging (non presenti upstream — vedi sezione *Logging* più sotto). Se sovrascrivi
-> questi file con una versione presa da un'altra fonte, riapplica le patch: senza HACS non c'è
-> nulla che le preservi automaticamente.
 
 ---
 
@@ -99,14 +98,19 @@ Impostazioni → Vimar Intercom → **Configura**:
 | **Usa SIP UDP locale** (`use_local_udp`) | ON = UDP locale; OFF = TLS cloud |
 | **Porta UDP locale** (`local_udp_port`) | default 5060 |
 | **Attuatori (JSON)** (`actuators`) | lista JSON `{name, msg, target, icon}`; crea bottoni dinamici. Vuoto = nessun bottone |
-| **SGA** (`sga_target`) | destinatario di `VOICEMAIL;`/`DND;` e dell'apri‑porta "AUTO". Vuoto = default `55001` |
+| **SGA** (`sga_target`) | destinatario di `VOICEMAIL;`/`DND;`. Vuoto = default `55001` |
 | **PICG** (`picg_target`) | destinatario di `GET_INIT_STATUS`. Sugli impianti verificati coincide con l'SGA. Vuoto = default `55001` |
+| **Targa video** (`camera_target`) | targa chiamata per aprire il video senza una chiamata in corso. Vuoto = `55100`; se quella targa non esiste, l'integrazione prova la targa che ha suonato l'ultima volta e se la ricorda |
+| **Targa che apre la porta** (`door_target`) | targa a cui va il comando di apertura: il `GID_PE` dell'attuatore porta nella rubrica. Vuoto = la targa dell'attuatore porta se gli attuatori sono stati importati, altrimenti l'SGA |
 
-Gli attuatori e i valori SGA/PICG si ricavano dalla **rubrica dell'impianto** (`rubrica.db`): dal menu
-delle opzioni scegli **"Importa attuatori da rubrica.db"**, carica il file (lo trovi con l'app VIEW o
-via root, vedi `docs/RUBRICA.md`) e conferma — attuatori, SGA e PICG vengono impostati in automatico.
-In alternativa puoi inserire i valori a mano nello step "Impostazioni" (utile se conosci già l'SGA del
-tuo impianto o vuoi modificare la lista attuatori prodotta dall'import).
+Quasi tutti questi valori vengono dalla **rubrica dell'impianto**. Nel menu delle opzioni, **"Scarica la
+rubrica dal citofono"** la chiede al Tab in rete locale con le credenziali SIP che hai già;
+**"Importa attuatori da rubrica.db"** usa un file estratto da te (vedi `docs/RUBRICA.md`). Confermando
+l'una o l'altra si impostano attuatori, SGA, PICG e targa della porta. Puoi comunque correggere i
+valori a mano nello step "Impostazioni".
+
+La pagina **HomeKit** delle opzioni accende o spegne il videocitofono nell'app Casa e sceglie il modo
+del video.
 
 ---
 
@@ -116,9 +120,9 @@ tuo impianto o vuoi modificare la lista attuatori prodotta dall'import).
 |---|---|---|
 | Intercom (Videocitofono) | `camera` | Video **on‑demand**: aprendo lo stream l'hub avvia la chiamata SIP, il video RTP H.264 viene decodificato via ffmpeg in MJPEG (no RTSP) |
 | Doorbell (Campanello) | `event` | Entità `event` (device_class DOORBELL), event_type `ring`, allo squillo (INVITE in arrivo) |
-| Serratura | `lock` | Apri porta (`OPEN_2F` → targa); auto‑relock dopo 5 s (nessun feedback fisico) |
+| Serratura | `lock` | Apri porta (`OPEN_2F` alla targa della porta); auto‑relock dopo 5 s (nessun feedback fisico) |
 | Chiama | `button` | Chiamata SIP verso la targa di default |
-| Chiama Video (esterno) / Chiama Casa (interno) | `button` | Chiamata verso 55001 / 55002 |
+| Chiama Video (esterno) / Chiama Casa (interno) | `button` | Chiamata verso l'SGA / verso 55002 |
 | Rispondi / Riaggancia | `button` | Rispondi (200 OK) / termina (BYE) |
 | Apri Porta | `button` | `OPEN_2F` verso la targa |
 | *Attuatori dinamici* | `button` | Uno per voce in `options["actuators"]` (F1/F2, luci scala, relè…); invia `MSG` con `Panda: command` |
@@ -144,12 +148,12 @@ tuo impianto o vuoi modificare la lista attuatori prodotta dall'import).
 
 | Servizio | Descrizione | Campi |
 |---|---|---|
-| `vimar_intercom.send_command` | SIP MESSAGE arbitrario (per test) | `body`, `target`, `header_name`, `header_value` |
+| `vimar_intercom.send_command` | SIP MESSAGE arbitrario (per test). Solo amministratori | `body`, `target`, `header_name`, `header_value` |
 | `vimar_intercom.call` | Chiamata SIP verso una targa/monitor | `target` |
 | `vimar_intercom.answer` | Risponde alla chiamata in arrivo | — |
 | `vimar_intercom.hangup` | Termina la chiamata attiva | — |
 | `vimar_intercom.open_door` | Comando di apertura (`OPEN_2F`) | `target`, `command` |
-| `vimar_intercom.fetch_local` | GET HTTP Digest verso l'interfaccia locale del Tab (home mode) | `path`, `save_as`, `host`, `scheme` |
+| `vimar_intercom.fetch_local` | GET HTTP Digest verso l'interfaccia locale del Tab (home mode). Solo amministratori; solo indirizzi privati; i file finiscono in `config/vimar_intercom/` | `path`, `save_as`, `host`, `scheme` |
 
 Esempio (Strumenti per sviluppatori → Azioni):
 
@@ -208,15 +212,39 @@ automation:
             image: "/api/camera_proxy/camera.vimar_intercom_intercom"
 ```
 
-⚠ **Non aggiungerci `camera.snapshot`.** Sembra funzionare — la chiamata al servizio riesce — ma non
-scrive nessun file e non logga niente, perché sulla versione attuale l'entità camera non può produrre
-immagini ([#8](../../issues/8)). Nemmeno `camera.record` funziona: richiede l'integrazione `stream`,
-che una camera MJPEG non fornisce. E non aggirare il problema con una `camera: platform: ffmpeg`
-puntata su `/api/vimar_intercom/av`: blocca Home Assistant finché la sonda di ffmpeg non scade. Gli
-stessi avvisi, con i dettagli, sono dentro il file del package.
+L'immagine della camera è l'ultimo fotogramma salvato durante una chiamata, o un'immagine d'attesa se
+da quando Home Assistant è partito non ce ne sono state. Al momento dello squillo quel fotogramma viene
+di solito dalla chiamata precedente, quindi `camera.snapshot` in un'automazione di squillo non mostra
+chi è alla porta. `camera.record` richiede l'integrazione `stream`, che questa camera non fornisce. Non
+puntare una `camera: platform: ffmpeg` su `/api/vimar_intercom/av`: l'endpoint vuole l'autenticazione
+di Home Assistant, e senza una chiamata attiva la sonda di ffmpeg resta appesa finché non scade.
 
 In `docs/lovelace_example.yaml` c'è una card Lovelace di base con i pulsanti rispondi / apri porta /
-riaggancia. Il riquadro del video, per lo stesso motivo di sopra, resta vuoto.
+riaggancia.
+
+---
+
+## HomeKit
+
+L'integrazione può pubblicare il citofono nell'app Casa come videocitofono suo: notifica di squillo,
+video dal vivo, audio nei due sensi e il cancello come serratura nello stesso accessorio. Di serie è
+spento.
+
+1. Impostazioni → Dispositivi e servizi → Vimar Intercom → Configura → **HomeKit** → accendi
+   **Pubblica in HomeKit**.
+2. Compare una notifica con un QR e un codice di 8 cifre. Nell'app Casa scegli **Aggiungi accessorio**
+   e inquadralo. iOS avvisa che l'accessorio non è certificato: scegli **Aggiungi comunque**.
+3. Nelle impostazioni dell'accessorio, **Mostra come riquadri separati** rende raggiungibile il
+   cancello dalla vista dal vivo.
+
+**Video più fluido (ricodifica)** è acceso di serie. Il relay cloud perde qualche pacchetto ogni cento
+e la targa ignora le richieste di keyframe, quindi un video diretto può fermarsi fino a 3 secondi dopo
+una perdita. Con la ricodifica Home Assistant manda un keyframe al secondo: l'apertura richiede circa
+mezzo secondo in più e un po' di CPU. Spegnila per l'apertura più veloce su una rete locale pulita.
+
+Il ponte HomeKit di Home Assistant non riesce a far parlare verso la strada: il suo campanello
+dichiara un altoparlante ma non ascolta sulla porta che comunica al telefono. Se avevi esposto la
+camera del citofono tramite il ponte, toglila da lì. I dettagli sono in `docs/HOMEKIT.md`.
 
 ## Limiti noti
 
@@ -240,40 +268,33 @@ riaggancia. Il riquadro del video, per lo stesso motivo di sopra, resta vuoto.
 
 ## Logging
 
-Il componente tiene un buffer circolare interno (`_debug_log`, in `__init__.py`) per la propria
-diagnostica, e per riempirlo alza il proprio logger a `DEBUG`. Di base questo farebbe propagare
-ogni riga `DEBUG` anche al log di Home Assistant, scavalcando il livello impostato in `logger:`
-nella `configuration.yaml` (i logger Python propagano al root).
+Il componente tiene un buffer circolare suo (le ultime 3000 righe, `DEBUG` compreso), che gli
+amministratori leggono da `/api/vimar_intercom/debug`. Il log di Home Assistant riceve di serie
+`WARNING` e oltre. Per vederne di più, imposta il livello in `configuration.yaml`:
 
-Patch applicata: il logger `custom_components.vimar_intercom` resta a `DEBUG` per il buffer interno,
-ma con `propagate = False`; un handler dedicato inoltra al log HA solo gli eventi `WARNING` e oltre.
-Risultato: diagnostica interna intatta, log HA pulito.
+```yaml
+logger:
+  logs:
+    custom_components.vimar_intercom: debug
+```
 
-**"Stale response 407" nel keepalive SIP**: l'OPTIONS periodico (`_send_options_ping` in
-`sip_client.py`) non registra il proprio Call-ID tra le risposte attese, quindi la risposta del
-proxy (tipicamente un `407`) veniva loggata come `WARNING "Stale response ..."` anche se è l'esito
-normale del keepalive. `_dispatch_message` ora riconosce i Call-ID con prefisso `ping-` e li logga
-a `DEBUG` invece che `WARNING`. Con questa fix + quella sopra, **non serve più** alcun filtro
-`logger:` in `configuration.yaml` per silenziare questi messaggi.
-
-**Limite noto**: il compromesso vale in entrambe le direzioni. Poiché il componente tiene il proprio
-logger a `DEBUG` e inoltra solo `WARNING` e oltre, impostare
-`logger: logs: custom_components.vimar_intercom: debug` in `configuration.yaml` **non** farà comparire
-le righe `DEBUG` di questo componente nel log di Home Assistant: si leggono da
-`/api/vimar_intercom/debug`. Rendere configurabile il livello inoltrato è nella lista delle cose da
-fare.
-
-Se aggiorni `__init__.py` o `sip_client.py` da una fonte esterna (non HACS, non versionato per
-questo componente), ricontrolla che entrambe le patch siano ancora presenti (vedi nota in
-*Installazione → Manuale*).
+Entrambe le destinazioni oscurano password, risposte digest, token della rubrica e chiavi SRTP prima
+di scrivere.
 
 ---
 
 ## Sicurezza
 
-- Credenziali SIP (password/`ha1`) memorizzate **cifrate** nella config entry di HA, mai in chiaro nel repo.
-- Endpoint HTTP interni: `/video` e `/av` sono filtrati **solo LAN** (`_is_local_request`); il WebSocket
-  `/audio_ws` richiede autenticazione HA. Il payload del QR non viene loggato a livello INFO.
+- Le credenziali SIP (password e `ha1`) stanno nella config entry di Home Assistant, sotto `.storage`,
+  in chiaro come i segreti di ogni altra integrazione. Non finiscono mai nei log.
+- `/av` richiede l'autenticazione di Home Assistant e una richiesta dalla rete locale; l'ffmpeg di Home
+  Assistant ci arriva con un URL firmato. Il WebSocket `/audio_ws` richiede l'autenticazione, e le sue
+  azioni di manutenzione (comandi grezzi, scansioni, nuova registrazione) sono solo per amministratori.
+- `/api/vimar_intercom/debug`, `send_command` e `fetch_local` sono solo per amministratori.
+- Il codice di abbinamento HomeKit è salvato con permessi 0600, e il link del QR smette di funzionare
+  appena l'accessorio è abbinato.
+- In UDP locale l'integrazione accetta SIP solo dal citofono configurato, e RTP in chiaro solo dalla
+  controparte della chiamata in corso.
 - Nessuna dipendenza cloud obbligatoria in modalità UDP locale.
 
 ---

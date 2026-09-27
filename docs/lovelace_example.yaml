@@ -2,12 +2,9 @@
 # Vimar Intercom — card Lovelace "citofono base"
 # Video del pianerottolo + pulsanti Rispondi / Apri porta / Riaggancia.
 #
-# ⚠ ATTENZIONE, leggi prima di aspettarti il video: sulla versione attuale la
-# card `picture-entity` qui sotto NON mostra nulla. L'entità camera non produce
-# immagini né stream MJPEG, perché il video viaggia come NAL H.264 sul WebSocket
-# e il percorso JPEG non è più alimentato (issue #8). La card resta utile per i
-# pulsanti e per lo stato; il riquadro del video sarà vuoto finché la questione
-# non è risolta.
+# Il riquadro della camera mostra l'ultimo fotogramma salvato, aggiornato una
+# volta al secondo: durante una chiamata segue il video, fuori dalle chiamate
+# resta sull'ultima immagine (o su quella d'attesa). Aprirlo non chiama nessuno.
 #
 # NB: questa card non fa nemmeno audio bidirezionale (parlare): l'audio a 2 vie
 # richiede una card custom su /audio_ws.
@@ -19,7 +16,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 type: vertical-stack
 cards:
-  # Video live del citofono (MJPEG). Durante la chiamata mostra il pianerottolo.
+  # Il pianerottolo: un fotogramma al secondo durante la chiamata.
   - type: picture-entity
     entity: camera.vimar_intercom_intercom
     camera_view: live

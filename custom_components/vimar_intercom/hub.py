@@ -8,21 +8,26 @@ from datetime import datetime, timezone
 
 from . import sip_client as sip
 from . import media_handler as media
-from . import push_sender
 from . import const as C
 from . import runtime as R
+from .hub_messages import SIP_ID_NAMES, HubMessagesMixin, sip_id_name  # noqa: F401
 
 _LOGGER = logging.getLogger(__name__)
 
 STREAM_HANGUP_DELAY = 30
-
-# Nomi "umani" degli indirizzi SIP dell'impianto
-SIP_ID_NAMES = {
-    "55001": "Targa Esterna",
-    "55002": "Targa Interna",
-    "60001": "Monitor Interno",
-}
-
+# Una chiamata a cui si è risposto aprendo la vista finisce quando la vista si
+# chiude: nell'app Casa non c'è un altro modo per riagganciare. Pochi secondi
+# bastano a coprire una riapertura immediata.
+ANSWERED_HANGUP_DELAY = 2
+# Quanto si concede all'ffmpeg di HomeKit per farsi vedere, prima di
+# concludere che quella sessione non è mai partita.
+HOMEKIT_WATCH_START = 8.0
+# Quanto si aspetta che un riaggancio in corso finisca, prima di
+# aprire una vista nuova. Sopra il tempo di una transazione BYE.
+HANGUP_SETTLE = 6.0
+# Ogni quanto si tiene viva la connessione verso il relay. Il rinnovo della
+# registrazione non passa da qui: lo decide la durata concessa dal registrar.
+KEEPALIVE_INTERVAL = 60
 
 def sip_uri(target) -> str:
     """URI SIP per un target dell'impianto, rifiutando i newline.
@@ -46,10 +51,6 @@ def _uri_to_id(uri: str | None) -> str | None:
     return u.split("@")[0].split(";")[0] or None
 
 
-def sip_id_name(sip_id: str | None) -> str | None:
-    if not sip_id:
-        return None
-    return SIP_ID_NAMES.get(sip_id, sip_id)
 MAX_CALL_DURATION = 300  # 5 minutes — auto-hangup safety net
 
 # Interni interrogati con un OPTIONS all'avvio per farsi identificare dal
@@ -58,7 +59,7 @@ MAX_CALL_DURATION = 300  # 5 minutes — auto-hangup safety net
 MODEL_PROBE_TARGETS = ("55001", "55002", "60001")
 
 
-class VimarIntercomHub:
+class VimarIntercomHub(HubMessagesMixin):
     """Orchestrates SIP registration, calls, door control, and media."""
 
     def __init__(self):
@@ -66,14 +67,25 @@ class VimarIntercomHub:
         self._running = False
         self._ring_callbacks: list[Callable] = []
         self._state_callbacks: list[Callable] = []
+        self._call_end_callbacks: list[Callable] = []
+        self._ring_end_callbacks: list[Callable] = []
+        # Salva nell'entry ciò che l'hub impara dall'impianto (vedi __init__).
+        self._persist: Callable[[dict], None] | None = None
+        # L'ultima targa che ha suonato: è una targa video che risponde.
+        self._last_ring_panel: str | None = None
         self._model_callbacks: list[Callable] = []
         self._ws_broadcast_fn: Callable | None = None
-        self._has_ws_clients: Callable | None = None
         self._stream_viewers = 0
+        self._hanging_up = False
+        # I processi ffmpeg della sessione HomeKit in corso, per poter chiudere
+        # quelli e soltanto quelli.
+        self._homekit_pids: set[int] = set()
         self._hangup_task: asyncio.Task | None = None
         self._call_timeout_task: asyncio.Task | None = None
         self._keyframe_task: asyncio.Task | None = None
         self._auto_called = False
+        # Chiamata dal citofono a cui si è risposto aprendo una vista.
+        self._answered_call = False
         self._auto_call_target: str | None = None
 
         # ─── Statistiche / stato esteso (esposte da sensor.py) ───────────
@@ -196,12 +208,31 @@ class VimarIntercomHub:
         return sip.in_call
 
     @property
-    def is_ringing(self) -> bool:
-        return sip.pending_incoming["active"]
+    def video_available(self) -> bool:
+        """Se da questo impianto ci si può aspettare del video.
+
+        Alcuni posti esterni sono solo citofoni: microfono e altoparlante, e
+        nessuna telecamera. In quel caso la telecamera in Home Assistant non
+        deve fingere di esistere.
+        """
+        if not getattr(R, "VIDEO_ENABLED", True):
+            return False
+        if sip.in_call:
+            return media.has_video
+        return True
 
     @property
-    def video_frame(self) -> bytes | None:
-        return None  # Video sent directly via WebSocket H.264 NALs
+    def devices(self) -> list[dict]:
+        """I dispositivi dell'impianto visti finora sul canale SIP."""
+        return sip.DEVICES.snapshot()
+
+    @property
+    def devices_summary(self) -> list[str]:
+        return sip.DEVICES.describe(SIP_ID_NAMES)
+
+    @property
+    def is_ringing(self) -> bool:
+        return sip.pending_incoming["active"]
 
     def register_ring_callback(self, callback: Callable) -> None:
         self._ring_callbacks.append(callback)
@@ -217,6 +248,26 @@ class VimarIntercomHub:
     def unregister_state_callback(self, callback: Callable) -> None:
         if callback in self._state_callbacks:
             self._state_callbacks.remove(callback)
+
+    def register_call_end_callback(self, callback: Callable) -> None:
+        """Registra un callback() chiamato quando una chiamata finisce."""
+        self._call_end_callbacks.append(callback)
+
+    def unregister_call_end_callback(self, callback: Callable) -> None:
+        if callback in self._call_end_callbacks:
+            self._call_end_callbacks.remove(callback)
+
+    def set_persist_callback(self, callback: Callable[[dict], None]) -> None:
+        """Chi salva nell'entry i valori imparati dall'impianto."""
+        self._persist = callback
+
+    def register_ring_end_callback(self, callback: Callable) -> None:
+        """Registra un callback() chiamato quando uno squillo finisce senza risposta."""
+        self._ring_end_callbacks.append(callback)
+
+    def unregister_ring_end_callback(self, callback: Callable) -> None:
+        if callback in self._ring_end_callbacks:
+            self._ring_end_callbacks.remove(callback)
 
     def register_event_callback(self, callback: Callable) -> None:
         """Registra un callback(event_type: str, data: dict) per gli eventi
@@ -303,52 +354,149 @@ class VimarIntercomHub:
             self._hangup_task.cancel()
             self._hangup_task = None
 
+        # Se un riaggancio è in corso, quella chiamata sta morendo: attaccarsi
+        # a lei significa vedersela chiudere sotto un attimo dopo. Si aspetta
+        # che sia finita e se ne fa una nuova.
+        waited = 0.0
+        while getattr(self, "_hanging_up", False) and waited < HANGUP_SETTLE:
+            await asyncio.sleep(0.05)
+            waited += 0.05
+        if waited:
+            _LOGGER.info("Riaggancio in corso: attesi %.1fs prima di richiamare", waited)
+
         if sip.in_call or sip.calling:
             return
 
-        # Don't auto-call when iOS app WS clients are connected —
-        # the app sends the call action explicitly via WebSocket.
-        if self._has_ws_clients and self._has_ws_clients():
-            _LOGGER.info("Stream opened but WS clients connected — skipping auto-call")
+        # Se una chiamata sta già squillando, aprire il video significa
+        # rispondere a quella: la targa ci sta chiamando e piazzarle un secondo
+        # INVITE è inutile: risponde 404/486 perché è occupata nella chiamata in
+        # corso, e intanto lo squillo resta senza risposta finché non scade.
+        if getattr(sip, "pending_incoming", {}).get("active"):
+            _LOGGER.info("Stream opened while ringing — answering the incoming call")
+            self._spawn(self._answer_incoming())
             return
 
+        # Qui c'era un rifiuto ad autochiamare quando esisteva anche un solo
+        # WebSocket audio aperto, perché l'app manda la chiamata per conto suo.
+        # Ma quel controllo guardava lo stato GLOBALE, non chi stava chiedendo:
+        # bastava che l'app fosse aperta su un telefono qualsiasi perché la
+        # telecamera in HomeKit non chiamasse più nessuno, aspettasse quindici
+        # secondi e rispondesse 503 — cioè "Nessuna risposta" nell'app Casa,
+        # senza una riga di errore da nessuna parte. Chi apre il video vuole
+        # vedere: la chiamata si fa. Il doppio INVITE resta escluso dal
+        # controllo su in_call/calling qui sopra.
         if sip.registered:
             self._auto_called = True
             self._auto_call_target = target
             # Fire auto-call as background task — don't block the HTTP response
-            asyncio.create_task(self._do_auto_call(target))
+            self._spawn(self._do_auto_call(target))
+
+    async def _answer_incoming(self):
+        """Risponde alla chiamata in arrivo invece di piazzarne una nuova."""
+        try:
+            ok, msg = await sip.do_answer_incoming()
+            if ok:
+                # Trattata come l'autoaccensione: alla chiusura dello stream la
+                # chiamata viene chiusa dallo stesso percorso di hangup.
+                self._auto_called = True
+                self._answered_call = True
+                # Ha risposto qualcuno: senza questo la chiamata veniva poi
+                # contata fra quelle perse.
+                self._ring_answered = True
+            else:
+                _LOGGER.error("Answering the incoming call failed: %s", msg)
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.error("Answer error: %s", e)
 
     async def _do_auto_call(self, target: str | None):
         """Background auto-call when video stream opens without active call."""
         try:
+            # Il dominio SIP è un valore di runtime (dipende dal trasporto in
+            # uso), non una costante: C.SIP_DOMAIN non esiste e sollevava
+            # AttributeError, impedendo ogni autoaccensione — quindi niente
+            # video e niente audio, che viaggiano sulla stessa chiamata.
             if target:
                 uri = sip_uri(target)
                 ok, msg = await sip.do_call(target=uri)
             else:
-                # Autoaccensione: chiama la TARGA VIDEO (55100), non il PICG 55001
-                # (55001 dava 488 Not Acceptable Here — vedi const.CAMERA_TARGET).
-                uri = sip_uri(C.CAMERA_TARGET)
+                # Autoaccensione: chiama la TARGA VIDEO, non il PICG
+                # (il PICG risponde 488 Not Acceptable Here).
+                uri = sip_uri(R.CAMERA_TARGET)
                 ok, msg = await sip.do_call(target=uri)
+                alt = None if ok else self._camera_fallback(msg)
+                if alt:
+                    _LOGGER.warning(
+                        "La targa video %s non risponde (%s): provo %s, la targa "
+                        "che ha suonato", R.CAMERA_TARGET, msg, alt)
+                    ok, msg = await sip.do_call(target=sip_uri(alt))
+                    if ok:
+                        R.CAMERA_TARGET = alt
+                        if self._persist:
+                            self._persist({"learned_camera_target": alt})
+                        _LOGGER.info("Targa video imparata dall'impianto: %s", alt)
             if not ok:
                 _LOGGER.error("Auto-call failed: %s", msg)
                 self._auto_called = False
+            elif self._stream_viewers == 0 and not self._hangup_pending():
+                # L'INVITE può concludersi dopo che lo spettatore ha già
+                # rinunciato (lui aspetta 15 s, la chiamata fino a 45): senza
+                # questo la chiamata resterebbe aperta senza nessuno a guardare.
+                _LOGGER.info("Auto-call connected with no viewers left — hanging up")
+                self._schedule_hangup()
         except Exception as e:
             _LOGGER.error("Auto-call error: %s", e)
             self._auto_called = False
+
+    def _camera_fallback(self, result: str) -> str | None:
+        """La targa da provare quando quella di default non esiste.
+
+        Il default (55100) è la targa video dell'impianto di riferimento; su
+        un altro impianto risponde 404 e l'autoaccensione non parte mai. La
+        targa che ha suonato l'ultima volta invece esiste di sicuro e manda
+        video. Solo se la targa non l'ha scelta nessuno: una scelta esplicita
+        non si tocca.
+        """
+        if R.CAMERA_TARGET_CONFIGURED:
+            return None
+        code = (result or "").split(" ", 1)[0]
+        if code not in ("404", "480", "488", "604"):
+            return None
+        alt = self._last_ring_panel
+        return alt if alt and alt != R.CAMERA_TARGET else None
 
     async def stream_closed(self):
         self._stream_viewers = max(0, self._stream_viewers - 1)
         _LOGGER.info("Stream viewer disconnected (%d remaining)", self._stream_viewers)
 
         if self._stream_viewers == 0 and self._auto_called and sip.in_call:
-            self._hangup_task = asyncio.create_task(self._delayed_hangup())
+            self._schedule_hangup()
 
     async def _delayed_hangup(self):
         try:
-            await asyncio.sleep(STREAM_HANGUP_DELAY)
+            # Una chiamata dal citofono (dalla targa o dal monitor di casa) a
+            # cui si è risposto: 30 s di attesa la tenevano viva, e ogni vista
+            # riaperta nel frattempo ci si riattaccava. La chiamata del monitor
+            # non ha video, quindi per un minuto buono la strada non si vedeva.
+            delay = (ANSWERED_HANGUP_DELAY if getattr(self, "_answered_call", False)
+                     else STREAM_HANGUP_DELAY)
+            await asyncio.sleep(delay)
             if self._stream_viewers == 0 and self._auto_called and sip.in_call:
                 _LOGGER.info("No viewers, hanging up auto-call")
-                await sip.do_hangup()
+                # Da qui il riaggancio va fino in fondo: una vista che si apre
+                # adesso cancella questo task, e prima interrompeva il BYE a
+                # metà — in_call restava vero, il media acceso, e la vista
+                # nuova si attaccava a una chiamata morta per cinque minuti.
+                # La vista nuova aspetta _hanging_up e poi richiama.
+                # Il flag lo spegne la fine del BYE, non la fine di questo
+                # task: se una vista nuova lo cancella, il BYE continua e lei
+                # deve continuare ad aspettarlo.
+                self._hanging_up = True
+                bye = asyncio.ensure_future(sip.do_hangup())
+                bye.add_done_callback(lambda _t: setattr(self, "_hanging_up", False))
+                await asyncio.shield(bye)
+            if self._stream_viewers == 0:
+                # Anche se la chiamata era già finita per conto suo: il flag
+                # deve morire con lei, non sopravviverle.
                 self._auto_called = False
         except asyncio.CancelledError:
             pass
@@ -372,6 +520,134 @@ class VimarIntercomHub:
                 self._auto_called = False
         except asyncio.CancelledError:
             pass
+
+    def _hangup_pending(self) -> bool:
+        """Se c'è davvero un riaggancio in attesa.
+
+        Un task concluso resta un oggetto, quindi "if self._hangup_task"
+        continuava a essere vero per sempre dopo il primo riaggancio: la rete
+        di sicurezza che quel controllo proteggeva non è più scattata.
+        """
+        return self._hangup_task is not None and not self._hangup_task.done()
+
+    def _schedule_hangup(self):
+        if self._hangup_pending():
+            self._hangup_task.cancel()
+        self._hangup_task = self._spawn(self._delayed_hangup())
+        return self._hangup_task
+
+    def start_homekit_watch(self, session):
+        """Un guardiano per OGNI vista, non uno solo per tutte.
+
+        Era uno solo, e l'apertura di una seconda vista annullava quello della
+        prima: il suo finally rilasciava la sessione della prima vista — che da
+        lì non riceveva più l'audio della strada — e quando la seconda si
+        chiudeva, il suo guardiano credeva di essere l'ultimo e riagganciava.
+        Visto il 26 settembre: si risponde dall'iPhone, la compagna apre la
+        stessa chiamata, la chiude, e in strada la chiamata cade.
+
+        Ognuno ora guarda soltanto il proprio ffmpeg, e si riaggancia solo quando
+        si chiude l'ultima vista della chiamata.
+        """
+        tasks = self.__dict__.setdefault("_homekit_watch_tasks", set())
+        task = self._spawn(self.watch_homekit_session(session))
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        return task
+
+    async def watch_homekit_session(self, session=None):
+        """Riaggancia quando si chiude l'ultima vista HomeKit della chiamata.
+
+        Senza, la chiamata resta in piedi fino al limite del citofono: una
+        trentina di secondi per l'autoaccensione, ma DUE MINUTI per una
+        chiamata che arriva dalla strada. In quei due minuti la luce del posto
+        esterno resta accesa e nessun altro può suonare.
+
+        Non ci sono eventi da cui accorgersene per la telecamera di Home
+        Assistant — legge un SDP, non una richiesta HTTP che finisce — ma il suo
+        ffmpeg vive esattamente quanto la vista: basta guardarlo comparire e
+        sparire. L'SDP è unico per sessione, quindi l'ffmpeg che lo legge è
+        per forza quello di questa vista.
+        """
+        # La chiamata di questa vista. Se alla fine ce n'è un'altra, la vista
+        # era della vecchia, e riagganciare chiuderebbe quella di qualcun altro.
+        call_id = (getattr(sip, "call_state", None) or {}).get("call_id")
+        sdp = session["sdp"] if session else None
+        mine: set[int] = set()
+        loop = asyncio.get_running_loop()
+
+        async def _pids():
+            # Legge /proc: fuori dall'event loop, ogni pochi decimi di secondo
+            # per ogni vista aperta sarebbe un fermo continuo.
+            return await loop.run_in_executor(None, media.homekit_ffmpeg_pids, sdp)
+
+        try:
+            for _ in range(int(HOMEKIT_WATCH_START / 0.2)):
+                await asyncio.sleep(0.2)
+                mine = set(await _pids())
+                if mine:
+                    self._homekit_pids = set(mine)
+                    break
+            if not mine:
+                # La vista non è mai partita (chiusa mentre la chiamata si
+                # apriva). Conta come chiusa: senza, la chiamata restava su
+                # senza nessuno a guardare fino al limite di sicurezza.
+                _LOGGER.debug("Nessun ffmpeg per la sessione %s", sdp)
+            while mine and await _pids():
+                await asyncio.sleep(0.4)
+                if not sip.in_call:
+                    return
+        finally:
+            if session:
+                media.release_homekit_session(session["id"])
+        still_open = media.homekit_session_count()
+        if still_open:
+            _LOGGER.info("Vista HomeKit chiusa, ne restano %d aperte: la chiamata "
+                         "resta", still_open)
+            return
+        if call_id and call_id != (getattr(sip, "call_state", None) or {}).get("call_id"):
+            _LOGGER.debug("La vista chiusa era di una chiamata precedente: non "
+                          "riaggancio")
+            return
+        if sip.in_call and self._auto_called:
+            _LOGGER.info("Ultima vista HomeKit chiusa — riaggancio invece di "
+                         "aspettare che sia il citofono a farlo")
+            # Da qui fino a chiamata davvero finita c'è una finestra in cui
+            # sip.in_call è ancora vero ma la chiamata è spacciata. Chi apre
+            # una vista in quel momento ci si attacca e se la vede morire
+            # sotto: è il "riapro subito e non parte più".
+            self._hanging_up = True
+            try:
+                await sip.do_hangup()
+            finally:
+                self._hanging_up = False
+            self._auto_called = False
+
+    def spawn(self, coro):
+        """Versione pubblica di _spawn, per le piattaforme."""
+        return self._spawn(coro)
+
+    def _spawn(self, coro):
+        """Lancia un task tenendone un riferimento.
+
+        asyncio conserva solo riferimenti deboli: un task lasciato andare può
+        essere raccolto dal garbage collector a metà esecuzione.
+        """
+        task = asyncio.create_task(coro)
+        tasks = getattr(self, "_bg_tasks", None)
+        if tasks is None:
+            tasks = self._bg_tasks = set()
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        return task
+
+    async def request_keyframe(self):
+        """Chiede subito un keyframe: senza IDR il decoder non mostra nulla."""
+        if sip.in_call:
+            try:
+                await sip.send_keyframe_request()
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Keyframe request failed: %s", e)
 
     def _start_keyframe_loop(self):
         """Send periodic keyframe requests during calls for video recovery."""
@@ -406,11 +682,15 @@ class VimarIntercomHub:
                 if _video_flowing():
                     break
                 await sip.send_keyframe_request()
-            # Then slow refresh: every 5s, only while the call lasts.
-            while sip.in_call:
-                await asyncio.sleep(5)
-                if sip.in_call:
-                    await sip.send_keyframe_request()
+            # Nemmeno via RTCP si chiede più nulla: misurato sul campo, la
+            # targa non onora PLI, FIR moderno né FIR legacy.
+            # Niente refresh periodico: la targa non onora picture_fast_update
+            # e manda i keyframe sulla sua cadenza (circa tre secondi), che non
+            # è configurabile. Il vecchio ciclo ogni 5 s costava una transazione
+            # SIP con sfida 407 e ritentativo, attraverso il relay cloud, per
+            # tutta la durata della chiamata, e non anticipava un fotogramma.
+            # Il burst iniziale resta: costa poco e copre il caso in cui una
+            # targa diversa si comporti diversamente a chiamata fredda.
         except asyncio.CancelledError:
             pass
 
@@ -436,12 +716,19 @@ class VimarIntercomHub:
         self._tasks.append(asyncio.create_task(sip.request_processor()))
         self._tasks.append(asyncio.create_task(self._auto_startup()))
         self._tasks.append(asyncio.create_task(self._keepalive_loop()))
-        if R.USE_LOCAL_UDP:
-            self._tasks.append(asyncio.create_task(sip.udp_register_refresh_task()))
+        # Every transport needs renewal: a cloud binding expires just like a local one.
+        self._tasks.append(asyncio.create_task(sip.register_refresh_task()))
         self._running = True
 
     async def async_stop(self):
         self._running = False
+        if sip.in_call or sip.calling:
+            # Scaricare l'integrazione a chiamata aperta lasciava la targa
+            # accesa fino al suo timeout: prima si chiude la chiamata.
+            try:
+                await asyncio.wait_for(sip.do_hangup(), timeout=3)
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Riaggancio allo scaricamento non riuscito: %s", e)
         for t in self._tasks:
             t.cancel()
         self._tasks.clear()
@@ -461,6 +748,7 @@ class VimarIntercomHub:
                 sip._udp_sock.close()
             except Exception:
                 pass
+        sip.reset_state()
         _LOGGER.info("Hub stopped")
 
     async def async_call(self, target: str | None = None) -> tuple[bool, str]:
@@ -510,7 +798,7 @@ class VimarIntercomHub:
             uri, body, extra_headers={"Panda": "command"})
 
         self.stats["last_door_time"] = self._now()
-        self.stats["last_door_target"] = target or R.SGA_TARGET
+        self.stats["last_door_target"] = target or R.DOOR_TARGET
         self.stats["last_door_result"] = msg
         if ok:
             self.stats["door_count"] += 1
@@ -547,15 +835,21 @@ class VimarIntercomHub:
     async def async_send_command(
         self,
         body: str,
-        target: str = "55001",
+        target: str | None = None,
         header_name: str | None = "Panda",
         header_value: str | None = "command",
     ) -> tuple[bool, str]:
         """Invia un SIP MESSAGE arbitrario al citofono (per test / comandi non ancora mappati).
 
-        target può essere un ID (es. "55001") oppure un URI sip: completo.
+        target può essere un ID (es. "55001") oppure un URI sip: completo;
+        senza, l'SGA configurato.
         """
+        target = target or R.SGA_TARGET
         if target.startswith("sip:"):
+            # Un URI intero finisce tale e quale nella request line: niente
+            # a capo, spazi o parentesi angolari, che la spezzerebbero.
+            if any(c in target for c in "\r\n <>"):
+                return False, "target non valido"
             uri = target
         else:
             uri = sip_uri(target)
@@ -602,7 +896,7 @@ class VimarIntercomHub:
 
         if msg_type in ("ring", "ring_ended", "call_started", "call_ended", "registered", "error"):
             # Don't broadcast "ring" to WS clients if we initiated the call
-            if msg_type == "ring" and (self._auto_called or sip.in_call or sip.calling):
+            if msg_type == "ring" and (sip.in_call or sip.calling):
                 pass  # Will be handled below (suppress + decline)
             elif self._ws_broadcast_fn:
                 try:
@@ -620,41 +914,80 @@ class VimarIntercomHub:
         if msg_type == "call_started":
             self._start_call_timeout()
             self._start_keyframe_loop()
+        elif msg_type == "ring_ended":
+            for cb in list(getattr(self, "_ring_end_callbacks", ())):
+                try:
+                    cb()
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("Ring-end callback error")
+        elif msg_type == "call_ended" and (sip.in_call or sip.calling):
+            # La fine di una chiamata precedente, arrivata quando ne è già
+            # partita un'altra: toccare timer, viste e ffmpeg adesso vorrebbe
+            # dire rompere quella nuova.
+            _LOGGER.debug("call_ended in ritardo: c'è già un'altra chiamata, ignorato")
         elif msg_type == "call_ended":
             self._cancel_call_timeout()
             self._cancel_keyframe_loop()
-            # La chiamata e' chiusa: da qui in poi un INVITE in arrivo e' uno
-            # squillo vero, non l'eco della nostra. Senza questo reset il ramo
-            # "ring" piu' sotto continuerebbe a rispondere 603 Decline per
-            # sempre quando a chiudere e' stato il citofono (il watchdog
-            # _delayed_hangup non arriva: la sua guardia richiede sip.in_call).
+            for cb in list(getattr(self, "_call_end_callbacks", ())):
+                try:
+                    cb()
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("Call-end callback error")
+            # Il conteggio degli spettatori vale solo durante una chiamata, e
+            # va azzerato con lei. HomeKit adesso legge l'RTP da un SDP invece
+            # che da /av, quindi non c'è più una richiesta HTTP che finendo
+            # segnali l'uscita: senza questo il contatore cresceva a ogni
+            # apertura e non tornava più a zero — visto arrivare a 14 — e con
+            # lui non sarebbe mai scattato il riaggancio per assenza di
+            # spettatori.
+            # Solo se non c'è già una chiamata nuova in corso. Questo
+            # call_ended può arrivare con secondi di ritardo — la chiusura di
+            # ffmpeg ne costava tre — e nel frattempo qualcuno può aver
+            # riaperto la vista. Azzerare qui i contatori della chiamata NUOVA
+            # la lasciava senza spettatori e senza _auto_called: partiva il
+            # "Auto-call connected with no viewers left", e poi chiudendo la
+            # vista non si riagganciava più nulla, perché il guardiano
+            # pretende _auto_called. Il posto esterno restava occupato per
+            # tutti i trenta secondi. Visto nei registri alle 18:30:23.
+            self._stream_viewers = 0
             self._auto_called = False
+            self._answered_call = False
+            # Chi guardava da HomeKit deve accorgersene. Il suo ffmpeg legge
+            # un SDP, e un ingresso RTP non finisce da solo: senza pacchetti
+            # resta acceso, si tiene le porte — così la vista successiva non
+            # parte più — e intanto sullo schermo resta l'ultimo fotogramma,
+            # come se il collegamento fosse ancora vivo mentre l'audio è già
+            # morto. Chiuderlo fa capire a Home Assistant che è finita.
+            # Difensivo: alcune prove costruiscono un hub parziale, e questo
+            # percorso deve restare innocuo anche lì.
+            media.stop_homekit_ffmpeg(getattr(self, "_homekit_pids", None) or None)
+            self._homekit_pids = set()
 
         if msg_type == "ring":
-            # If we initiated the call (tap to view / auto-call), the Tab5S
-            # sends an INVITE back to us. Suppress ring + push — this is NOT
-            # a doorbell ring, just the PBX echoing our outgoing call.
-            if self._auto_called or sip.in_call or sip.calling:
-                _LOGGER.info("Suppressing ring — we initiated this call (auto_called=%s, in_call=%s, calling=%s)",
-                             self._auto_called, sip.in_call, sip.calling)
-                asyncio.create_task(sip.do_decline_incoming())
+            # Quando siamo noi a chiamare (tap per vedere / autoaccensione) il
+            # Tab ci rimanda un INVITE: quello va zittito, non è una chiamata
+            # al campanello ma l'eco della nostra. Deve però valere solo se
+            # siamo davvero occupati: con il solo _auto_called, e nessuna
+            # chiamata in corso, si finiva per rifiutare con 603 chiamate
+            # legittime — cioè chiunque suonasse dopo una nostra autoaccensione.
+            busy = sip.in_call or sip.calling
+            if busy:
+                _LOGGER.info(
+                    "Suppressing ring — we initiated this call (auto_called=%s, in_call=%s, calling=%s)",
+                    self._auto_called, sip.in_call, sip.calling)
+                self._spawn(sip.do_decline_incoming())
                 return
+            if self._auto_called:
+                _LOGGER.info(
+                    "Ring arrivato con autoaccensione segnata ma nessuna chiamata attiva: "
+                    "trattato come squillo vero")
+                self._auto_called = False
 
             for cb in self._ring_callbacks:
                 try:
                     cb()
                 except Exception:
                     _LOGGER.exception("Ring callback error")
-
-            # Send VoIP push to wake iOS devices
-            sender = push_sender.get_sender()
-            if sender:
-                caller = sip.pending_incoming.get("caller_uri", "55001")
-                # Extract SIP user from URI (e.g. "sip:55001@domain" → "55001")
-                if "@" in caller:
-                    caller = caller.split("@")[0].replace("sip:", "")
-                panel = "esterna"  # TODO: detect panel from caller
-                asyncio.create_task(sender.send_voip_push(caller=caller, panel=panel))
 
     def _update_stats(self, msg_type: str, msg):
         """Aggiorna le statistiche in base agli eventi SIP."""
@@ -663,11 +996,13 @@ class VimarIntercomHub:
         try:
             if msg_type == "ring":
                 # Squillo reale solo se non l'abbiamo originato noi
-                if not (self._auto_called or sip.in_call or sip.calling):
+                if not (sip.in_call or sip.calling):
                     caller = sip.pending_incoming.get("caller_uri") or ""
                     st["last_ring_time"] = now
                     st["last_caller_uri"] = caller or None
                     st["last_caller_id"] = _uri_to_id(caller)
+                    if (st["last_caller_id"] or "").isdigit():
+                        self._last_ring_panel = st["last_caller_id"]
                     st["ring_count"] += 1
                     self._ring_answered = False
             elif msg_type == "ring_ended":
@@ -679,7 +1014,7 @@ class VimarIntercomHub:
                 st["call_count"] += 1
                 if not self._ring_answered:
                     st["last_call_direction"] = "out"
-            elif msg_type == "call_ended":
+            elif msg_type == "call_ended" and not (sip.in_call or sip.calling):
                 st["last_call_end"] = now
                 if self._call_started_mono is not None:
                     st["last_call_duration"] = round(time.monotonic() - self._call_started_mono, 1)
@@ -701,222 +1036,9 @@ class VimarIntercomHub:
     # ─── Parsing dei SIP MESSAGE in ingresso (Panda: blue) ───────────────────
     # Qui si LEGGE soltanto: nessun comando in uscita. Parsing difensivo: alcuni
     # body sono JSON, altri delimitati da ';'. Se non combacia → debug, no crash.
-    def _handle_incoming_message(self, body: str) -> None:
-        st = self.stats
-        raw = (body or "").strip()
-        upper = raw.upper()
-
-        # Annunci di stato: "VOICEMAIL;ON|OFF" / "DND;ON|OFF" [VERIFICATO]
-        if upper.startswith("VOICEMAIL;"):
-            st["voicemail"] = ("ON" in upper and "OFF" not in upper)
-            return
-        if upper.startswith("DND;"):
-            st["dnd"] = ("ON" in upper and "OFF" not in upper)
-            return
-
-        # GET_INIT_STATUS_REPLY;<json array [{PARAM,VALUE}]>
-        if upper.startswith("GET_INIT_STATUS_REPLY"):
-            self._parse_init_status_reply(raw)
-            return
-
-        # MISSED_CALL;{json}  [da confermare sul campo — PROTOCOL.md §4]
-        if upper.startswith("MISSED_CALL"):
-            self._handle_missed_call(raw)
-            return
-
-        # VM;VIDEO_MESSAGE_CHANGE;NEW[;<n>] | ;UPDATE  [da confermare sul campo]
-        if upper.startswith("VM;VIDEO_MESSAGE_CHANGE"):
-            self._handle_videomessage(raw)
-            return
-
-        # FP;{json}  fuoriporta  [da confermare sul campo]
-        if upper.startswith("FP;") or upper.startswith("FP{"):
-            self._handle_fuoriporta(raw)
-            return
-
-        # CALL_INFO;{json}  [da confermare sul campo]
-        if upper.startswith("CALL_INFO"):
-            self._handle_call_info(raw)
-            return
-
-        # NEW_PHONEBOOK;<gid>;<ver>  [da confermare sul campo]
-        if upper.startswith("NEW_PHONEBOOK"):
-            self._handle_new_phonebook(raw)
-            return
-
-        _LOGGER.debug("MESSAGE in ingresso non mappato: %r", raw[:120])
-
-    @staticmethod
-    def _split_json_payload(raw: str, prefix_parts: int):
-        """Restituisce (json_str | None) dopo aver saltato `prefix_parts`
-        segmenti separati da ';'. Es. raw='MISSED_CALL;{...}' → prefix_parts=1."""
-        parts = raw.split(";", prefix_parts)
-        if len(parts) <= prefix_parts:
-            return None
-        return parts[prefix_parts].strip()
-
-    def _parse_init_status_reply(self, raw: str) -> None:
-        """Parsa GET_INIT_STATUS_REPLY;[{PARAM,VALUE}] in modo generico e robusto.
-
-        NB: il body dei MESSAGE arriva TRONCATO a 200 char da sip_client.broadcast,
-        quindi il JSON può essere incompleto → usiamo un fallback a regex sui
-        segmenti {PARAM..VALUE} presenti, così estraiamo tutto ciò che c'è.
-        """
-        import json
-        import re
-
-        payload = self._split_json_payload(raw, 1) or ""
-        pairs: dict[str, str] = {}
-        try:
-            arr = json.loads(payload)
-            if isinstance(arr, list):
-                for item in arr:
-                    if isinstance(item, dict) and "PARAM" in item:
-                        pairs[str(item["PARAM"])] = item.get("VALUE")
-        except Exception:
-            # JSON incompleto/troncato: estrai le coppie PARAM/VALUE via regex.
-            for m in re.finditer(
-                r'"PARAM"\s*:\s*"([^"]+)"\s*,\s*"VALUE"\s*:\s*"([^"]*)"', payload
-            ):
-                pairs[m.group(1)] = m.group(2)
-            if not pairs:
-                _LOGGER.debug("GET_INIT_STATUS_REPLY non parsabile: %r", payload[:120])
-
-        if not pairs:
-            return
-
-        st = self.stats
-        st["init_status"] = {**st.get("init_status", {}), **pairs}
-
-        def _as_bool(v):
-            return str(v).strip() in ("1", "true", "True", "ON", "on")
-
-        if "voicemail" in pairs:
-            st["voicemail"] = _as_bool(pairs["voicemail"])
-        if "dnd" in pairs:
-            st["dnd"] = _as_bool(pairs["dnd"])
-        if "vm_level" in pairs:
-            st["vm_level"] = pairs["vm_level"]
-        if "vm_ver" in pairs:
-            st["vm_ver"] = pairs["vm_ver"]
-        # token / altri param restano in init_status per usi futuri (phonebook cloud)
-        if "rubrica_ver" in pairs:
-            self._update_rubrica_ver(pairs["rubrica_ver"])
-
-        _LOGGER.info(
-            "GET_INIT_STATUS_REPLY: voicemail=%s dnd=%s vm_level=%s rubrica_ver=%s",
-            st.get("voicemail"), st.get("dnd"), st.get("vm_level"), st.get("rubrica_ver"),
-        )
-
-    def _update_rubrica_ver(self, new_ver, gid: str | None = None) -> None:
-        """Aggiorna rubrica_ver; se CAMBIA (dopo il primo) emette phonebook_changed."""
-        new_ver = None if new_ver is None else str(new_ver)
-        old = self.stats.get("rubrica_ver")
-        self.stats["rubrica_ver"] = new_ver
-        if old is not None and new_ver is not None and new_ver != old:
-            _LOGGER.info("Rubrica cambiata: %s → %s", old, new_ver)
-            self._fire_event(
-                C.EVENT_PHONEBOOK_CHANGED,
-                {"gid": gid or R.SIP_USER, "rubrica_ver": new_ver},
-            )
-
-    def _handle_missed_call(self, raw: str) -> None:
-        import json
-        data = {"sip_id": None, "ts": None}
-        payload = self._split_json_payload(raw, 1)
-        if payload:
-            try:
-                j = json.loads(payload)
-                if isinstance(j, dict):
-                    data["sip_id"] = j.get("SIP_ID") or j.get("sip_id")
-                    data["ts"] = j.get("TS") or j.get("ts")
-            except Exception:
-                _LOGGER.debug("MISSED_CALL payload non-JSON: %r", payload[:120])
-        data["name"] = sip_id_name(str(data["sip_id"])) if data["sip_id"] is not None else None
-        self.stats["last_missed_call"] = data
-        self.stats["missed_call_count"] += 1
-        _LOGGER.info("Chiamata persa: %s", data)
-        self._fire_event(C.EVENT_MISSED_CALL, data)
-
-    def _handle_videomessage(self, raw: str) -> None:
-        # VM;VIDEO_MESSAGE_CHANGE;NEW[;<n>] | ;UPDATE
-        parts = raw.split(";")
-        change = parts[2].strip().upper() if len(parts) > 2 else "NEW"
-        extra = parts[3].strip() if len(parts) > 3 else None
-        is_new = change == "NEW"
-        self.stats["new_videomessage"] = is_new
-        self.stats["last_videomessage"] = raw[:120]
-        _LOGGER.info("Videomessaggio: change=%s extra=%s", change, extra)
-        self._fire_event(
-            C.EVENT_VIDEOMESSAGE, {"change": change, "extra": extra, "full": raw[:120]}
-        )
-
-    def _handle_fuoriporta(self, raw: str) -> None:
-        import json
-        data = {"sip_id": None, "msg": None}
-        payload = self._split_json_payload(raw, 1)
-        if payload:
-            try:
-                j = json.loads(payload)
-                if isinstance(j, dict):
-                    data["sip_id"] = j.get("SIP_ID") or j.get("sip_id")
-                    data["msg"] = j.get("MSG") or j.get("msg")
-            except Exception:
-                _LOGGER.debug("FP payload non-JSON: %r", payload[:120])
-        self.stats["last_fuoriporta"] = data
-        _LOGGER.info("Fuoriporta: %s", data)
-        self._fire_event(C.EVENT_FUORIPORTA, data)
-
-    def _handle_call_info(self, raw: str) -> None:
-        import json
-        data = {"sip_id": None, "reason": None, "media_type": None, "video_src": None}
-        payload = self._split_json_payload(raw, 1)
-        if payload:
-            try:
-                j = json.loads(payload)
-                if isinstance(j, dict):
-                    # `is not None`, non `or`: 0 è un valore significativo in tre
-                    # campi su quattro — MEDIA_TYPE 0 = audio, REASON 0 = rifiutata,
-                    # VIDEO_SRC 0 = sorgente non commutabile. Con `or` fino alla
-                    # 1.0.6 diventavano None (MsgCallInfoReceiver.java dell'app).
-                    def _pick(upper: str, lower: str):
-                        value = j.get(upper)
-                        return j.get(lower) if value is None else value
-                    data["sip_id"] = _pick("SIP_ID", "sip_id")
-                    data["reason"] = _pick("REASON", "reason")
-                    data["media_type"] = _pick("MEDIA_TYPE", "media_type")
-                    data["video_src"] = _pick("VIDEO_SRC", "video_src")
-            except Exception:
-                _LOGGER.debug("CALL_INFO payload non-JSON: %r", payload[:120])
-        self.stats["last_call_info"] = data
-        _LOGGER.info("Call info: %s", data)
-        self._fire_event(C.EVENT_CALL_INFO, data)
-
-    def _handle_new_phonebook(self, raw: str) -> None:
-        # NEW_PHONEBOOK;<ver>;<gid> — la versione (MD5 del file, = rubrica_ver)
-        # viene PRIMA del gid. Fino alla 1.0.6 li leggevamo al contrario, seguendo
-        # la nostra documentazione che diceva «da confermare sul campo»: il sensore
-        # Versione Rubrica prendeva il GID, e al GET_INIT_STATUS_REPLY successivo
-        # il valore «cambiava» di nuovo, con un secondo phonebook_changed spurio.
-        # Ordine verificato nel sorgente dell'app (MsgNewPhonebookReceiver:
-        # getOrNull(…, 0) = phonebookVersion, getOrNull(…, 1) = gid).
-        parts = raw.split(";")
-        ver = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
-        gid = parts[2].strip() if len(parts) > 2 and parts[2].strip() else None
-        _LOGGER.info("NEW_PHONEBOOK gid=%s ver=%s", gid, ver)
-        # Aggiorna rubrica_ver ed emette phonebook_changed (anche se primo valore,
-        # NEW_PHONEBOOK è per definizione un cambio → forziamo l'evento).
-        if ver is not None:
-            old = self.stats.get("rubrica_ver")
-            self.stats["rubrica_ver"] = str(ver)
-            if old != str(ver):
-                self._fire_event(
-                    C.EVENT_PHONEBOOK_CHANGED, {"gid": gid or R.SIP_USER, "rubrica_ver": str(ver)}
-                )
-        else:
-            self._fire_event(
-                C.EVENT_PHONEBOOK_CHANGED, {"gid": gid or R.SIP_USER, "rubrica_ver": None}
-            )
+    async def async_request_init_status(self):
+        """Richiesta esplicita dello stato: usata anche per verificare i comandi."""
+        return await self._request_init_status()
 
     async def _request_init_status(self):
         """Chiede lo stato iniziale al PICG (GET_INIT_STATUS, Panda: blue).
@@ -971,16 +1093,31 @@ class VimarIntercomHub:
             _LOGGER.error("Auto startup error: %s", e, exc_info=True)
 
     async def _keepalive_loop(self):
+        """Tiene viva la connessione e recupera se la registrazione cade.
+
+        Prima questo ciclo rifaceva una REGISTER completa ogni 120 s, cioè
+        rinnovava la registrazione per conto suo, in parallelo al rinnovo
+        basato sulla durata concessa dal registrar: due meccanismi per la
+        stessa cosa, con Call-ID e CSeq diversi. Qui resta solo ciò che la
+        registrazione non copre — tenere viva la connessione verso il relay e
+        rimettersi in piedi se lo stato si perde — mentre il rinnovo vero vive
+        in sip_client.register_refresh_task().
+        """
         while self._running:
-            await asyncio.sleep(120)
+            await asyncio.sleep(KEEPALIVE_INTERVAL)
             await self._keepalive_tick()
 
     async def _keepalive_tick(self):
         """Un giro di keepalive. Separato dal loop per poterlo testare."""
         try:
             if sip.registered:
-                ok = await sip.do_register()
-                _LOGGER.debug("Keepalive: %s", "OK" if ok else "FAILED")
+                # Il rinnovo lo fa sip_client alla scadenza concessa dal
+                # registrar; qui basta tenere vivo il collegamento col relay.
+                await sip.send_keepalive()
+                if not self._init_status_sent:
+                    await self._request_init_status()
+                self._touch()
+                return
             else:
                 # Fino alla 1.0.5 questo ramo non esisteva: la guardia era
                 # `if sip.registered`, quindi persa la registrazione il loop

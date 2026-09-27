@@ -28,7 +28,7 @@ def hub(monkeypatch):
 @pytest.fixture
 def chiamate(monkeypatch):
     """Registra cosa il tick ha provato a fare, senza toccare la rete."""
-    fatte = {"register": 0, "reconnect": 0, "init_status": 0}
+    fatte = {"register": 0, "reconnect": 0, "init_status": 0, "ping": 0}
 
     async def _register():
         fatte["register"] += 1
@@ -39,7 +39,12 @@ def chiamate(monkeypatch):
         return fatte.get("reconnect_ok", True)
 
     monkeypatch.setattr(sip, "do_register", _register)
+    async def _ping():
+        fatte["ping"] += 1
+        return True
+
     monkeypatch.setattr(sip, "reconnect", _reconnect)
+    monkeypatch.setattr(sip, "send_keepalive", _ping)
     return fatte
 
 
@@ -54,13 +59,15 @@ def _tick(hub, fatte, monkeypatch):
 
 # ─── registrato: keepalive normale ───────────────────────────────────────────
 
-def test_se_registrati_si_rinnova_e_basta(hub, chiamate, monkeypatch):
+def test_se_registrati_basta_il_ping(hub, chiamate, monkeypatch):
+    """Il rinnovo lo fa sip_client alla scadenza concessa dal registrar."""
     monkeypatch.setattr(sip, "registered", True, raising=False)
     hub._init_status_sent = True
 
     _tick(hub, chiamate, monkeypatch)
 
-    assert chiamate["register"] == 1
+    assert chiamate["ping"] == 1
+    assert chiamate["register"] == 0
     assert chiamate["reconnect"] == 0
     assert chiamate["init_status"] == 0, "lo stato iniziale c'era già: non si richiede"
 
@@ -105,6 +112,6 @@ def test_un_errore_non_ferma_il_loop(hub, monkeypatch):
         raise RuntimeError("rete sparita")
 
     monkeypatch.setattr(sip, "registered", True, raising=False)
-    monkeypatch.setattr(sip, "do_register", _esplode)
+    monkeypatch.setattr(sip, "send_keepalive", _esplode)
 
     asyncio.run(hub._keepalive_tick())  # non deve sollevare

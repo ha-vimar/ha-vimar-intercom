@@ -43,7 +43,7 @@ def test_pure_modules_do_not_import_home_assistant(name):
 def test_const_has_no_guessed_actuators():
     from custom_components.vimar_intercom import const
     # ADR-4: nessun attuatore ipotizzato nel codice attivo
-    assert const.ACTUATORS == []
+    assert getattr(const, "ACTUATORS", []) == []
     assert const.DOOR_COMMAND == "OPEN_2F"
     assert const.SEGRETERIA_HEADER_VALUE == "blue"
 

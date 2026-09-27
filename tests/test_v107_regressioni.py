@@ -159,6 +159,10 @@ def test_con_stato_reale_non_e_supposto():
     sw = _switch(_Hub(ok=True, reale=False))
     assert sw.assumed_state is False
     asyncio.run(sw.async_turn_on())
+    # Finché la verifica è in corso si vede lo stato chiesto, così nessuno
+    # preme di nuovo; a verifica chiusa prevale l'annuncio del Tab.
+    assert sw.is_on is True
+    sw._set_verified(False)
     assert sw.is_on is False, "prevale l'annuncio del Tab, non il comando"
 
 

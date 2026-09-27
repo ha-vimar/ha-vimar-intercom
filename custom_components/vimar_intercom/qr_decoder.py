@@ -160,9 +160,13 @@ def extract_sip_credentials(fields: dict[str, str]) -> dict[str, str]:
         "local_domain": local_domain,
         "cloud_domain": cloud_domain,
         "sip_ha1":      sip_ha1,
+        # "video=0" sui posti esterni solo audio: senza questo l'integrazione
+        # chiederebbe comunque un flusso video che non esiste.
+        "video_enabled": fields.get(QR_VIDEO, "1") != "0",
         "cloud_proxy":  cloud_proxy,
         "gid":          fields.get(QR_GID, ""),
         "plant_type":   fields.get(QR_PLANTTYPE, ""),
+        "product_code": fields.get(QR_PC, ""),
         "mac":          fields.get(QR_MAC, ""),
     }
 

@@ -13,15 +13,15 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
 import homeassistant.helpers.config_validation as cv
-from homeassistant.exceptions import Unauthorized
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, Unauthorized
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.service import async_register_admin_service
 
-from .const import DOMAIN
+from .const import CONF_HOMEKIT_ACCESSORY, DEFAULT_HOMEKIT_ACCESSORY, DOMAIN
 from . import log_buffer as _log_buffer
 from . import validate
 from .hub import VimarIntercomHub
 from . import media_handler as media
-from . import push_sender
 from . import sip_client as sip
 from . import runtime
 
@@ -60,20 +60,26 @@ FETCH_LOCAL_SCHEMA = vol.Schema({
     vol.Optional("host"): cv.string,                    # default: local_proxy
     vol.Optional("scheme", default="http"): cv.string,
 })
+def _default_door_target() -> str:
+    """La targa che apre la porta (door_target, o l'SGA se non configurata)."""
+    return runtime.DOOR_TARGET
+
+
 OPEN_DOOR_SCHEMA = vol.Schema({
-    vol.Optional("target", default=_default_sga_target): cv.string,
+    vol.Optional("target", default=_default_door_target): cv.string,
     vol.Optional("command", default="OPEN_2F"): cv.string,
 })
 
 def _get_hub_from_hass(hass: HomeAssistant) -> VimarIntercomHub:
     """Risolve l'hub dalla entry attiva in hass.data[DOMAIN].
 
-    Non usa globals a livello di modulo: sicuro con reload e multi-entry.
+    Guarda solo i valori che sono davvero entry (hanno un hub): una chiave di
+    servizio finita lì dentro non deve bastare a rompere tutti i servizi.
     """
-    domain_data = hass.data.get(DOMAIN, {})
-    if not domain_data:
-        raise RuntimeError("Vimar Intercom non inizializzato")
-    return next(iter(domain_data.values()))["hub"]
+    for data in hass.data.get(DOMAIN, {}).values():
+        if isinstance(data, dict) and data.get("hub") is not None:
+            return data["hub"]
+    raise HomeAssistantError("Vimar Intercom non è pronto")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -85,6 +91,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # vicenda. Gli entry già esistenti vengono migrati qui, in silenzio.
     if not entry.data.get("device_imei") or not entry.data.get("device_uuid"):
         identity = runtime.new_device_identity()
+        # Le entry del fork m4r1k hanno già un'identità, sotto un solo nome
+        # («device_id», usato per entrambi gli header): cambiarla spezzerebbe
+        # l'abbinamento, quindi la si conserva.
+        legacy = str(entry.data.get("device_id") or "").strip()
+        if legacy:
+            identity = {"device_imei": legacy, "device_uuid": legacy}
         hass.config_entries.async_update_entry(
             entry, data={**entry.data, **identity})
         _LOGGER.info("Identità dispositivo generata per questa installazione")
@@ -106,7 +118,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     audio_ws_clients: set[web.WebSocketResponse] = set()
 
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {"hub": hub, "audio_ws_clients": audio_ws_clients}
+    hass.data[DOMAIN][entry.entry_id] = {
+        "hub": hub, "audio_ws_clients": audio_ws_clients,
+        # Le options con cui è partita: il listener ricarica solo se cambiano.
+        "options": dict(entry.options),
+    }
 
     @callback
     def _on_model_detected(model: str, fw: str, ua: str, priority: int) -> None:
@@ -137,6 +153,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.register_model_callback(_on_model_detected)
 
     @callback
+    def _persist_learned(updates: dict) -> None:
+        """Valori imparati dall'impianto: nei dati dell'entry, non nelle
+        options, così salvarli non ricarica l'integrazione."""
+        if any(entry.data.get(k) != v for k, v in updates.items()):
+            hass.config_entries.async_update_entry(entry, data={**entry.data, **updates})
+
+    hub.set_persist_callback(_persist_learned)
+
+    @callback
     def _on_hub_event(event_type: str, data: dict) -> None:
         """Propaga gli eventi in ingresso del citofono sul bus di HA.
 
@@ -150,7 +175,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hub.register_event_callback(_on_hub_event)
 
-    await hub.async_start()
+    try:
+        await hub.async_start()
+    except (OSError, ConnectionError, asyncio.TimeoutError) as err:
+        # Rete o relay non raggiungibili all'avvio: Home Assistant riprova da
+        # solo più tardi. Prima l'integrazione restava in errore fino a un
+        # ricaricamento a mano, con i socket RTP già aperti.
+        await hub.async_stop()
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        raise ConfigEntryNotReady(f"Citofono non raggiungibile: {err}") from err
 
     # Closures locali: catturano audio_ws_clients (nessun global di modulo).
     async def _ws_send_bytes(data: bytes):
@@ -174,26 +207,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Wire up audio broadcast to WebSocket clients
     media.ws_send_bytes = _ws_send_bytes
+    media.has_ws_clients = lambda: len(audio_ws_clients) > 0
+    media.request_keyframe = hub.request_keyframe
     hub.set_ws_broadcast(_broadcast)
-    hub._has_ws_clients = lambda: len(audio_ws_clients) > 0
-
-    # Initialize APNs VoIP push sender
-    from .const import APNS_KEY_PATH, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_SANDBOX
-    if APNS_KEY_ID and APNS_TEAM_ID:
-        push_sender.init(APNS_KEY_PATH, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_SANDBOX)
-        _LOGGER.info("APNs VoIP push sender initialized")
-    else:
-        _LOGGER.warning("APNs push not configured — set APNS_KEY_ID and APNS_TEAM_ID in const.py")
 
     _register_services(hass)
 
-    hass.http.register_view(VimarMjpegView(hass, entry.entry_id))
     hass.http.register_view(VimarAVStreamView(hass, entry.entry_id))
     hass.http.register_view(VimarAudioWSView(hass, entry.entry_id))
-    hass.http.register_view(VimarPushTokenView())
     hass.http.register_view(VimarDebugView())
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # SPS/PPS della targa salvati: la prima apertura dopo un riavvio non deve
+    # aspettare che la targa li rimandi (vedi media_handler.load_parameter_sets).
+    await hass.async_add_executor_job(
+        media.load_parameter_sets,
+        hass.config.path(".storage", f"{DOMAIN}.video_params.json"))
+
+    # Il videocitofono in HomeKit lo pubblichiamo noi: il ponte di Home
+    # Assistant non riceve la voce di chi risponde (vedi homekit_accessory).
+    # Se qualcosa va storto qui, il resto dell'integrazione deve funzionare
+    # lo stesso: il citofono in Home Assistant non dipende da HomeKit.
+    if entry.options.get(CONF_HOMEKIT_ACCESSORY, DEFAULT_HOMEKIT_ACCESSORY):
+        try:
+            from .homekit_accessory import async_setup_homekit  # noqa: PLC0415
+
+            hass.data[DOMAIN][entry.entry_id]["homekit_stop"] = (
+                await async_setup_homekit(hass, entry, hub))
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Videocitofono HomeKit non avviato")
 
     # Ricarica l'entry quando cambiano le options (es. lista attuatori):
     # così i bottoni dinamici vengono ricreati con la nuova configurazione.
@@ -202,7 +245,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Ricarica l'integrazione al salvataggio delle options."""
+    """Ricarica l'integrazione al salvataggio delle options.
+
+    Il listener scatta a ogni modifica dell'entry, anche quando è
+    l'integrazione stessa a salvare nei dati il modello rilevato: prima
+    quello bastava a ricaricare tutto, anche a chiamata in corso.
+    """
+    current = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    if current.get("options") == dict(entry.options):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -211,13 +262,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if ok:
         data = hass.data[DOMAIN].pop(entry.entry_id)
+        # Prima HomeKit, che libera la sua porta: a un ricaricamento il nuovo
+        # server la vuole subito.
+        if stop := data.get("homekit_stop"):
+            try:
+                await stop()
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Arresto del videocitofono HomeKit")
         # Chiudi tutti i WS audio attivi prima di fermare l'hub:
         # evita che le views (ancora registrate in HA) usino il vecchio hub
         # e che i client rimangano connessi a un hub non più valido.
         for ws in list(data.get("audio_ws_clients", set())):
             await ws.close()
         await data["hub"].async_stop()
-        if not hass.data[DOMAIN]:
+        if not any(isinstance(v, dict) and "hub" in v for v in hass.data[DOMAIN].values()):
             for svc in (SERVICE_SEND_COMMAND, SERVICE_CALL, SERVICE_ANSWER,
                         SERVICE_HANGUP, SERVICE_OPEN_DOOR, SERVICE_FETCH_LOCAL):
                 hass.services.async_remove(DOMAIN, svc)
@@ -268,7 +326,7 @@ def _register_services(hass: HomeAssistant) -> None:
         hub = _get_hub_from_hass(hass)
         ok, msg = await hub.async_send_command(
             body=call.data["body"],
-            target=call.data.get("target", "55001"),
+            target=call.data.get("target") or runtime.SGA_TARGET,
             header_name=call.data.get("header_name") or None,
             header_value=call.data.get("header_value") or None,
         )
@@ -353,8 +411,10 @@ def _register_services(hass: HomeAssistant) -> None:
             target=call.data.get("target"), command=call.data.get("command"))
         return {"ok": ok, "result": msg}
 
-    hass.services.async_register(
-        DOMAIN, SERVICE_SEND_COMMAND, _svc_send_command,
+    # Comandi arbitrari all'impianto e richieste con la password SIP: solo
+    # per gli amministratori. Le automazioni (senza utente) passano comunque.
+    async_register_admin_service(
+        hass, DOMAIN, SERVICE_SEND_COMMAND, _svc_send_command,
         schema=SEND_COMMAND_SCHEMA, supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(
         DOMAIN, SERVICE_CALL, _svc_call,
@@ -368,8 +428,8 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, SERVICE_OPEN_DOOR, _svc_open_door,
         schema=OPEN_DOOR_SCHEMA, supports_response=SupportsResponse.OPTIONAL)
-    hass.services.async_register(
-        DOMAIN, SERVICE_FETCH_LOCAL, _svc_fetch_local,
+    async_register_admin_service(
+        hass, DOMAIN, SERVICE_FETCH_LOCAL, _svc_fetch_local,
         schema=FETCH_LOCAL_SCHEMA, supports_response=SupportsResponse.OPTIONAL)
 
 
@@ -438,7 +498,7 @@ class VimarAudioWSView(HomeAssistantView):
         try:
             async for msg in ws:
                 if msg.type == web.WSMsgType.TEXT:
-                    await self._handle_text(ws, msg.data)
+                    await self._handle_text(ws, msg.data, request.get("hass_user"))
                 elif msg.type == web.WSMsgType.BINARY:
                     # Client sending mic audio: 0x02 prefix + PCM16LE
                     if len(msg.data) > 1 and msg.data[0] == 0x02 and hub.in_call:
@@ -453,7 +513,12 @@ class VimarAudioWSView(HomeAssistantView):
 
         return ws
 
-    async def _handle_text(self, ws: web.WebSocketResponse, text: str):
+    # Azioni da manutenzione: comandi SIP arbitrari, scansioni, registrazioni.
+    # Chiamare, rispondere, riagganciare e aprire restano a tutti gli utenti:
+    # è quello che fa la scheda del citofono per chiunque in casa.
+    _ADMIN_ACTIONS = frozenset({"command", "register", "probe", "scan", "reconnect"})
+
+    async def _handle_text(self, ws: web.WebSocketResponse, text: str, user=None):
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
@@ -464,6 +529,10 @@ class VimarAudioWSView(HomeAssistantView):
         hub = self._hub
         if hub is None:
             await ws.send_str(json.dumps({"type": "error", "msg": "Integration not loaded"}))
+            return
+        if action in self._ADMIN_ACTIONS and not (user and user.is_admin):
+            await ws.send_str(json.dumps(
+                {"type": "error", "msg": f"'{action}' richiede un amministratore"}))
             return
 
         if action == "status":
@@ -542,7 +611,7 @@ class VimarAudioWSView(HomeAssistantView):
             try:
                 ok, m = await hub.async_send_command(
                     body=data.get("body", ""),
-                    target=data.get("target", "55001"),
+                    target=data.get("target") or runtime.SGA_TARGET,
                     header_name=data.get("header_name", "Panda"),
                     header_value=data.get("header_value", "command"),
                 )
@@ -616,47 +685,6 @@ class VimarAudioWSView(HomeAssistantView):
                 await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
 
 
-class VimarPushTokenView(HomeAssistantView):
-    """REST endpoint for iOS app to register/unregister VoIP push tokens."""
-
-    url = "/api/vimar_intercom/push_token"
-    name = "api:vimar_intercom:push_token"
-    requires_auth = True
-
-    async def post(self, request: web.Request) -> web.Response:
-        try:
-            data = await request.json()
-        except Exception:
-            return web.json_response({"error": "Invalid JSON"}, status=400)
-
-        token = data.get("token")
-        if not token:
-            return web.json_response({"error": "Missing token"}, status=400)
-
-        sender = push_sender.get_sender()
-        if not sender:
-            return web.json_response({"error": "Push not configured"}, status=503)
-
-        device_name = data.get("device_name", "unknown")
-        sender.register_token(token, device_name)
-        return web.json_response({"status": "ok", "devices": len(sender.registered_devices)})
-
-    async def delete(self, request: web.Request) -> web.Response:
-        try:
-            data = await request.json()
-        except Exception:
-            return web.json_response({"error": "Invalid JSON"}, status=400)
-
-        token = data.get("token")
-        if not token:
-            return web.json_response({"error": "Missing token"}, status=400)
-
-        sender = push_sender.get_sender()
-        if sender:
-            sender.unregister_token(token)
-        return web.json_response({"status": "ok"})
-
-
 class VimarDebugView(HomeAssistantView):
     """Debug endpoint — returns recent vimar_intercom logs as plain text."""
 
@@ -675,60 +703,8 @@ class VimarDebugView(HomeAssistantView):
             n = int(request.query.get("lines", "100"))
         except ValueError:
             n = 100
-        text = "\n".join(_debug_log[-n:])
+        text = "\n".join(list(_debug_log)[-n:])
         return web.Response(text=text, content_type="text/plain")
-
-
-class VimarMjpegView(HomeAssistantView):
-    """Serve MJPEG stream at /api/vimar_intercom/video."""
-
-    url = "/api/vimar_intercom/video"
-    name = "api:vimar_intercom:video"
-    requires_auth = False
-
-    def __init__(self, hass: HomeAssistant, entry_id: str):
-        self._hass = hass
-        self._entry_id = entry_id
-
-    async def get(self, request: web.Request) -> web.StreamResponse:
-        if not _is_local_request(request):
-            return web.Response(status=403, text="Forbidden (local network only)")
-        hub = self._hass.data.get(DOMAIN, {}).get(self._entry_id, {}).get("hub")
-        if hub is None:
-            return web.Response(status=503, text="Integration not loaded")
-        # Il target finisce nella request line di un INVITE. Senza controllo,
-        # un parametro arbitrario faceva chiamare qualunque indirizzo e un CRLF
-        # spezzava il messaggio SIP in due.
-        raw_target = request.query.get("target")
-        target = validate.sip_target(raw_target)
-        if raw_target and target is None:
-            _LOGGER.warning("Target %r rifiutato: sono ammesse solo cifre", raw_target[:40])
-            return web.Response(status=400, text="Invalid target")
-        await hub.stream_opened(target=target)
-
-        response = web.StreamResponse()
-        response.content_type = "multipart/x-mixed-replace; boundary=frame"
-        await response.prepare(request)
-        try:
-            waited = 0
-            while not hub.video_frame and waited < 25:
-                await asyncio.sleep(0.5)
-                waited += 0.5
-
-            while True:
-                frame = hub.video_frame
-                if frame:
-                    await response.write(
-                        b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n\r\n"
-                        + frame + b"\r\n"
-                    )
-                await asyncio.sleep(0.04)
-        except (ConnectionResetError, asyncio.CancelledError):
-            pass
-        finally:
-            await hub.stream_closed()
-        return response
 
 
 class VimarAVStreamView(HomeAssistantView):
@@ -736,7 +712,12 @@ class VimarAVStreamView(HomeAssistantView):
 
     url = "/api/vimar_intercom/av"
     name = "api:vimar_intercom:av"
-    requires_auth = False
+    # Autenticato: l'ffmpeg di Home Assistant arriva con un URL firmato (vedi
+    # camera.prepare_homekit_source). Prima bastava un indirizzo di rete
+    # locale, e da un port-forward con SNAT, un tunnel sullo stesso host o un
+    # qualunque dispositivo in LAN si faceva partire una chiamata e si
+    # guardava la strada.
+    requires_auth = True
 
     def __init__(self, hass: HomeAssistant, entry_id: str):
         self._hass = hass
@@ -750,37 +731,64 @@ class VimarAVStreamView(HomeAssistantView):
             return web.Response(status=503, text="Integration not loaded")
         _LOGGER.info("AV stream requested — triggering auto-call")
         await hub.stream_opened()
+        # Da qui in poi ogni uscita deve passare da stream_closed(), altrimenti
+        # il contatore degli spettatori non torna a zero e la chiamata resta
+        # aperta fino al limite di sicurezza.
+        try:
+            # Attesa a grana fine: con passi da mezzo secondo si buttavano via
+            # fino a 450 ms su una chiamata che era già pronta.
+            waited = 0.0
+            while not hub.in_call and waited < 15:
+                await asyncio.sleep(0.02)
+                waited += 0.02
 
-        waited = 0
-        while not hub.in_call and waited < 15:
-            await asyncio.sleep(0.5)
-            waited += 0.5
+            if not hub.in_call:
+                _LOGGER.warning("AV stream: call not established after 15s")
+                return web.Response(status=503, text="Call not established")
 
-        if not hub.in_call:
-            _LOGGER.warning("AV stream: call not established after 15s")
+            # Ci si iscrive PRIMA di avviare ffmpeg: così non si perdono i
+            # primi pacchetti (PAT/PMT e, se capita, il primo IDR) e non esiste
+            # la finestra in cui un altro client che esce spegne tutto.
+            queue = media.subscribe_av()
+            try:
+                return await self._serve(request, hub, queue)
+            finally:
+                await media.release_av(queue)
+        finally:
             await hub.stream_closed()
-            return web.Response(status=503, text="Call not established")
 
+    async def _serve(self, request, hub, queue) -> web.StreamResponse:
+        # Prima di avviare ffmpeg: l'INFO parte subito e SPS/PPS arrivano
+        # mentre ffmpeg si sta ancora alzando, così il video è già dichiarabile
+        # al primo avvio e non serve riavviarlo.
+        keyframe = asyncio.create_task(hub.request_keyframe())
         await media.start_av_ffmpeg()
         if not media.av_ffmpeg_proc:
-            await hub.stream_closed()
             return web.Response(status=503, text="ffmpeg failed to start")
+
+        del keyframe  # già in volo: la si lascia finire per conto suo
 
         response = web.StreamResponse()
         response.content_type = "video/mp2t"
         await response.prepare(request)
 
-        loop = asyncio.get_running_loop()
+        # Lo stdout di ffmpeg viene letto una volta sola e distribuito: due
+        # client che leggessero la pipe si spartirebbero i byte e nessuno dei
+        # due riceverebbe un flusso decodificabile.
         try:
-            while media.av_ffmpeg_proc and media.av_ffmpeg_proc.poll() is None:
-                chunk = await loop.run_in_executor(
-                    None, media.av_ffmpeg_proc.stdout.read, 4096)
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(queue.get(), timeout=10)
+                except asyncio.TimeoutError:
+                    # Nessun byte per 10 s: se la chiamata è finita si chiude,
+                    # altrimenti si aspetta ancora invece di appendere il
+                    # client a una coda che nessuno alimenterà più.
+                    if not hub.in_call:
+                        break
+                    continue
                 if not chunk:
                     break
                 await response.write(chunk)
         except (ConnectionResetError, asyncio.CancelledError):
             pass
-        finally:
-            await media.stop_av_ffmpeg()
-            await hub.stream_closed()
         return response

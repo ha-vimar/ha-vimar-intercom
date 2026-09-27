@@ -33,16 +33,18 @@
       },
       "network": {
         "title": "Local network",
-        "description": "Enter the local IP of the intercom. A SIP registration test will be performed. User: {sip_user}@{sip_domain} — MAC: {mac}. On error: {error_detail}",
+        "description": "Detected plant: {plant}. Enter the local IP of the intercom. A SIP registration test will be performed. User: {sip_user}@{sip_domain} — MAC: {mac}. On error: {error_detail}",
         "data": {
           "local_proxy": "Intercom IP (local proxy)",
           "use_local_udp": "Use local UDP (recommended)",
-          "local_udp_port": "Local UDP port"
+          "local_udp_port": "Local UDP port",
+          "device_name": "Device name"
         },
         "data_description": {
           "local_proxy": "The local IP address of your Vimar intercom (e.g. 192.168.1.100).",
           "use_local_udp": "Enable local UDP mode. Requires HA and the intercom to be on the same network.",
-          "local_udp_port": "UDP port used by HA for local SIP. Default: 5060."
+          "local_udp_port": "UDP port used by HA for local SIP. Default: 5060.",
+          "device_name": "The name Home Assistant appears under among the intercom's paired devices. It is fixed at pairing time: changing it later requires a new QR code."
         }
       }
     },
@@ -63,7 +65,8 @@
         "menu_options": {
           "settings": "Network and actuator settings",
           "import_rubrica": "Import actuators from rubrica.db",
-          "fetch_rubrica": "Download the phonebook from the intercom"
+          "fetch_rubrica": "Download the phonebook from the intercom",
+          "homekit": "HomeKit"
         }
       },
       "settings": {
@@ -76,13 +79,17 @@
           "media_enc": "Encrypt media (SRTP)",
           "actuators": "Actuators (JSON)",
           "sga_target": "SGA (intercom SIP id/AUTO)",
-          "picg_target": "PICG (GET_INIT_STATUS SIP id)"
+          "picg_target": "PICG (GET_INIT_STATUS SIP id)",
+          "camera_target": "Video entrance (auto-on)",
+          "door_target": "Door panel"
         },
         "data_description": {
           "media_enc": "Leave off for plain RTP (default, required by most Vimar 2F systems). Enable only if the entry panel/system requires SRTP.",
           "actuators": "JSON list of objects name, msg, target, icon. icon: door|light|switch. target \"AUTO\" uses the default open-door station. Empty = no buttons.",
-          "sga_target": "Target for VOICEMAIL;/DND; and the AUTO open-door. Empty = historical default (55001). Change it only if your system uses a different SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
-          "picg_target": "Target for GET_INIT_STATUS. On systems verified so far it matches the SGA. Empty = historical default (55001)."
+          "sga_target": "Target for VOICEMAIL;/DND;, and for the door command when \"Door panel\" is empty. Empty = historical default (55001). Change it only if your system uses a different SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
+          "picg_target": "Target for GET_INIT_STATUS. On systems verified so far it matches the SGA. Empty = historical default (55001).",
+          "camera_target": "The panel called to open the video when there is no call in progress. Empty = 55100, and if that does not exist, the panel that last rang (then remembered). Fill it in only to force a specific panel.",
+          "door_target": "The panel that receives the open command (GID_PE of the door actuator in the phonebook). Filled in automatically when you import or download the phonebook. Empty = the door actuator's panel if actuators were imported, otherwise the SGA."
         }
       },
       "import_rubrica": {
@@ -108,6 +115,18 @@
         },
         "data_description": {
           "rubrica_gid": "The apartment GID in the phonebook (usually the one already in use, e.g. 101)."
+        }
+      },
+      "homekit": {
+        "title": "HomeKit settings",
+        "description": "The intercom in HomeKit as a video doorbell, with two-way audio and the gate in the same view.",
+        "data": {
+          "homekit_accessory": "Publish to HomeKit",
+          "homekit_video_smooth": "Smoother video (re-encode)"
+        },
+        "data_description": {
+          "homekit_accessory": "Turns on the HomeKit video doorbell. When first turned on, a notification with the pairing QR code appears.",
+          "homekit_video_smooth": "On (recommended): Home Assistant re-encodes the panel's video with a keyframe every second, so a packet lost on the cloud relay shows as a brief smear instead of a freeze. Opening takes about half a second longer and uses some CPU. Off: the video goes straight to the phone and opens faster, but a lost packet can freeze the picture for up to 3 seconds."
         }
       }
     },

@@ -8,8 +8,11 @@ import ipaddress
 import json
 import logging
 import os
-import random
+import secrets
+import re
 import socket
+import ssl
+import time
 import tempfile
 
 import voluptuous as vol
@@ -19,10 +22,17 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
-from .const import DOMAIN, SGA_TARGET, PICG_TARGET
+from .const import (
+    DOMAIN, SGA_TARGET, PICG_TARGET, USER_AGENT, CA_PATH,
+    SIP_PORT as CLOUD_SIP_PORT, MY_NAME as DEFAULT_DEVICE_NAME,
+    CONF_HOMEKIT_ACCESSORY, CONF_HOMEKIT_SMOOTH,
+    DEFAULT_HOMEKIT_ACCESSORY, DEFAULT_HOMEKIT_SMOOTH,
+)
 from . import qr_decoder
+from . import profiles
 from . import rest_client
 from . import rubrica_import
+from . import runtime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 KEY_SIP_USER      = "sip_user"
 KEY_SIP_PASSWORD  = "sip_password"
 KEY_SIP_DOMAIN    = "sip_domain"
+KEY_DEVICE_NAME   = "device_name"
 KEY_SIP_HA1       = "sip_ha1"
 KEY_CLOUD_PROXY   = "cloud_proxy"
 KEY_LOCAL_PROXY   = "local_proxy"
@@ -42,6 +53,8 @@ KEY_ACTUATORS      = "actuators"
 KEY_MEDIA_ENC      = "media_enc"
 KEY_SGA_TARGET     = "sga_target"
 KEY_PICG_TARGET    = "picg_target"
+KEY_CAMERA_TARGET  = "camera_target"
+KEY_DOOR_TARGET    = "door_target"
 
 DEFAULT_CLOUD_PROXY    = "ipvdes.vimar.cloud"
 DEFAULT_LOCAL_SIP_PORT = 5060
@@ -99,124 +112,356 @@ def _validate_ip(ip: str) -> bool:
         return False
 
 
+# Parametri di un challenge Digest: valori quotati (che possono contenere
+# virgole) oppure token nudi. Va analizzato dopo aver tolto nome header e
+# schema, altrimenti il primo parametro — di solito realm — viene perso.
+_CHALLENGE_PARAM = re.compile(r'([A-Za-z][A-Za-z0-9_-]*)\s*=\s*(?:"([^"]*)"|([^,\s]+))')
+
+
+def _parse_challenge(response: str) -> dict[str, str]:
+    """Estrae i parametri del challenge Digest da una risposta 401/407."""
+    for line in response.split("\r\n"):
+        name, sep, value = line.partition(":")
+        if not sep or name.strip().lower() not in ("www-authenticate", "proxy-authenticate"):
+            continue
+        scheme, sep, params = value.strip().partition(" ")
+        if not sep or scheme.lower() != "digest":
+            continue
+        return {
+            m.group(1).lower(): m.group(2) if m.group(2) is not None else m.group(3)
+            for m in _CHALLENGE_PARAM.finditer(params)
+        }
+    return {}
+
+
+def _digest_header(
+    *, user: str, password: str, realm: str, nonce: str, uri: str,
+    method: str = "REGISTER", qop: str = "", opaque: str = "", cnonce: str = "",
+) -> str:
+    """Costruisce l'header Authorization per un challenge Digest MD5."""
+    nc = "00000001"
+    ha1 = hashlib.md5(f"{user}:{realm}:{password}".encode()).hexdigest()
+    ha2 = hashlib.md5(f"{method}:{uri}".encode()).hexdigest()
+    offered = [item.strip().lower() for item in qop.split(",")] if qop else []
+    if "auth" in offered:
+        response = hashlib.md5(
+            f"{ha1}:{nonce}:{nc}:{cnonce}:auth:{ha2}".encode()
+        ).hexdigest()
+        header = (
+            f'Digest username="{user}", realm="{realm}", nonce="{nonce}", '
+            f'uri="{uri}", response="{response}", algorithm=MD5, '
+            f'qop=auth, nc={nc}, cnonce="{cnonce}"'
+        )
+    else:
+        response = hashlib.md5(f"{ha1}:{nonce}:{ha2}".encode()).hexdigest()
+        header = (
+            f'Digest username="{user}", realm="{realm}", nonce="{nonce}", '
+            f'uri="{uri}", response="{response}", algorithm=MD5'
+        )
+    if opaque:
+        header += f', opaque="{opaque}"'
+    return header
+
+
+def _cloud_targets(cloud_proxy: str) -> list[tuple[str, int]]:
+    """Proxy SIP cloud, da SRV _sips._tcp.<proxy> con fallback noti."""
+    targets: list[tuple[str, int]] = []
+    try:
+        import dns.resolver  # dnspython, presente in HA
+
+        answers = dns.resolver.resolve(f"_sips._tcp.{cloud_proxy}", "SRV")
+        for record in sorted(answers, key=lambda r: (r.priority, -r.weight)):
+            targets.append((str(record.target).rstrip("."), int(record.port)))
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("SRV lookup _sips._tcp.%s fallito: %s", cloud_proxy, exc)
+    if not targets and cloud_proxy.endswith("ipvdes.vimar.cloud"):
+        targets = [(f"flexiprod{i}.ipvdes2.vimarsso.cloud", CLOUD_SIP_PORT) for i in (1, 2, 3)]
+    return targets
+
+
+async def _test_cloud_registration(
+    sip_user: str,
+    sip_password: str,
+    cloud_domain: str,
+    cloud_proxy: str = DEFAULT_CLOUD_PROXY,
+    device_imei: str = "",
+    device_uuid: str = "",
+    device_name: str = DEFAULT_DEVICE_NAME,
+    timeout: float = 12.0,
+) -> tuple[bool, str]:
+    """Registra sul relay cloud in TLS e restituisce (successo, messaggio)."""
+    if not cloud_domain:
+        return False, (
+            "Le credenziali non contengono il dominio cloud: riconfigura "
+            "l'integrazione partendo dal QR di abbinamento."
+        )
+
+    def _run() -> tuple[bool, str]:
+        def rand_hex(n: int = 8) -> str:
+            return f"{secrets.randbelow(16**n):0{n}x}"
+
+        call_id  = rand_hex(16)
+        from_tag = rand_hex(8)
+        uri      = f"sip:{cloud_domain}"
+
+        context = ssl.create_default_context()
+        if os.path.exists(CA_PATH):
+            context.load_verify_locations(CA_PATH)
+
+        last_error = "nessun proxy raggiungibile"
+        for host, port in _cloud_targets(cloud_proxy):
+            try:
+                raw = socket.create_connection((host, port), timeout=timeout)
+            except OSError as exc:
+                last_error = f"{host}:{port}: {exc}"
+                continue
+            try:
+                with context.wrap_socket(raw, server_hostname=cloud_proxy) as sock:
+                    sock.settimeout(timeout)
+                    my_ip, my_port = sock.getsockname()[:2]
+
+                    def make_register(auth_hdr=None, seq=1):
+                        contact = f"<sip:{sip_user}@{my_ip}:{my_port};transport=tls>"
+                        if device_uuid:
+                            contact += f';+sip.instance="<urn:uuid:{device_uuid}>"'
+                        lines = [
+                            f"REGISTER {uri} SIP/2.0",
+                            f"Via: SIP/2.0/TLS {my_ip}:{my_port};alias;branch=z9hG4bK{rand_hex()};rport",
+                            f"Route: <sip:{cloud_proxy};transport=tls;lr>",
+                            "Max-Forwards: 70",
+                            f"To: <sip:{sip_user}@{cloud_domain}>",
+                            f"From: <sip:{sip_user}@{cloud_domain}>;tag={from_tag}",
+                            f"Call-ID: {call_id}",
+                            f"CSeq: {seq} REGISTER",
+                            f"Contact: {contact}",
+                            "Expires: 60",
+                            f"User-Agent: {USER_AGENT}",
+                            f"MyName: {device_name}",
+                        ]
+                        if device_imei:
+                            lines.append(f"Mobile-IMEI: {device_imei}")
+                        if auth_hdr:
+                            lines.append(f"Authorization: {auth_hdr}")
+                        lines += ["Content-Length: 0", "", ""]
+                        return "\r\n".join(lines).encode()
+
+                    def read_final() -> str:
+                        """Scarta le risposte provvisorie e restituisce la finale."""
+                        buffer = b""
+                        deadline = time.monotonic() + timeout
+                        while time.monotonic() < deadline:
+                            chunk = sock.recv(65535)
+                            if not chunk:
+                                raise OSError("connessione chiusa dal relay")
+                            buffer += chunk
+                            while b"\r\n\r\n" in buffer:
+                                head, _, buffer = buffer.partition(b"\r\n\r\n")
+                                message = head.decode(errors="replace")
+                                first = message.split("\r\n", 1)[0]
+                                code = first.split(" ")[1] if first.count(" ") >= 1 else ""
+                                if code.isdigit() and int(code) >= 200:
+                                    return message
+                        raise socket.timeout
+
+                    sock.sendall(make_register())
+                    response = read_final()
+                    first = response.split("\r\n", 1)[0]
+                    if " 200" in first:
+                        return True, "Registrazione cloud riuscita (senza auth)"
+                    if " 401" not in first and " 407" not in first:
+                        return False, f"Il relay ha rifiutato la registrazione: {first}"
+
+                    challenge = _parse_challenge(response)
+                    if not challenge.get("nonce") or not challenge.get("realm"):
+                        return False, "Challenge cloud senza nonce/realm"
+                    auth = _digest_header(
+                        user=sip_user, password=sip_password,
+                        realm=challenge["realm"], nonce=challenge["nonce"], uri=uri,
+                        qop=challenge.get("qop", ""), opaque=challenge.get("opaque", ""),
+                        cnonce=rand_hex(8),
+                    )
+                    sock.sendall(make_register(auth_hdr=auth, seq=2))
+                    final = read_final().split("\r\n", 1)[0]
+                    if " 200" in final:
+                        return True, f"Registrazione cloud riuscita tramite {host}"
+                    return False, f"Autenticazione cloud rifiutata: {final}"
+            except (OSError, ssl.SSLError, socket.timeout) as exc:
+                last_error = f"{host}:{port}: {exc}"
+                continue
+        return False, f"Registrazione cloud fallita ({last_error})"
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _run)
+
+
+async def _probe_transport(
+    credentials: dict, *, local_proxy: str, local_udp_port: int,
+    device_imei: str, device_uuid: str, device_name: str, prefer_local: bool,
+) -> tuple[bool, bool, str]:
+    """Stabilisce quale trasporto funziona davvero.
+
+    Restituisce ``(use_local_udp, ok, messaggio)``. Si parte da ciò che il
+    profilo dell'impianto suggerisce, ma se fallisce si prova l'altra via prima
+    di arrendersi: il tipo di impianto dichiarato nel QR è un'indicazione, non
+    una garanzia, e su un firmware nuovo può essere smentito. Quello che passa
+    la prova è ciò che viene salvato.
+    """
+
+    async def _local() -> tuple[bool, str]:
+        return await _test_sip_registration(
+            sip_user=credentials["sip_user"],
+            sip_password=credentials["sip_password"],
+            sip_domain=credentials.get("local_domain") or credentials["sip_domain"],
+            local_proxy=local_proxy,
+            local_udp_port=local_udp_port,
+            device_imei=device_imei,
+            device_uuid=device_uuid,
+            device_name=device_name,
+        )
+
+    async def _cloud() -> tuple[bool, str]:
+        return await _test_cloud_registration(
+            sip_user=credentials["sip_user"],
+            sip_password=credentials["sip_password"],
+            cloud_domain=credentials.get("cloud_domain", ""),
+            cloud_proxy=credentials.get("cloud_proxy", DEFAULT_CLOUD_PROXY),
+            device_imei=device_imei,
+            device_uuid=device_uuid,
+            device_name=device_name,
+        )
+
+    first_local = bool(prefer_local)
+    first = _local if first_local else _cloud
+    second = _cloud if first_local else _local
+    first_name = "UDP locale" if first_local else "cloud TLS"
+    second_name = "cloud TLS" if first_local else "UDP locale"
+
+    ok, msg = await first()
+    _LOGGER.info("SIP test (%s): ok=%s msg=%s", first_name, ok, msg)
+    if ok:
+        return first_local, True, msg
+
+    ok2, msg2 = await second()
+    _LOGGER.info("SIP test (%s, ripiego): ok=%s msg=%s", second_name, ok2, msg2)
+    if ok2:
+        return (not first_local), True, (
+            f"{first_name} non disponibile ({msg}); registrazione riuscita via {second_name}"
+        )
+    return first_local, False, f"{first_name}: {msg} — {second_name}: {msg2}"
+
+
 async def _test_sip_registration(
     sip_user: str,
     sip_password: str,
     sip_domain: str,
     local_proxy: str,
     local_udp_port: int = DEFAULT_LOCAL_UDP_PORT,
+    device_imei: str = "",
+    device_uuid: str = "",
+    device_name: str = DEFAULT_DEVICE_NAME,
     timeout: float = 8.0,
 ) -> tuple[bool, str]:
-    """Tenta una registrazione SIP UDP e restituisce (successo, messaggio)."""
+    """Tenta una registrazione SIP UDP e restituisce (successo, messaggio).
+
+    Usa la stessa identità che userà il runtime: il citofono lega la coppia
+    (identificativo, nome) alle credenziali al momento dell'abbinamento, quindi
+    un test con un'identità diversa proverebbe qualcosa di inutile.
+    """
 
     def _run() -> tuple[bool, str]:
         def rand_hex(n: int = 8) -> str:
-            return f"{random.randint(0, 16**n - 1):0{n}x}"
+            return f"{secrets.randbelow(16**n):0{n}x}"
 
         call_id  = rand_hex(16)
         from_tag = rand_hex(8)
         uri      = f"sip:{sip_domain}"
 
-        ha1_cache: dict[str, str] = {}
-
-        def compute_ha1(realm: str) -> str:
-            if realm not in ha1_cache:
-                ha1_cache[realm] = hashlib.md5(
-                    f"{sip_user}:{realm}:{sip_password}".encode()
-                ).hexdigest()
-            return ha1_cache[realm]
-
-        def make_register(auth_hdr: str | None = None, seq: int = 1) -> bytes:
-            my_ip = "0.0.0.0"
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.connect((local_proxy, DEFAULT_LOCAL_SIP_PORT))
-                my_ip = s.getsockname()[0]
-                s.close()
-            except Exception:
-                pass
-            branch = f"z9hG4bK{rand_hex()}"
-            lines = [
-                f"REGISTER {uri} SIP/2.0",
-                f"Via: SIP/2.0/UDP {my_ip}:{local_udp_port};branch={branch};rport",
-                "Max-Forwards: 70",
-                f"To: <sip:{sip_user}@{sip_domain}>",
-                f"From: <sip:{sip_user}@{sip_domain}>;tag={from_tag}",
-                f"Call-ID: {call_id}",
-                f"CSeq: {seq} REGISTER",
-                f"Contact: <sip:{sip_user}@{my_ip}:{local_udp_port}>",
-                "Expires: 60",
-                "User-Agent: HomeAssistant/VimarIntercom",
-            ]
-            if auth_hdr:
-                lines.append(f"Authorization: {auth_hdr}")
-            lines += ["Content-Length: 0", "", ""]
-            return "\r\n".join(lines).encode()
-
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(timeout)
         try:
-            sock.bind(("0.0.0.0", 0))
-            sock.sendto(make_register(seq=1), (local_proxy, DEFAULT_LOCAL_SIP_PORT))
-            data, _ = sock.recvfrom(65535)
-            resp     = data.decode(errors="replace")
-            first    = resp.split("\r\n", 1)[0]
+            # Via e Contact devono annunciare la porta realmente in ascolto:
+            # annunciarne un'altra manda le risposte in un socket inesistente.
+            try:
+                sock.bind(("0.0.0.0", local_udp_port))
+            except OSError:
+                sock.bind(("0.0.0.0", 0))
+            my_port = sock.getsockname()[1]
 
-            if "200" in first:
-                return True, "Registrazione riuscita (senza auth)"
+            my_ip = "0.0.0.0"
+            try:
+                probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                probe.connect((local_proxy, DEFAULT_LOCAL_SIP_PORT))
+                my_ip = probe.getsockname()[0]
+                probe.close()
+            except OSError:
+                pass
 
-            if "401" not in first:
+            def make_register(auth_hdr: str | None = None, seq: int = 1) -> bytes:
+                branch = f"z9hG4bK{rand_hex()}"
+                lines = [
+                    f"REGISTER {uri} SIP/2.0",
+                    f"Via: SIP/2.0/UDP {my_ip}:{my_port};branch={branch};rport",
+                    "Max-Forwards: 70",
+                    f"To: <sip:{sip_user}@{sip_domain}>",
+                    f"From: <sip:{sip_user}@{sip_domain}>;tag={from_tag}",
+                    f"Call-ID: {call_id}",
+                    f"CSeq: {seq} REGISTER",
+                    f"Contact: <sip:{sip_user}@{my_ip}:{my_port}>"
+                    + (f';+sip.instance="<urn:uuid:{device_uuid}>"' if device_uuid else ""),
+                    "Expires: 60",
+                    f"User-Agent: {USER_AGENT}",
+                    f"MyName: {device_name}",
+                ]
+                if device_imei:
+                    lines.append(f"Mobile-IMEI: {device_imei}")
+                if auth_hdr:
+                    lines.append(f"Authorization: {auth_hdr}")
+                lines += ["Content-Length: 0", "", ""]
+                return "\r\n".join(lines).encode()
+
+            def status(response: str) -> str:
+                return response.split("\r\n", 1)[0]
+
+            def rejected(first: str) -> tuple[bool, str]:
+                if " 503" in first:
+                    return False, (
+                        f"Il citofono ha rifiutato la registrazione UDP locale ({first.strip()}). "
+                        "Su alcuni firmware l'UDP locale è disabilitato: disattiva «Usa UDP locale» "
+                        "per registrarti tramite il cloud."
+                    )
                 return False, f"Risposta inattesa: {first}"
 
-            # Estrai challenge
-            nonce = realm = opaque = qop = ""
-            for line in resp.split("\r\n"):
-                lo = line.lower()
-                if lo.startswith("www-authenticate:"):
-                    for part in line.split(","):
-                        part = part.strip()
-                        for field in ("nonce", "realm", "opaque", "qop"):
-                            if part.lower().startswith(field + "="):
-                                val = part.split("=", 1)[1].strip().strip('"')
-                                if field == "nonce":  nonce  = val
-                                if field == "realm":  realm  = val
-                                if field == "opaque": opaque = val
-                                if field == "qop":    qop    = val
+            sock.sendto(make_register(seq=1), (local_proxy, DEFAULT_LOCAL_SIP_PORT))
+            data, _ = sock.recvfrom(65535)
+            resp  = data.decode(errors="replace")
+            first = status(resp)
 
+            if " 200" in first:
+                return True, "Registrazione riuscita (senza auth)"
+            if " 401" not in first and " 407" not in first:
+                return rejected(first)
+
+            challenge = _parse_challenge(resp)
+            nonce  = challenge.get("nonce", "")
+            realm  = challenge.get("realm", "")
+            opaque = challenge.get("opaque", "")
+            qop    = challenge.get("qop", "")
             if not nonce or not realm:
                 return False, "Challenge 401 senza nonce/realm"
 
-            ha1    = compute_ha1(realm)
-            ha2    = hashlib.md5(f"REGISTER:{uri}".encode()).hexdigest()
-            nc     = "00000001"
-            cnonce = rand_hex(8)
-
-            if "auth" in qop:
-                rh = hashlib.md5(
-                    f"{ha1}:{nonce}:{nc}:{cnonce}:auth:{ha2}".encode()
-                ).hexdigest()
-                auth = (
-                    f'Digest username="{sip_user}", realm="{realm}", '
-                    f'nonce="{nonce}", uri="{uri}", response="{rh}", '
-                    f'algorithm=MD5, qop=auth, nc={nc}, cnonce="{cnonce}"'
-                )
-            else:
-                rh   = hashlib.md5(f"{ha1}:{nonce}:{ha2}".encode()).hexdigest()
-                auth = (
-                    f'Digest username="{sip_user}", realm="{realm}", '
-                    f'nonce="{nonce}", uri="{uri}", response="{rh}", algorithm=MD5'
-                )
-            if opaque:
-                auth += f', opaque="{opaque}"'
+            auth = _digest_header(
+                user=sip_user, password=sip_password, realm=realm, nonce=nonce,
+                uri=uri, qop=qop, opaque=opaque, cnonce=rand_hex(8),
+            )
 
             sock.sendto(make_register(auth_hdr=auth, seq=2), (local_proxy, DEFAULT_LOCAL_SIP_PORT))
             data2, _ = sock.recvfrom(65535)
-            resp2    = data2.decode(errors="replace")
-            first2   = resp2.split("\r\n", 1)[0]
+            resp2  = data2.decode(errors="replace")
+            first2 = status(resp2)
 
-            if "200" in first2:
+            if " 200" in first2:
                 return True, "Registrazione riuscita"
-            return False, f"Risposta auth: {first2}"
+            return rejected(first2)
 
         except socket.timeout:
             return False, (
@@ -243,6 +488,10 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._credentials: dict = {}
         self._qr_error: str | None = None
+        # Generato una volta sola: il test di registrazione lo usa e, se
+        # l'abbinamento viene creato in quel momento, il citofono lo lega alle
+        # credenziali. Il valore salvato dev'essere lo stesso che è stato testato.
+        self._identity: dict[str, str] = runtime.new_device_identity()
 
     async def async_step_user(
         self, user_input: dict | None = None
@@ -344,40 +593,67 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # Il doppione si scarta PRIMA della prova: la prova registra
+            # davvero sul citofono, e su una credenziale già in uso poteva
+            # disturbare l'integrazione che la sta usando.
+            await self.async_set_unique_id(
+                f"{self._credentials['sip_user']}@{self._credentials['sip_domain']}")
+            self._abort_if_unique_id_configured()
+
             local_proxy    = user_input.get("local_proxy", "").strip()
             use_local_udp  = user_input.get("use_local_udp", True)
             local_udp_port = int(user_input.get("local_udp_port", DEFAULT_LOCAL_UDP_PORT))
+            device_name    = user_input.get("device_name", DEFAULT_DEVICE_NAME).strip()
 
+            if not device_name:
+                errors["device_name"] = "required"
             if not local_proxy:
                 errors["local_proxy"] = "required"
             elif not _validate_ip(local_proxy):
                 errors["local_proxy"] = "invalid_ip"
-            elif use_local_udp:
-                ok, msg = await _test_sip_registration(
-                    sip_user      = self._credentials["sip_user"],
-                    sip_password  = self._credentials["sip_password"],
-                    sip_domain    = self._credentials["sip_domain"],
-                    local_proxy   = local_proxy,
-                    local_udp_port = local_udp_port,
+            elif not errors:
+                # Solo con i dati validi: la prova registra davvero, e su una
+                # credenziale nuova è la registrazione stessa a fissare
+                # l'abbinamento, nome compreso.
+                # Si verifica il trasporto che verrà davvero usato, e se quello
+                # scelto non risponde si prova l'altro invece di fallire: è
+                # l'introspezione che evita di dare per scontato il modello.
+                use_local_udp, ok, msg = await _probe_transport(
+                    self._credentials,
+                    local_proxy=local_proxy,
+                    local_udp_port=local_udp_port,
+                    **self._identity,
+                    device_name=device_name,
+                    prefer_local=use_local_udp,
                 )
-                _LOGGER.info("SIP test: ok=%s msg=%s", ok, msg)
                 if not ok:
-                    errors["local_proxy"] = "sip_registration_failed"
+                    errors["base"] = "sip_registration_failed"
+                    self._qr_error = msg
+                else:
                     self._qr_error = msg
 
             if not errors:
+                # L'abbinamento lega (identificativo, nome) alle credenziali: il
+                # citofono rifiuta poi con 503 ogni registrazione che cambi uno
+                # dei due. L'identificativo è casuale e per-installazione, così
+                # due istanze di HA sullo stesso impianto non collidono, e va
+                # conservato: perderlo significa dover rigenerare il QR.
                 data = {
                     **self._credentials,
                     KEY_LOCAL_PROXY:    local_proxy,
                     KEY_USE_LOCAL_UDP:  use_local_udp,
                     KEY_LOCAL_UDP_PORT: local_udp_port,
+                    **self._identity,
+                    KEY_DEVICE_NAME:    device_name,
+                    # L'impostazione iniziale della cifratura media segue il
+                    # profilo dell'impianto; in risposta si rispecchia comunque
+                    # ciò che offre l'altro capo.
+                    KEY_MEDIA_ENC: bool(
+                        profiles.profile_for(
+                            self._credentials.get("plant_type")
+                        ).media_encryption
+                    ),
                 }
-                unique_id = (
-                    f"{self._credentials['sip_user']}@"
-                    f"{self._credentials['sip_domain']}"
-                )
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
 
                 return self.async_create_entry(
                     title=f"Vimar Intercom ({local_proxy})",
@@ -388,16 +664,26 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="network",
             data_schema=vol.Schema({
                 vol.Required("local_proxy"): str,
-                vol.Optional("use_local_udp", default=True): bool,
+                vol.Optional(
+                    "use_local_udp",
+                    default=profiles.profile_for(
+                        self._credentials.get("plant_type")
+                    ).prefers_local_udp,
+                ): bool,
                 vol.Optional(
                     "local_udp_port", default=DEFAULT_LOCAL_UDP_PORT
                 ): vol.All(vol.Coerce(int), vol.Range(min=1024, max=65535)),
+                vol.Optional("device_name", default=DEFAULT_DEVICE_NAME): str,
             }),
             errors=errors,
             description_placeholders={
                 "sip_user":   self._credentials.get("sip_user", ""),
                 "sip_domain": self._credentials.get("sip_domain", ""),
                 "mac":        self._credentials.get("mac", ""),
+                "plant":      profiles.describe(
+                    self._credentials.get("plant_type"),
+                    self._credentials.get("product_code"),
+                ),
                 "error_detail": self._qr_error or "",
             },
         )
@@ -429,7 +715,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Menu: impostazioni a mano, rubrica dal citofono, o file rubrica.db."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["settings", "fetch_rubrica", "import_rubrica"],
+            menu_options=["settings", "homekit", "fetch_rubrica", "import_rubrica"],
         )
 
     async def async_step_settings(
@@ -462,6 +748,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors[KEY_SGA_TARGET] = "invalid_target"
             if picg_target_raw and not picg_target_raw.isdigit():
                 errors[KEY_PICG_TARGET] = "invalid_target"
+            camera_target_raw = str(user_input.get(KEY_CAMERA_TARGET, "")).strip()
+            if camera_target_raw and not camera_target_raw.isdigit():
+                errors[KEY_CAMERA_TARGET] = "invalid_target"
+            door_target_raw = str(user_input.get(KEY_DOOR_TARGET, "")).strip()
+            if door_target_raw and not door_target_raw.isdigit():
+                errors[KEY_DOOR_TARGET] = "invalid_target"
 
             actuators: list[dict] = []
             try:
@@ -481,12 +773,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if not _validate_ip(local_proxy):
                 errors["local_proxy"] = "invalid_ip"
             elif use_local_udp and sip_changed:
+                # Con l'identità già abbinata: il citofono lega (identificativo,
+                # nome) alle credenziali, e una prova senza quella veniva
+                # rifiutata con 503 bloccando il salvataggio.
                 ok, msg = await _test_sip_registration(
                     sip_user      = current["sip_user"],
                     sip_password  = current["sip_password"],
-                    sip_domain    = current["sip_domain"],
+                    sip_domain    = current.get("local_domain") or current["sip_domain"],
                     local_proxy   = local_proxy,
                     local_udp_port = local_udp_port,
+                    device_imei   = current.get("device_imei", ""),
+                    device_uuid   = current.get("device_uuid", ""),
+                    device_name   = current.get("device_name") or DEFAULT_DEVICE_NAME,
                 )
                 if not ok:
                     errors["local_proxy"] = "sip_registration_failed"
@@ -495,6 +793,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return self.async_create_entry(
                     title="",
                     data={
+                        # Le opzioni che questa pagina non gestisce (HomeKit)
+                        # restano com'erano: senza, salvare la rete le azzerava.
+                        **self._entry.options,
                         KEY_LOCAL_PROXY:    local_proxy,
                         KEY_USE_LOCAL_UDP:  use_local_udp,
                         KEY_LOCAL_UDP_PORT: local_udp_port,
@@ -502,6 +803,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         KEY_ACTUATORS:      actuators,
                         KEY_SGA_TARGET:     sga_target_raw,
                         KEY_PICG_TARGET:    picg_target_raw,
+                        KEY_CAMERA_TARGET:  camera_target_raw,
+                        KEY_DOOR_TARGET:    door_target_raw,
                     },
                 )
 
@@ -543,11 +846,50 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     KEY_PICG_TARGET,
                     default=form.get(KEY_PICG_TARGET) or PICG_TARGET,
                 ): str,
+                vol.Optional(
+                    KEY_CAMERA_TARGET,
+                    # Vuoto se nessuno l'ha scelta: precompilarla col default
+                    # la farebbe sembrare una scelta, e l'hub smetterebbe di
+                    # impararla dalla targa che suona.
+                    default=form.get(KEY_CAMERA_TARGET) or "",
+                ): str,
+                vol.Optional(
+                    KEY_DOOR_TARGET,
+                    default=form.get(KEY_DOOR_TARGET) or "",
+                ): str,
             }),
             errors=errors,
             description_placeholders={
                 "actuators_error": getattr(self, "_actuators_error", "") or "",
             },
+        )
+
+    async def async_step_homekit(
+        self, user_input: dict | None = None
+    ) -> FlowResult:
+        """Il videocitofono in HomeKit: acceso o spento, video diretto o ricodificato."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    **self._entry.options,
+                    CONF_HOMEKIT_ACCESSORY: bool(user_input.get(CONF_HOMEKIT_ACCESSORY)),
+                    CONF_HOMEKIT_SMOOTH: bool(user_input.get(CONF_HOMEKIT_SMOOTH)),
+                },
+            )
+        current = self._entry.options
+        return self.async_show_form(
+            step_id="homekit",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_HOMEKIT_ACCESSORY,
+                    default=current.get(CONF_HOMEKIT_ACCESSORY, DEFAULT_HOMEKIT_ACCESSORY),
+                ): bool,
+                vol.Optional(
+                    CONF_HOMEKIT_SMOOTH,
+                    default=current.get(CONF_HOMEKIT_SMOOTH, DEFAULT_HOMEKIT_SMOOTH),
+                ): bool,
+            }),
         )
 
     async def async_step_fetch_rubrica(
@@ -735,9 +1077,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             #   picg_target ← il ruolo PICG dichiarato dal citofono nei nickname
             new_sga  = sga or current.get(KEY_SGA_TARGET) or SGA_TARGET
             new_picg = self._confirm_picg(current, sga)
+            new_door = runtime.door_from_actuators(actuators) or current.get(KEY_DOOR_TARGET, "")
             return self.async_create_entry(
                 title="",
                 data={
+                    **self._entry.options,
                     KEY_LOCAL_PROXY:    current.get(KEY_LOCAL_PROXY, ""),
                     KEY_USE_LOCAL_UDP:  current.get(KEY_USE_LOCAL_UDP, True),
                     KEY_LOCAL_UDP_PORT: current.get(KEY_LOCAL_UDP_PORT, DEFAULT_LOCAL_UDP_PORT),
@@ -745,6 +1089,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     KEY_ACTUATORS:      actuators,
                     KEY_SGA_TARGET:     new_sga,
                     KEY_PICG_TARGET:    new_picg,
+                    KEY_DOOR_TARGET:    new_door,
                 },
             )
 

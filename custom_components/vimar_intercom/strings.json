@@ -33,16 +33,18 @@
       },
       "network": {
         "title": "Rete locale",
-        "description": "Inserisci l'IP locale del citofono. Sarà eseguito un test di registrazione SIP. Utente: {sip_user}@{sip_domain} — MAC: {mac}. In caso di errore: {error_detail}",
+        "description": "Impianto rilevato: {plant}. Inserisci l'IP locale del citofono. Sarà eseguito un test di registrazione SIP. Utente: {sip_user}@{sip_domain} — MAC: {mac}. In caso di errore: {error_detail}",
         "data": {
           "local_proxy": "IP citofono (proxy locale)",
           "use_local_udp": "Usa UDP locale (consigliato)",
-          "local_udp_port": "Porta UDP locale"
+          "local_udp_port": "Porta UDP locale",
+          "device_name": "Nome del dispositivo"
         },
         "data_description": {
           "local_proxy": "L'indirizzo IP locale del tuo citofono Vimar (es. 192.168.1.100).",
           "use_local_udp": "Abilita la modalità UDP locale. Richiede che HA e il citofono siano sulla stessa rete.",
-          "local_udp_port": "Porta UDP usata da HA per il SIP locale. Default: 5060."
+          "local_udp_port": "Porta UDP usata da HA per il SIP locale. Default: 5060.",
+          "device_name": "Il nome con cui Home Assistant appare fra i dispositivi abbinati sul citofono. Viene fissato all'abbinamento: cambiarlo dopo richiede un nuovo QR."
         }
       }
     },
@@ -63,7 +65,8 @@
         "menu_options": {
           "settings": "Impostazioni di rete e attuatori",
           "import_rubrica": "Importa attuatori da rubrica.db",
-          "fetch_rubrica": "Scarica la rubrica dal citofono"
+          "fetch_rubrica": "Scarica la rubrica dal citofono",
+          "homekit": "HomeKit"
         }
       },
       "settings": {
@@ -76,13 +79,17 @@
           "media_enc": "Cifra il media (SRTP)",
           "actuators": "Attuatori (JSON)",
           "sga_target": "SGA (id SIP citofono/AUTO)",
-          "picg_target": "PICG (id SIP GET_INIT_STATUS)"
+          "picg_target": "PICG (id SIP GET_INIT_STATUS)",
+          "camera_target": "Targa video (autoaccensione)",
+          "door_target": "Targa che apre la porta"
         },
         "data_description": {
           "media_enc": "Lascia disattivato per RTP in chiaro (default, richiesto dalla maggior parte degli impianti Vimar 2F). Attiva solo se la targa/impianto richiede SRTP.",
           "actuators": "Lista JSON di oggetti name, msg, target, icon. icon: door|light|switch. target \"AUTO\" usa la targa di default dell'apri-porta. Vuoto = nessun bottone.",
-          "sga_target": "Destinatario di VOICEMAIL;/DND; e dell'apri-porta AUTO. Vuoto = default storico (55001). Cambialo solo se il tuo impianto usa un altro SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
-          "picg_target": "Destinatario di GET_INIT_STATUS. Sugli impianti verificati finora coincide con l'SGA. Vuoto = default storico (55001)."
+          "sga_target": "Destinatario di VOICEMAIL;/DND;, e dell'apertura porta se «Targa che apre la porta» è vuota. Vuoto = default storico (55001). Cambialo solo se il tuo impianto usa un altro SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
+          "picg_target": "Destinatario di GET_INIT_STATUS. Sugli impianti verificati finora coincide con l'SGA. Vuoto = default storico (55001).",
+          "camera_target": "La targa chiamata per aprire il video senza una chiamata in corso. Vuoto = 55100, e se quella non esiste la targa che ha suonato l'ultima volta (poi ricordata). Compila solo se serve una targa precisa.",
+          "door_target": "La targa a cui va il comando di apertura (GID_PE dell'attuatore porta nella rubrica). Si compila da sola importando o scaricando la rubrica. Vuoto = la targa dell'attuatore porta, se gli attuatori sono stati importati, altrimenti l'SGA."
         }
       },
       "import_rubrica": {
@@ -108,6 +115,18 @@
         },
         "data_description": {
           "rubrica_gid": "Il GID dell'appartamento nella rubrica (di solito quello già in uso, es. 101)."
+        }
+      },
+      "homekit": {
+        "title": "Impostazioni HomeKit",
+        "description": "Il citofono in HomeKit come videocitofono, con audio nei due sensi e il cancello nella stessa vista.",
+        "data": {
+          "homekit_accessory": "Pubblica in HomeKit",
+          "homekit_video_smooth": "Video più fluido (ricodifica)"
+        },
+        "data_description": {
+          "homekit_accessory": "Accende il videocitofono in HomeKit. Alla prima accensione arriva una notifica con il QR per aggiungerlo all'app Casa.",
+          "homekit_video_smooth": "Acceso (consigliato): Home Assistant ricodifica il video della targa con un keyframe al secondo, così un pacchetto perso dal relay diventa una breve sbavatura invece di un blocco. L'apertura richiede circa mezzo secondo in più e un po' di CPU. Spento: il video va dritto al telefono e si apre prima, ma un pacchetto perso può fermare l'immagine fino a 3 secondi."
         }
       }
     },

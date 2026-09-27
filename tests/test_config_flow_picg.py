@@ -92,3 +92,43 @@ def test_il_riepilogo_e_il_salvataggio_non_divergono_mai(cf):
         for rest in (None, "55001", "55009"):
             info, saved = _confirm(cf, options, rest)
             assert saved in info, (options, rest, info, saved)
+
+
+# ─── ogni pagina delle opzioni salva solo i suoi campi (revisione del 26/09) ──
+
+FOREIGN = {"homekit_accessory": True, "homekit_video_smooth": False,
+           "door_target": "55001", "camera_target": "55001", "something_new": 1}
+
+
+def _save(cf, step, user_input, options):
+    flow = _flow(cf, dict(options))
+    return asyncio.run(getattr(flow, step)(user_input))
+
+
+def test_the_homekit_page_keeps_the_network_settings(cf):
+    options = {**FOREIGN, "local_proxy": "192.0.2.1", "sga_target": "61000"}
+    out = _save(cf, "async_step_homekit",
+                {"homekit_accessory": False, "homekit_video_smooth": True}, options)
+    assert out["type"] == "create_entry"
+    assert out["data"]["sga_target"] == "61000"
+    assert out["data"]["door_target"] == "55001"
+    assert out["data"]["homekit_accessory"] is False
+
+
+def test_the_settings_page_keeps_homekit_and_unknown_keys(cf):
+    out = _save(cf, "async_step_settings", {
+        "local_proxy": "192.0.2.1", "use_local_udp": False, "local_udp_port": 5060,
+        "media_enc": False, "actuators": "", "sga_target": "61000",
+        "picg_target": "61000", "camera_target": "55001", "door_target": "55001",
+    }, FOREIGN)
+    assert out["type"] == "create_entry"
+    assert out["data"]["homekit_accessory"] is True
+    assert out["data"]["homekit_video_smooth"] is False
+    assert out["data"]["something_new"] == 1
+
+
+def test_the_phonebook_import_fills_in_the_door_panel(cf):
+    flow = _flow(cf, {"sga_target": "61000"})
+    out = asyncio.run(flow.async_step_import_confirm({}))
+    assert out["data"]["door_target"] == "55001"
+    assert out["data"]["sga_target"] == "55001"

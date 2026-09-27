@@ -35,11 +35,16 @@ LOCAL_UDP_PORT = 5060    # porta UDP locale su HA
 DOOR_COMMAND = "OPEN_2F"
 
 # ─── RTP / Media ──────────────────────────────────────────────────────────────
-RTP_AUDIO_PORT     = 7200
-RTP_VIDEO_PORT     = 9200
-FFMPEG_VIDEO_PORT  = 19200    # MJPEG ffmpeg legge video qui
-FFMPEG_AV_VIDEO_PORT = 19201  # AV ffmpeg video
-FFMPEG_AV_AUDIO_PORT = 19202  # AV ffmpeg audio
+# Ogni flusso RTP occupa DUE porte: N per l'RTP e N+1 per l'RTCP (RFC 3550).
+# Porte adiacenti quindi si scontrano: con video 19201 e audio 19202, l'RTCP
+# del video (19202) è la porta RTP dell'audio e ffmpeg falliva il bind di
+# entrambe ("bind failed: Address in use"), uscendo subito all'avvio.
+# Vanno tenute pari e distanziate di almeno 2.
+RTP_AUDIO_PORT     = 7200     # + 7201 RTCP
+RTP_VIDEO_PORT     = 9200     # + 9201 RTCP
+FFMPEG_AV_VIDEO_PORT = 19202  # AV ffmpeg video (+ 19203 RTCP)
+FFMPEG_AV_AUDIO_PORT = 19204  # AV ffmpeg audio (+ 19205 RTCP)
+# 19206-19217: le coppie di porte delle sessioni HomeKit (media_handler).
 
 # ─── Push Notifications — opzionale, non necessario per UDP locale ────────────
 PN_APP_ID = "toga-prod"
@@ -64,13 +69,6 @@ PN_TOKEN = ""
 # ─── Certificato CA Vimar (per modalità TLS cloud) ───────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CA_PATH    = os.path.join(SCRIPT_DIR, "vimar_rootca.pem")
-
-# ─── APNs VoIP Push (opzionale — solo per push iOS) ──────────────────────────
-APNS_KEY_PATH  = os.path.join(SCRIPT_DIR, "AuthKey.p8")
-APNS_KEY_ID    = ""
-APNS_TEAM_ID   = ""
-APNS_BUNDLE_ID = "noiseheroes.Home"
-APNS_SANDBOX   = True
 
 # ─── Segreteria (answering machine) — comando DA CONFERMARE ──────────────────
 # SGA (MAGIC_APT_INTERCOM) = destinatario di VOICEMAIL;ON/OFF e DND;ON/OFF con Panda: blue.
@@ -97,28 +95,15 @@ PICG_TARGET             = SGA_TARGET
 # fa. Su un impianto diverso il bottone chiamerà un indirizzo inesistente e la
 # chiamata fallirà: nessun effetto collaterale, al contrario dell'apri-porta.
 INTERNAL_PANEL_TARGET   = "55002"
-# SEGRETERIA_TARGET/DND_TARGET non sono più letti dal codice (switch.py usa
-# runtime.SGA_TARGET): restano solo come alias storici/di comodo.
-SEGRETERIA_TARGET       = SGA_TARGET
 SEGRETERIA_ON           = "VOICEMAIL;ON"
 SEGRETERIA_OFF          = "VOICEMAIL;OFF"
 SEGRETERIA_HEADER_NAME  = "Panda"
 SEGRETERIA_HEADER_VALUE = "blue"   # dall'app VIEW: i messaggi di stato usano Panda: blue
 
 # Non disturbare — "DND;ON" / "DND;OFF" verso l'SGA (Panda: blue).
-DND_TARGET              = SGA_TARGET
 DND_ON                  = "DND;ON"
 DND_OFF                 = "DND;OFF"
 
-# ─── Attuatori aggiuntivi (visti nell'app VIEW → Videocitofonia) ─────────────
-# Stessa famiglia di OPEN_2F (header Panda: command). I token OPEN_F1/OPEN_F2
-# sono quelli standard dei relè aux della targa; LUCE SCALA / Attuatore 02 /
-# TIRO sono IPOTESI da confermare col test o con la cattura del MESSAGE.
-# Formato: (key, nome, target, comando, icona)
-ACTUATORS = []  # RIMOSSI 18/08/2026: i token ipotizzati (OPEN_F1/OPEN_2/OPEN_2F)
-# aprivano la PORTA anziché comandare F1/F2/Luce Scala/Attuatore 02.
-# Luce Scala e Attuatore 02 sono oggetti By-me (solo cloud, non SIP).
-# Ripristinare solo con i comandi reali ricavati dall'APK decifrata.
 
 # ─── Targa video (autoaccensione camera on-demand) ───────────────────────────
 # La camera on-demand chiama QUESTA targa per accendere il video (autoaccensione),
@@ -138,3 +123,15 @@ EVENT_FUORIPORTA        = f"{DOMAIN}_fuoriporta"         # {sip_id, msg}
 EVENT_CALL_INFO         = f"{DOMAIN}_call_info"          # {sip_id, reason, media_type, video_src}
 EVENT_PHONEBOOK_CHANGED = f"{DOMAIN}_phonebook_changed"  # {gid, rubrica_ver}
 
+
+# Pubblica il citofono in HomeKit come videocitofono nostro (vedi
+# homekit_accessory.py). Spento se non detto altrimenti.
+CONF_HOMEKIT_ACCESSORY = "homekit_accessory"
+
+# Video HomeKit ricodificato sul Pi (più fluido) invece che diretto (più veloce).
+CONF_HOMEKIT_SMOOTH = "homekit_video_smooth"
+# HomeKit è una scelta: spento finché qualcuno non lo accende dalle opzioni.
+# Il video ricodificato invece è il default: con il video diretto il relay
+# perde abbastanza pacchetti da fermare l'immagine fino a 3 s alla volta.
+DEFAULT_HOMEKIT_ACCESSORY = False
+DEFAULT_HOMEKIT_SMOOTH = True

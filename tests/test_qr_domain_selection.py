@@ -115,4 +115,17 @@ def test_entry_without_the_new_keys_is_unchanged():
         "use_local_udp": False,
     })
     assert runtime.SIP_DOMAIN == LOCAL
+    # Con la password l'HA1 si ricalcola sempre: su un'entry sana è lo stesso
+    # valore salvato, su una salvata per il realm sbagliato è quello giusto.
+    import hashlib
+    assert runtime.SIP_HA1 == hashlib.md5(f"12345:{LOCAL}:secret".encode()).hexdigest()
+
+
+def test_without_a_password_the_stored_ha1_is_kept():
+    runtime.configure({
+        "sip_user": "12345",
+        "sip_domain": LOCAL,
+        "sip_ha1": "deadbeef",
+        "use_local_udp": False,
+    })
     assert runtime.SIP_HA1 == "deadbeef"

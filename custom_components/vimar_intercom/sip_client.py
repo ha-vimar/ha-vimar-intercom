@@ -3,7 +3,8 @@
 import asyncio
 import hashlib
 import os
-import random
+import secrets
+import re
 import socket
 import ssl
 import string
@@ -12,8 +13,13 @@ import logging
 
 from . import const as C
 from . import runtime as R
+from .sip_message import (  # noqa: F401 — usati anche da fuori come sip._parse, ...
+    MAX_SIP_BODY, _angle, _call_id, _challenge_nonce, _clen, _parse,
+    _split_contacts, _split_stream, _tag, _via_block, parse_sdp,
+)
 from . import media_handler as media
 from . import model_detect
+from .inventory import DeviceInventory
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +49,11 @@ lock = None
 _udp_sock = None     # UDP socket (local mode)
 _udp_target = None   # (host, port) target for UDP sendto
 registered = False
+# Dispositivi dell'impianto osservati sul canale SIP (vedi inventory.py).
+DEVICES = DeviceInventory()
+# Lifetime granted by the registrar on the last successful REGISTER, in seconds.
+# It may be shorter than requested, and renewal must follow what it grants.
+granted_expiry = 0
 in_call = False
 calling = False
 cseq_counter = 0
@@ -55,7 +66,16 @@ _state_change_callback = None
 call_state = {
     "call_id": None, "from_tag": None, "to_tag": None,
     "remote_contact": None, "remote_sdp": None, "original_target": None,
+    # L'SDP che abbiamo mandato noi: a un re-INVITE si risponde con questo.
+    "local_sdp": None,
+    # La transazione INVITE in corso, per poterla annullare con un CANCEL.
+    "invite_branch": None, "invite_cseq": None, "cancelled": False,
 }
+
+_DIALOG_RESET = dict(call_id=None, from_tag=None, to_tag=None,
+                     remote_contact=None, remote_sdp=None, original_target=None,
+                     route_set=None, local_sdp=None, invite_branch=None,
+                     invite_cseq=None, cancelled=False)
 
 pending_responses: dict[str, asyncio.Queue] = {}
 incoming_requests: asyncio.Queue = None
@@ -167,8 +187,20 @@ def _contact_hdr(include_pn=True):
     return contact
 
 
-def _route_line():
-    """Return Route header line (with trailing CRLF) or empty string."""
+def _route_line(route_set=None):
+    """Le intestazioni Route da mettere in una richiesta.
+
+    Fuori da un dialogo si usa il proxy della registrazione. DENTRO un dialogo
+    no: serve la strada che il dialogo stesso ha registrato nei Record-Route
+    della risposta, presi al contrario (RFC 3261 §12.1.2). Qui ne arrivano
+    cinque — il relay, l'indirizzo pubblico, il PBX del citofono e due interni
+    — e senza di quelle una richiesta in-dialogo non arriva a destinazione: il
+    BYE finiva nel vuoto, nessuno rispondeva, e la chiamata restava aperta
+    fino al timeout del citofono. Due minuti, con la luce del posto esterno
+    accesa e nessuno che potesse più suonare.
+    """
+    if route_set:
+        return "".join(f"Route: {r}\r\n" for r in route_set)
     if R.USE_LOCAL_UDP:
         return ""
     return f"Route: <sip:{R.SIP_PROXY};transport=tls;lr>\r\n"
@@ -183,7 +215,7 @@ def _simple_contact():
 
 
 def _gen(prefix="z9hG4bK"):
-    return f"{prefix}{random.randint(100000, 9999999):x}"
+    return f"{prefix}{secrets.token_hex(4)}"
 
 
 def _next_cseq():
@@ -221,7 +253,7 @@ def _make_auth(method, uri, challenge):
     opaque = p.get("opaque", "")
     qop = p.get("qop", "")
     nc = "00000001"
-    cnonce = f"{random.randint(10**7, 10**8-1):08x}"
+    cnonce = secrets.token_hex(8)
     if "auth" in qop:
         resp = _digest_resp(method, uri, nonce, realm, "auth", nc, cnonce)
         hdr = (f'Digest username="{R.SIP_USER}", realm="{realm}", '
@@ -358,12 +390,30 @@ async def connect():
         if writer is None:
             raise ConnectionError(f"Nessun proxy SIP cloud raggiungibile: {last_err}")
         lock = asyncio.Lock()
+        global _conn_gen
+        _conn_gen += 1
+        _conn_event().set()
         _LOGGER.info("SIP TLS connected")
 
 
 async def reconnect():
-    """Reconnect / re-register with exponential backoff."""
-    global reader, writer
+    """Riconnette e ri-registra, con attese crescenti. Una alla volta.
+
+    La chiedono in tanti (il lettore, il keepalive dell'hub, il rinnovo, il
+    pulsante nella scheda): chi arriva mentre una è in corso ne aspetta
+    l'esito invece di aprire una seconda connessione in parallelo.
+    """
+    global _reconnect_lock
+    if _reconnect_lock is None:
+        _reconnect_lock = asyncio.Lock()
+    if _reconnect_lock.locked():
+        async with _reconnect_lock:
+            return registered
+    async with _reconnect_lock:
+        return await _reconnect_locked()
+
+
+async def _reconnect_locked():
     _set_registered(False)
     delays = [2, 4, 8, 16, 32]
     for attempt, delay in enumerate(delays, 1):
@@ -412,43 +462,26 @@ async def send(msg: str):
         raise
 
 
-def _parse(msg):
-    parts = msg.split("\r\n\r\n", 1)
-    body = parts[1] if len(parts) > 1 else ""
-    lines = parts[0].split("\r\n")
-    first = lines[0]
-    code = method = None
-    if first.startswith("SIP/2.0"):
-        try:
-            code = int(first.split()[1])
-        except (ValueError, IndexError):
-            pass
-    else:
-        method = first.split()[0] if first else None
-    hdrs = {}
-    via_list = []
-    for line in lines[1:]:
-        if ":" in line:
-            k, v = line.split(":", 1)
-            key = k.strip().lower()
-            if key == "via":
-                via_list.append(v.strip())
-            hdrs[key] = v.strip()
-    if via_list:
-        hdrs["_via_all"] = via_list
-    return (code or method), hdrs, body, first
+async def send_keepalive() -> bool:
+    """Ping CRLF sulla connessione (RFC 5626 §3.5.1, "double CRLF").
 
-
-def _call_id(hdrs):
-    return hdrs.get("call-id", "")
-
-
-def _tag(header_val):
-    for part in header_val.split(";"):
-        part = part.strip()
-        if part.startswith("tag="):
-            return part[4:]
-    return ""
+    Serve a tenere viva la connessione e il binding NAT verso il relay senza
+    rifare una REGISTER completa: il rinnovo della registrazione ha una sua
+    scadenza, decisa da quanto concede il registrar, ed è un'altra cosa.
+    In UDP locale non c'è NAT di mezzo e il ping non serve.
+    """
+    if R.USE_LOCAL_UDP:
+        return False
+    if not writer or writer.is_closing():
+        return False
+    try:
+        async with lock:
+            writer.write(b"\r\n\r\n")
+            await writer.drain()
+        return True
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.warning("SIP keepalive failed: %s", e)
+        return False
 
 
 # ─── Rilevamento modello dal SIP ────────────────────────────────────────────
@@ -527,11 +560,28 @@ async def _send_options_ping():
         _LOGGER.debug("OPTIONS ping failed: %s", e)
 
 
+def _log_sdp(direction: str, first: str, body: str) -> None:
+    """Scrive l'SDP ricevuto, riga per riga, nel registro di diagnostica.
+
+    Finora del corpo non restava traccia: si registrava solo la riga di
+    richiesta. Ma è nell'SDP che l'altro capo dichiara cosa sa fare — quali
+    ritorni RTCP accetta, se vuole i pacchetti compatti, se multiplexa RTP e
+    RTCP sulla stessa porta — e senza vederlo si finisce a dedurre dalle
+    proprie offerte, che sono tutt'altra cosa.
+    """
+    if not body or not body.lstrip().startswith("v=0"):
+        return
+    _LOGGER.debug("[SDP %s] per %s:", direction, first)
+    for line in body.strip().splitlines():
+        _LOGGER.debug("[SDP %s]   %s", direction, line.strip())
+
+
 async def _dispatch_message(raw: str):
     """Smista un messaggio SIP ricevuto (sia UDP che TCP)."""
     kind, hdrs, body, first = _parse(raw)
     cid = _call_id(hdrs)
     _LOGGER.debug("[SIP <<<] %s", first)
+    _log_sdp("<<<", first, body)
     _learn_peer(hdrs, first)
 
     if isinstance(kind, int):
@@ -544,7 +594,9 @@ async def _dispatch_message(raw: str):
             # quindi è l'esito normale del keepalive, non un errore da segnalare.
             _LOGGER.debug("Keepalive response %d for cid=%s", kind, cid[:24])
         else:
-            _LOGGER.warning("Stale response %d for cid=%s", kind, cid[:24])
+            # Copie del relay (che manda tutto due volte) o risposte arrivate
+            # dopo la fine della loro transazione: normali, non un guasto.
+            _LOGGER.debug("Stale response %d for cid=%s", kind, cid[:24])
     elif isinstance(kind, str):
         await incoming_requests.put(raw)
 
@@ -557,8 +609,14 @@ async def _udp_reader_task():
 
     while True:
         try:
-            data, _addr = await asyncio.wait_for(
+            data, addr = await asyncio.wait_for(
                 loop.sock_recvfrom(_udp_sock, 65535), timeout=20)
+            if _udp_target and addr[0] != _udp_target[0]:
+                # In UDP chiunque in rete può mandare un datagramma: un finto
+                # squillo, o un SDP che dirotta il media altrove. Parliamo solo
+                # con il citofono configurato.
+                _LOGGER.debug("SIP UDP da %s ignorato: non è il citofono", addr[0])
+                continue
             raw = data.decode(errors="replace")
             await _dispatch_message(raw)
             last_ping = time.time()
@@ -574,91 +632,105 @@ async def _udp_reader_task():
             await asyncio.sleep(2)
 
 
+# La connessione TLS in uso: connect() la sostituisce e alza l'evento, il
+# lettore la legge finché muore. Il numero distingue una connessione nuova da
+# quella appena caduta.
+_conn_ready: asyncio.Event | None = None
+_conn_gen = 0
+_reconnect_task: asyncio.Task | None = None
+_reconnect_lock: asyncio.Lock | None = None
+
+
+def _conn_event() -> asyncio.Event:
+    global _conn_ready
+    if _conn_ready is None:
+        _conn_ready = asyncio.Event()
+    return _conn_ready
+
+
+def reset_state() -> None:
+    """Riporta il modulo allo stato di partenza (scaricamento dell'integrazione).
+
+    Lo stato SIP sta in variabili di modulo, che sopravvivono a un ricaricamento:
+    senza questo il nuovo hub partiva convinto di essere ancora in chiamata.
+    """
+    global _reconnect_task, _invite_idle_event
+    if _reconnect_task is not None and not _reconnect_task.done():
+        _reconnect_task.cancel()
+    _reconnect_task = None
+    _set_in_call(False)
+    _set_calling(False)
+    _set_registered(False)
+    call_state.update(_DIALOG_RESET)
+    pending_incoming["active"] = False
+    pending_incoming["early"], pending_incoming["early_sdp"] = False, None
+    pending_responses.clear()
+    _invite_idle_event = None
+    if _conn_ready is not None:
+        _conn_ready.clear()
+
+
+def _spawn_reconnect() -> None:
+    """Fa partire una riconnessione in un task suo, se non ce n'è già una."""
+    global _reconnect_task
+    if _reconnect_task is None or _reconnect_task.done():
+        _reconnect_task = asyncio.create_task(reconnect())
+
+
 async def reader_task():
+    """Legge la connessione TLS in uso; quando muore, chiede di rifarla.
+
+    Il lettore non aspetta mai la riconnessione. Prima la aspettava: dentro
+    c'è una REGISTER, la cui risposta arriva proprio da questo lettore, che
+    però era fermo ad aspettare. Cinque tentativi da 15 s andavano a vuoto e
+    si restava due o tre minuti senza squilli, fino al keepalive dell'hub.
+    """
     if R.USE_LOCAL_UDP:
         await _udp_reader_task()
         return
 
-    # ── TLS/TCP reader (originale) ────────────────────────────────
+    while True:
+        await _conn_event().wait()
+        gen, conn = _conn_gen, reader
+        await _read_connection(conn)
+        if gen == _conn_gen:
+            # È caduta quella che stavamo leggendo, e nessuno l'ha già rifatta.
+            _conn_event().clear()
+            _set_registered(False)
+            _spawn_reconnect()
+
+
+async def _read_connection(conn) -> None:
+    """Legge un flusso TLS finché si chiude, si rompe o manda spazzatura."""
     buf = b""
     while True:
         try:
-            chunk = await asyncio.wait_for(reader.read(8192), timeout=30)
-            if not chunk:
-                _LOGGER.warning("SIP connection closed by server, reconnecting...")
-                await reconnect()
-                buf = b""
-                continue
-            buf += chunk
-            if len(buf) > 1_000_000:  # guard: 1 MB max — evita OOM su messaggi malformati
-                _LOGGER.error("SIP TCP buffer overflow (>1 MB); reset connessione")
-                await reconnect()
-                buf = b""
-                continue
+            chunk = await asyncio.wait_for(conn.read(8192), timeout=30)
         except asyncio.TimeoutError:
-            # Send CRLF keepalive (RFC 5626) to prevent proxy from
-            # considering TLS connection stale
+            # Ping CRLF (RFC 5626): il proxy non deve credere morta la connessione.
             try:
                 async with lock:
                     writer.write(b"\r\n\r\n")
                     await writer.drain()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 _LOGGER.warning("CRLF keepalive failed, reconnecting...")
-                await reconnect()
-                buf = b""
+                return
             continue
         except asyncio.CancelledError:
             raise
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             _LOGGER.error("SIP reader error: %s, reconnecting...", e)
-            try:
-                await reconnect()
-            except Exception as re:
-                _LOGGER.error("Reconnect failed: %s", re)
-            buf = b""
-            await asyncio.sleep(2)
-            continue
-
-        while b"\r\n\r\n" in buf:
-            hdr_end = buf.index(b"\r\n\r\n") + 4
-            hdr_text = buf[:hdr_end].decode(errors="replace")
-            cl = 0
-            for line in hdr_text.split("\r\n"):
-                if line.lower().startswith("content-length:"):
-                    try:
-                        cl = int(line.split(":", 1)[1].strip())
-                    except ValueError:
-                        pass
-            total = hdr_end + cl
-            if len(buf) < total:
-                break
-            raw = buf[:total].decode(errors="replace")
-            buf = buf[total:]
-
-            kind, hdrs, body, first = _parse(raw)
-            cid = _call_id(hdrs)
-            _LOGGER.debug("[SIP <<<] %s", first)
-            _learn_peer(hdrs, first)
-
-            if isinstance(kind, int):
-                if cid in pending_responses:
-                    _LOGGER.debug("reader: queuing response %d for cid=%s", kind, cid[:24])
-                    await pending_responses[cid].put(raw)
-                else:
-                    _LOGGER.warning("Stale response %d for cid=%s (known: %s)", kind, cid[:24],
-                                    list(pending_responses.keys())[:3])
-            elif isinstance(kind, str):
-                await incoming_requests.put(raw)
-
-
-def _clen(body: str) -> int:
-    """`Content-Length` di un corpo: in **byte**, non in caratteri.
-
-    Fino alla 1.0.6 era `len(body)`: con un corpo non ASCII (`NICK;Cucina è`) si
-    dichiaravano 13 byte e se ne spedivano 14. In UDP il corpo arrivava troncato; in
-    TCP/TLS il byte in più veniva letto come inizio del messaggio successivo.
-    """
-    return len(body.encode("utf-8"))
+            return
+        if not chunk:
+            _LOGGER.warning("SIP connection closed by server, reconnecting...")
+            return
+        buf += chunk
+        if len(buf) > MAX_SIP_BODY:
+            _LOGGER.error("SIP TCP buffer overflow (>1 MB); reset connessione")
+            return
+        messages, buf = _split_stream(buf)
+        for raw in messages:
+            await _dispatch_message(raw)
 
 
 # Ritrasmissione delle richieste non-INVITE su UDP (RFC 3261 §17.1.2.2, Timer E).
@@ -743,20 +815,32 @@ _local_crypto_key = None
 _local_video_crypto_key = None
 
 
-def build_sdp():
+def build_sdp(enc: bool | None = None, *, video: bool = True, decline_video: bool = False):
     """Costruisce l'offerta/risposta SDP.
 
-    Su questo impianto (verificato sul campo 20/08/2026 verso la targa 55100)
-    il media viaggia in RTP IN CHIARO: se si offre SRTP (RTP/SAVP + a=crypto)
-    la targa baresip non risponde e tutto il media fallisce. Perciò il default
-    è RTP/AVP senza a=crypto. SRTP resta disponibile via R.MEDIA_ENC=True per
-    impianti che negoziano media_enc.
+    ``enc`` decide fra SRTP (``RTP/SAVP`` + ``a=crypto``) e RTP in chiaro.
+    Lasciato a ``None`` vale l'impostazione dell'impianto (``R.MEDIA_ENC``), che
+    è ciò che serve quando siamo noi a fare l'offerta.
+
+    Quando invece stiamo **rispondendo**, va passato ciò che l'altro capo ha
+    offerto: gli impianti non sono uguali fra loro. Su 2F verificato in campo
+    la targa baresip vuole RTP in chiaro e con SRTP non risponde affatto; su
+    2FV2 l'INVITE arriva con ``RTP/SAVP`` e ``a=crypto``. Rispondere con un
+    profilo diverso da quello offerto significa dire di aver accettato qualcosa
+    che non useremo: qui il risultato era ricevere cifrato e trasmettere in
+    chiaro.
+
+    ``video=False`` toglie del tutto la sezione video, per i posti esterni che
+    hanno solo microfono e altoparlante. ``decline_video=True`` la tiene ma con
+    porta 0: è il modo previsto da RFC 3264 per rifiutare un flusso che ci è
+    stato offerto, e va usato rispondendo, perché una risposta deve avere le
+    stesse sezioni dell'offerta nello stesso ordine.
     """
     global _local_crypto_key, _local_video_crypto_key
     sid = str(int(time.time()))
     import base64 as _b64
 
-    enc = bool(getattr(R, "MEDIA_ENC", False))
+    enc = bool(getattr(R, "MEDIA_ENC", False)) if enc is None else bool(enc)
     proto = "RTP/SAVP" if enc else "RTP/AVP"
 
     if enc:
@@ -771,7 +855,7 @@ def build_sdp():
         audio_crypto = ""
         video_crypto = ""
 
-    return (
+    sdp = (
         f"v=0\r\n"
         f"o=- {sid} {sid} IN IP4 {MY_IP}\r\n"
         f"s=Talk\r\n"
@@ -787,6 +871,14 @@ def build_sdp():
         f"a=ptime:20\r\n"
         f"a=sendrecv\r\n"
         f"{audio_crypto}"
+    )
+
+    if decline_video:
+        # Porta 0 = "questo flusso non lo voglio", mantenendo la sezione.
+        return sdp + f"m=video 0 {proto} 96\r\na=rtpmap:96 H264/90000\r\n"
+    if not video:
+        return sdp
+    return sdp + (
         f"m=video {C.RTP_VIDEO_PORT} {proto} 96\r\n"
         f"b=AS:256\r\n"
         f"a=rtpmap:96 H264/90000\r\n"
@@ -799,42 +891,53 @@ def build_sdp():
     )
 
 
-def parse_sdp(sdp_text):
-    result = {"audio": {}, "video": {}, "conn": ""}
-    m = None
-    for line in sdp_text.split("\n"):
-        line = line.strip()
-        if line.startswith("c=IN IP4 "):
-            ip = line.split()[-1]
-            if m:
-                result[m]["ip"] = ip
-            else:
-                result["conn"] = ip
-        elif line.startswith("m=audio"):
-            m = "audio"
-            parts = line.split()
-            result["audio"]["port"] = int(parts[1])
-        elif line.startswith("m=video"):
-            m = "video"
-            parts = line.split()
-            result["video"]["port"] = int(parts[1])
-        elif line.startswith("a=rtpmap:") and m:
-            result[m].setdefault("rtpmap", []).append(line)
-        elif line.startswith("a=fmtp:") and m:
-            result[m].setdefault("fmtp", []).append(line)
-        elif line.startswith("a=crypto:") and m:
-            parts = line.split()
-            for p in parts:
-                if p.startswith("inline:"):
-                    result[m]["crypto_key"] = p[7:]
-                    break
-    for section in ("audio", "video"):
-        if section in result and "ip" not in result[section]:
-            result[section]["ip"] = result["conn"]
-    return result
-
-
 # ─── Operations ─────────────────────────────────────────────────────
+
+def _record_bindings(hdrs) -> None:
+    """Annota chi risulta registrato sull'account, noi compresi.
+
+    È l'unico momento in cui il registrar elenca anche i dispositivi che in
+    questo momento non stanno inviando nulla.
+    """
+    try:
+        DEVICES.forget_bindings()
+        for contact in _split_contacts(hdrs):
+            DEVICES.note_binding(
+                contact, own_device_id=R.DEVICE_IMEI, own_name=R.DEVICE_NAME,
+            )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Device inventory (bindings) skipped: %s", e)
+
+
+def _remember_granted_expiry(hdrs) -> None:
+    """Record the lifetime the registrar granted, preferring our own contact."""
+    global granted_expiry
+    granted_expiry = 0
+    values = _split_contacts(hdrs)
+    instance = f"urn:uuid:{R.DEVICE_UUID}" if R.DEVICE_UUID else ""
+    ours = f"{MY_IP}:{_my_port()}" if MY_IP else ""
+    matching = [
+        v for v in values
+        if (instance and instance in v) or (ours and ours in v)
+    ]
+    offered = [
+        int(m.group(1))
+        for m in (re.search(r";\s*expires\s*=\s*(\d+)", v or "") for v in matching)
+        if m
+    ]
+    if offered:
+        granted_expiry = offered[0]
+    elif values:
+        # Più dispositivi condividono questo utente SIP. Se non riconosciamo il
+        # nostro binding, la durata residua degli altri non dice nulla di noi:
+        # prenderla porterebbe a rinnovare ogni pochi secondi, a raffica, per
+        # sempre. Meglio l'intestazione Expires, e in mancanza il default.
+        _LOGGER.debug("Binding nostro non riconoscibile fra %d contatti", len(values))
+    if not granted_expiry and re.fullmatch(r"\s*\d+\s*", str(hdrs.get("expires", ""))):
+        granted_expiry = int(str(hdrs["expires"]).strip())
+    if not granted_expiry:
+        granted_expiry = 3600
+
 
 async def do_register():
     # In UDP mode writer is always None — skip the TLS connect check
@@ -862,43 +965,56 @@ async def do_register():
              f"Contact: {_contact_hdr()}\r\n"
              f"User-Agent: {C.USER_AGENT}\r\n"
              f"Mobile-IMEI: {R.DEVICE_IMEI}\r\n"
-             f"MyName: {C.MY_NAME}\r\n"
+             f"MyName: {R.DEVICE_NAME}\r\n"
              f"Supported: replaces,outbound,gruu\r\n"
              f"Allow: INVITE,ACK,BYE,CANCEL,OPTIONS,NOTIFY,INFO,MESSAGE,UPDATE\r\n")
         if auth:
             m += f"Authorization: {auth}\r\n"
         return m + "Content-Length: 0\r\n\r\n"
 
-    s1 = _next_cseq()
-    resps = await _send_request(_msg(seq=s1), cid)
-
-    # Ogni uscita negativa deve azzerare `registered`: e' anche il keepalive a
-    # chiamare questa funzione, e fino alla 1.0.5 un fallimento lasciava il flag
-    # a True. Home Assistant dichiarava il citofono raggiungibile mentre non lo
-    # era piu', e il binary_sensor restava verde a impianto spento.
-    for r in resps:
-        code, hdrs, *_ = _parse(r)
-        if code == 401:
-            ch = hdrs.get("www-authenticate", "")
-            if not ch:
-                _LOGGER.warning("REGISTER: 401 senza challenge, registrazione fallita")
-                _set_registered(False)
-                return False
-            auth = _make_auth("REGISTER", uri, ch)
-            for r2 in await _send_request(_msg(auth=auth, seq=_next_cseq()), cid):
-                if _parse(r2)[0] == 200:
-                    _set_registered(True)
-                    _LOGGER.info("SIP registered successfully")
-                    return True
-            _LOGGER.warning("REGISTER: nessun 200 dopo l'autenticazione")
+    # Il registrar cambia il nonce fra un rinnovo e l'altro e risponde 401
+    # senza stale=true: con un nonce nuovo si riprova. Lo stesso nonce due
+    # volte vuol dire credenziali rifiutate, e riprovare girerebbe a vuoto.
+    # Ogni uscita negativa azzera `registered`: fino alla 1.0.5 un fallimento
+    # lasciava il flag a True e il citofono sembrava raggiungibile.
+    seen_nonces: set[str] = set()
+    auth = None
+    resps: list[str] = []
+    for _attempt in range(3):
+        resps = await _send_request(_msg(auth=auth, seq=_next_cseq()), cid)
+        final = None
+        for r in resps:
+            code, hdrs, *_ = _parse(r)
+            if isinstance(code, int) and code >= 200:
+                final = (code, hdrs)
+        if final is None:
+            break
+        code, hdrs = final
+        if code == 200:
+            _remember_granted_expiry(hdrs)
+            _record_bindings(hdrs)
+            _set_registered(True)
+            _LOGGER.info("SIP registered successfully (expires in %ds)", granted_expiry)
+            return True
+        if code not in (401, 407):
+            _LOGGER.warning("SIP registration rejected: %s", code)
             _set_registered(False)
             return False
-        elif code == 200:
-            _set_registered(True)
-            _LOGGER.info("SIP registered successfully")
-            return True
+        challenge = hdrs.get("www-authenticate" if code == 401 else "proxy-authenticate", "")
+        if not challenge:
+            _LOGGER.warning("REGISTER: %s senza challenge, registrazione fallita", code)
+            _set_registered(False)
+            return False
+        nonce = _challenge_nonce(challenge)
+        if nonce in seen_nonces:
+            _LOGGER.warning("SIP registration refused: credentials rejected")
+            _set_registered(False)
+            return False
+        seen_nonces.add(nonce)
+        auth = _make_auth("REGISTER", uri, challenge)
+
     # Diagnostica: "0 risposte" = nulla è tornato nemmeno dopo le ritrasmissioni;
-    # altrimenti diciamo quali codici sono arrivati, che prima non si leggevano.
+    # altrimenti diciamo quali codici sono arrivati.
     codes = [_parse(r)[0] for r in resps]
     _LOGGER.warning(
         "REGISTER: nessuna risposta finale utile (%d risposte%s) verso %s via %s",
@@ -917,7 +1033,7 @@ async def do_system_message(target_uri, body_text, extra_headers=None):
     _LOGGER.info("do_system_message: target=%s body=%s headers=%s", target_uri, body_text, extra_headers)
     ftag = _gen("")
     # Come l'app ufficiale (MakeCallModel/SystemMsg): Call-ID = 10 caratteri alfanumerici
-    cid = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+    cid = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
 
     def _msg(auth=None, seq=1):
         branch = _gen()
@@ -932,7 +1048,7 @@ async def do_system_message(target_uri, body_text, extra_headers=None):
              f"Contact: {_simple_contact()}\r\n"
              f"User-Agent: {C.USER_AGENT}\r\n"
              f"Mobile-IMEI: {R.DEVICE_IMEI}\r\n"
-             f"MyName: {C.MY_NAME}\r\n")
+             f"MyName: {R.DEVICE_NAME}\r\n")
         if extra_headers:
             for k, v in extra_headers.items():
                 m += f"{k}: {v}\r\n"
@@ -968,6 +1084,51 @@ async def do_system_message(target_uri, body_text, extra_headers=None):
 
 
 async def do_call(target=None):
+    """INVITE a SIP target, lasciando sempre lo stato coerente.
+
+    Il flag `calling` veniva alzato all'inizio e abbassato solo dai percorsi
+    che finiscono bene o in do_hangup. Se la scrittura sul socket TLS falliva
+    — e succede, perché il relay chiude la connessione e si riconnette — la
+    funzione usciva per eccezione con `calling` ancora alzato, per sempre. Da
+    quel momento ogni apertura di vista trovava "già in chiamata", non
+    chiamava nessuno e scadeva: HomeKit mostrava "Nessuna risposta" fino a un
+    riaggancio manuale o a un riavvio.
+    """
+    # Una transazione INVITE alla volta. Dopo un CANCEL la vecchia resta
+    # aperta finché non arriva il 487 (poche decine di millisecondi): una
+    # chiamata nuova partita in quella finestra si vedeva azzerare `calling`
+    # dal finally della vecchia, o scrivere nel proprio stato il 200 di
+    # quella.
+    idle = _invite_idle()
+    if not idle.is_set():
+        try:
+            await asyncio.wait_for(idle.wait(), INVITE_SETTLE)
+        except asyncio.TimeoutError:
+            return False, "Chiamata precedente ancora in chiusura"
+    idle.clear()
+    try:
+        return await _do_call_inner(target)
+    finally:
+        idle.set()
+        if not in_call:
+            _set_calling(False)
+
+
+# Quanto una chiamata nuova aspetta che la transazione INVITE precedente
+# (annullata) si chiuda.
+INVITE_SETTLE = 5.0
+_invite_idle_event: asyncio.Event | None = None
+
+
+def _invite_idle() -> asyncio.Event:
+    global _invite_idle_event
+    if _invite_idle_event is None:
+        _invite_idle_event = asyncio.Event()
+        _invite_idle_event.set()
+    return _invite_idle_event
+
+
+async def _do_call_inner(target=None):
     """INVITE a SIP target (default: intercom targa 55001)."""
     if not registered:
         _LOGGER.error("do_call: NOT registered")
@@ -981,15 +1142,18 @@ async def do_call(target=None):
     _LOGGER.info("do_call: target=%s", target_uri)
     ftag = _gen("")
     cid = _gen("call-")
-    sdp = build_sdp()
+    sdp = build_sdp(video=bool(getattr(R, "VIDEO_ENABLED", True)))
+    call_state.update(_DIALOG_RESET)
     call_state["call_id"] = cid
     call_state["from_tag"] = ftag
     call_state["original_target"] = target_uri
+    call_state["local_sdp"] = sdp
 
-    vimar_callid = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+    vimar_callid = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
 
     def _inv(auth=None, seq=1):
         branch = _gen()
+        call_state["invite_branch"], call_state["invite_cseq"] = branch, seq
         m = (f"INVITE {target_uri} SIP/2.0\r\n"
              f"{_via_line(branch)}"
              f"{_route_line()}"
@@ -1008,20 +1172,25 @@ async def do_call(target=None):
         if auth:
             m += f"Proxy-Authorization: {auth}\r\n"
         m += (f"Mobile-IMEI: {R.DEVICE_IMEI}\r\n"
-              f"MyName: {C.MY_NAME}\r\n"
+              f"MyName: {R.DEVICE_NAME}\r\n"
               f"X-Call-ID: {vimar_callid}\r\n"
               f"Content-Type: application/sdp\r\n"
               f"Content-Length: {_clen(sdp)}\r\n\r\n{sdp}")
         return m
 
-    def _ack(to_tag, seq):
+    def _ack(to_tag, seq, in_dialog=False):
+        """ACK di una risposta. Per un 2xx è una richiesta del dialogo
+        (RFC 3261 §13.2.2.4): va al Contact della targa per la strada dei
+        Record-Route, come il BYE; per un rifiuto segue l'INVITE."""
         branch = _gen()
         to_hdr = f"<{target_uri}>"
         if to_tag:
             to_hdr += f";tag={to_tag}"
-        return (f"ACK {target_uri} SIP/2.0\r\n"
+        uri = (call_state.get("remote_contact") or target_uri) if in_dialog else target_uri
+        route = call_state.get("route_set") if in_dialog else None
+        return (f"ACK {uri} SIP/2.0\r\n"
                 f"{_via_line(branch)}"
-                f"{_route_line()}"
+                f"{_route_line(route)}"
                 f"Max-Forwards: 70\r\n"
                 f"To: {to_hdr}\r\n"
                 f"From: <sip:{R.SIP_USER}@{R.SIP_DOMAIN}>;tag={ftag}\r\n"
@@ -1048,6 +1217,8 @@ async def do_call(target=None):
                 continue
 
             code, hdrs, body, first = _parse(raw)
+            if "INVITE" not in hdrs.get("cseq", "").upper():
+                continue    # es. il 200 del nostro CANCEL: non è la risposta all'INVITE
             ttag = _tag(hdrs.get("to", ""))
             _LOGGER.debug("do_call: response %s (body=%dB)", code, len(body) if body else 0)
 
@@ -1075,7 +1246,20 @@ async def do_call(target=None):
                     call_state["remote_contact"] = raw_contact[raw_contact.index("<")+1:raw_contact.index(">")]
                 else:
                     call_state["remote_contact"] = raw_contact
-                await send(_ack(ttag, cur_seq))
+                # Da chiamanti la strada del dialogo è l'elenco dei Record-Route
+                # AL CONTRARIO (RFC 3261 §12.1.2). Va usata per tutto ciò che
+                # viaggia dentro il dialogo, BYE compreso.
+                call_state["route_set"] = list(
+                    reversed(hdrs.get("_record_route_all") or []))
+                await send(_ack(ttag, cur_seq, in_dialog=True))
+
+                if call_state.get("cancelled"):
+                    # Il 200 ha incrociato il nostro CANCEL: la chiamata c'è,
+                    # ma nessuno la vuole più. Si chiude subito con un BYE,
+                    # invece di lasciare la luce della targa accesa per niente.
+                    _set_in_call(True)
+                    await do_hangup()
+                    return False, "Annullata"
 
                 if body:
                     remote = parse_sdp(body)
@@ -1092,7 +1276,10 @@ async def do_call(target=None):
                 return True, "Connesso!"
 
             if code >= 300:
-                _LOGGER.error("INVITE rejected: %d", code)
+                if code == 487 and call_state.get("cancelled"):
+                    _LOGGER.info("Chiamata annullata prima della risposta")
+                else:
+                    _LOGGER.warning("INVITE rejected: %d", code)
                 await send(_ack(ttag, cur_seq))
                 pending_responses.pop(cid, None)
                 _set_calling(False)
@@ -1135,7 +1322,7 @@ async def send_keyframe_request():
         m = (
             f"INFO {info_target} SIP/2.0\r\n"
             f"{_via_line(_gen())}"
-            f"{_route_line()}"
+            f"{_route_line(call_state.get('route_set'))}"
             f"Max-Forwards: 70\r\n"
             f"To: <{to_uri}>;tag={call_state['to_tag']}\r\n"
             f"From: <sip:{R.SIP_USER}@{R.SIP_DOMAIN}>;tag={call_state['from_tag']}\r\n"
@@ -1200,7 +1387,40 @@ async def send_keyframe_request():
     # possedere la stessa coda. La coda del dialog viene ripulita a hangup.
 
 
+async def _cancel_outgoing() -> None:
+    """Annulla l'INVITE ancora in squillo (RFC 3261 §9.1).
+
+    Prima un riaggancio durante lo squillo abbassava solo i flag: la chiamata
+    si connetteva lo stesso, senza nessuno a guardare, e la targa restava
+    accesa fino al suo timeout. Il CANCEL ripete Request-URI, Call-ID, From,
+    To e il branch dell'INVITE; la targa risponde 487 e _do_call_inner fa
+    l'ACK come per ogni rifiuto.
+    """
+    cid = call_state.get("call_id")
+    branch, seq = call_state.get("invite_branch"), call_state.get("invite_cseq")
+    target_uri = call_state.get("original_target")
+    if not (cid and branch and seq and target_uri):
+        return
+    call_state["cancelled"] = True
+    await send(
+        f"CANCEL {target_uri} SIP/2.0\r\n"
+        f"{_via_line(branch)}"
+        f"{_route_line()}"
+        f"Max-Forwards: 70\r\n"
+        f"To: <{target_uri}>\r\n"
+        f"From: <sip:{R.SIP_USER}@{R.SIP_DOMAIN}>;tag={call_state['from_tag']}\r\n"
+        f"Call-ID: {cid}\r\n"
+        f"CSeq: {seq} CANCEL\r\n"
+        f"Content-Length: 0\r\n\r\n")
+    _LOGGER.info("CANCEL inviato per la chiamata in squillo %s", cid[:24])
+
+
 async def do_hangup():
+    if calling and not in_call:
+        try:
+            await _cancel_outgoing()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning("CANCEL non inviato: %s", e)
     _set_calling(False)
     if not in_call or not call_state["call_id"]:
         _set_in_call(False)
@@ -1220,7 +1440,7 @@ async def do_hangup():
 
     bye = (f"BYE {target_uri} SIP/2.0\r\n"
            f"{_via_line(_gen())}"
-           f"{_route_line()}"
+           f"{_route_line(call_state.get('route_set'))}"
            f"Max-Forwards: 70\r\n"
            f"To: {to_hdr}\r\n"
            f"From: <sip:{R.SIP_USER}@{R.SIP_DOMAIN}>;tag={ftag}\r\n"
@@ -1231,18 +1451,17 @@ async def do_hangup():
     await send(bye)
     await _wait_final(cid, timeout=5)
 
+    if call_state.get("call_id") and cid != call_state["call_id"]:
+        # Mentre aspettavamo la risposta al BYE è partita un'altra chiamata:
+        # lo stato adesso è suo, e non va toccato.
+        _LOGGER.debug("Chiamata %s chiusa, ma nel frattempo ne è partita un'altra", cid[:24])
+        return
+
+    pending_responses.pop(cid, None)
     _set_in_call(False)
-    call_state.update(call_id=None, from_tag=None, to_tag=None,
-                      remote_contact=None, remote_sdp=None, original_target=None)
+    call_state.update(_DIALOG_RESET)
     await media.stop_media()
     await broadcast("call_ended", "Chiamata terminata")
-
-
-async def do_door():
-    """Legacy door open — prefer do_system_message via hub.async_door."""
-    _LOGGER.info("do_door: sending %s to %s", C.DOOR_COMMAND, R.DOOR_ESTERNO)
-    return await do_system_message(
-        R.DOOR_ESTERNO, C.DOOR_COMMAND, extra_headers={"Panda": "command"})
 
 
 async def do_options(target=None):
@@ -1332,7 +1551,55 @@ pending_incoming = {
     "active": False, "cid": None, "from_hdr": None, "to_hdr": None,
     "cseq": None, "via_block": None, "my_tag": None,
     "caller_uri": None, "caller_tag": None, "body": None,
+    "record_route": None, "caller_contact": None,
+    "early": False, "early_sdp": None,
 }
+
+
+async def _ack_request(hdrs):
+    """200 OK secco a una richiesta duplicata, senza rieseguirla."""
+    try:
+        await send(
+            f"SIP/2.0 200 OK\r\n"
+            f"{_via_block(hdrs)}To: {hdrs.get('to', '')}\r\nFrom: {hdrs.get('from', '')}\r\n"
+            f"Call-ID: {_call_id(hdrs)}\r\nCSeq: {hdrs.get('cseq', '')}\r\n"
+            f"Content-Length: 0\r\n\r\n")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Ack alla richiesta duplicata non riuscito: %s", e)
+
+
+async def _resend_ringing():
+    """Ripete il 180 sulla transazione già in squillo, senza rifare lo squillo."""
+    p = pending_incoming
+    if not p.get("active"):
+        return
+    try:
+        await send(
+            f"SIP/2.0 180 Ringing\r\n"
+            f"{p['via_block']}To: {p['to_hdr']};tag={p['my_tag']}\r\nFrom: {p['from_hdr']}\r\n"
+            f"Call-ID: {p['cid']}\r\nCSeq: {p['cseq']}\r\n"
+            f"Contact: {_simple_contact()}\r\n"
+            f"Content-Length: 0\r\n\r\n")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Ripetizione del 180 non riuscita: %s", e)
+
+
+async def _answer_reinvite(hdrs) -> None:
+    """Un re-INVITE nel dialogo in corso: si conferma la sessione com'è.
+
+    Prima era trattato come uno squillo nuovo: notifica, 180, e lo stato della
+    chiamata in corso sovrascritto. Si risponde con lo stesso SDP già mandato,
+    così chiavi e porte non cambiano sotto il flusso.
+    """
+    sdp = call_state.get("local_sdp") or ""
+    ctype = "Content-Type: application/sdp\r\n" if sdp else ""
+    await send(
+        f"SIP/2.0 200 OK\r\n"
+        f"{_via_block(hdrs)}To: {hdrs.get('to', '')}\r\nFrom: {hdrs.get('from', '')}\r\n"
+        f"Call-ID: {_call_id(hdrs)}\r\nCSeq: {hdrs.get('cseq', '1 INVITE')}\r\n"
+        f"Contact: {_simple_contact()}\r\n"
+        f"{ctype}Content-Length: {_clen(sdp)}\r\n\r\n{sdp}")
+    _LOGGER.info("re-INVITE nel dialogo in corso: sessione confermata")
 
 
 async def handle_incoming_invite(raw):
@@ -1342,6 +1609,10 @@ async def handle_incoming_invite(raw):
     via_block = _via_block(hdrs)
     to_hdr = hdrs.get("to", "")
     cseq = hdrs.get("cseq", "1 INVITE")
+
+    if in_call and cid and cid == call_state.get("call_id"):
+        await _answer_reinvite(hdrs)
+        return
 
     caller_tag = _tag(from_hdr)
     caller_uri = ""
@@ -1353,9 +1624,16 @@ async def handle_incoming_invite(raw):
     my_tag = _gen("")
 
     pending_incoming.update(
-        active=True, cid=cid, from_hdr=from_hdr, to_hdr=to_hdr,
+        active=True, early=False, early_sdp=None,
+        cid=cid, from_hdr=from_hdr, to_hdr=to_hdr,
         cseq=cseq, via_block=via_block, my_tag=my_tag,
         caller_uri=caller_uri, caller_tag=caller_tag, body=body,
+        # Il bersaglio del dialogo è il Contact di chi chiama, non il suo
+        # From: mandare il BYE al From si prende un "481 Call/transaction
+        # does not exist" e la chiamata resta aperta. Misurato.
+        caller_contact=_angle(hdrs.get("contact", "")) or caller_uri,
+        # La strada del dialogo, per poterlo chiudere davvero più tardi.
+        record_route=list(hdrs.get("_record_route_all") or []),
     )
 
     await send(
@@ -1367,13 +1645,113 @@ async def handle_incoming_invite(raw):
 
     await broadcast("ring", f"Chiamata da: {caller_uri}")
 
+    # Lo squillo è il momento buono per cominciare a ricevere: mentre la
+    # persona sente la notifica, prende il telefono e apre l'app passano
+    # secondi che oggi buttiamo via. Chiedere il media adesso li recupera
+    # tutti, senza rispondere e senza occupare il posto esterno.
+    # Mai durante un'altra chiamata: build_sdp tira chiavi SRTP nuove e
+    # setup_media riscrive i contesti del flusso che si sta guardando.
+    if EARLY_MEDIA and not (in_call or calling):
+        try:
+            await do_early_media()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Media in anticipo non riuscito: %s", err)
+
+
+# Prova: chiedere alla targa di mandare il flusso già allo squillo.
+EARLY_MEDIA = True
+
+
+async def do_early_media():
+    """Chiede il flusso PRIMA che qualcuno risponda, con un 183 che porta l'SDP.
+
+    Un 183 Session Progress con un corpo dice a chi chiama "comincia pure a
+    mandare, non ho ancora alzato": è esattamente il caso di chi vuole vedere
+    chi ha suonato prima di decidere. Se la targa lo onora, allo squillo il
+    flusso è già in arrivo e un keyframe ce l'abbiamo da parte: chi apre il
+    video dopo non aspetta né la chiamata (1,08 s dal relay) né il primo
+    fotogramma della targa (0,45 s).
+
+    Non è una risposta. La chiamata resta in squillo, nessuno la conta come
+    risposta, e il posto esterno non viene occupato: se la targa lo ignora,
+    un 183 provvisorio non cambia niente e si continua come prima.
+    """
+    p = pending_incoming
+    if not p.get("active") or p.get("early"):
+        return False
+    if not p.get("body"):
+        # Senza offerta non c'è niente a cui rispondere in anticipo.
+        return False
+    remote = parse_sdp(p["body"])
+    if not (remote.get("video") or {}).get("port"):
+        return False
+
+    offered_enc = bool(
+        (remote.get("audio") or {}).get("crypto_key")
+        or (remote.get("video") or {}).get("crypto_key")
+    )
+    sdp = build_sdp(enc=offered_enc, video=True)
+    await send(
+        f"SIP/2.0 183 Session Progress\r\n"
+        f"{p['via_block']}To: {p['to_hdr']};tag={p['my_tag']}\r\nFrom: {p['from_hdr']}\r\n"
+        f"Call-ID: {p['cid']}\r\nCSeq: {p['cseq']}\r\n"
+        f"Contact: {_simple_contact()}\r\n"
+        f"Content-Type: application/sdp\r\n"
+        f"Content-Length: {_clen(sdp)}\r\n\r\n{sdp}")
+    p["early"] = True
+    # La risposta va tenuta ALLA LETTERA: il 200 OK dovrà rimandare questa,
+    # non una ricostruita. Vedi do_answer_incoming.
+    p["early_sdp"] = sdp
+    await media.setup_media(remote, _local_crypto_key, _local_video_crypto_key)
+    _LOGGER.info("183 con SDP mandato allo squillo: in attesa di media in anticipo")
+    return True
+
 
 async def do_answer_incoming():
     if not pending_incoming["active"]:
         return False, "Nessuna chiamata in arrivo"
 
     p = pending_incoming
-    sdp = build_sdp()
+    # Da qui la chiamata non è più "in attesa": va segnato subito, prima di
+    # qualunque await, altrimenti la copia dell'INVITE che arriva nel frattempo
+    # trova ancora lo stato di squillo e la fa rifiutare.
+    pending_incoming["active"] = False
+    # L'offerta va letta PRIMA di rispondere: il profilo media della risposta
+    # deve essere quello offerto, non quello preferito da noi.
+    remote = parse_sdp(p["body"]) if p["body"] else {}
+    offered_enc = bool(
+        (remote.get("audio") or {}).get("crypto_key")
+        or (remote.get("video") or {}).get("crypto_key")
+    )
+    if p["body"]:
+        _LOGGER.info(
+            "Incoming offer: %s — answering in kind",
+            "SRTP" if offered_enc else "RTP in chiaro",
+        )
+    # Un posto esterno solo audio non offre video: rispondere con una sezione
+    # video inventata significa promettere un flusso che nessuno manderà.
+    offered_video = bool((remote.get("video") or {}).get("port"))
+    plant_has_video = bool(getattr(R, "VIDEO_ENABLED", True))
+    # Senza corpo nell'INVITE la nostra risposta è a tutti gli effetti
+    # un'offerta: lì il video lo decidiamo noi, non un'offerta che non c'è.
+    want_video = (offered_video and plant_has_video) if p["body"] else plant_has_video
+    if p.get("early_sdp") and want_video:
+        # La stessa risposta già mandata nel 183, parola per parola. Il 183 e
+        # il 200 OK dello stesso dialogo devono portare LA STESSA risposta
+        # (RFC 3261 §13.2.1): build_sdp però tira chiavi SRTP nuove a ogni
+        # giro, quindi ricostruirla qui significava offrire chiavi DIVERSE da
+        # quelle di mezzo minuto prima. La targa se ne accorgeva e rinegoziava
+        # il media: in strada la luce del posto esterno si accendeva e
+        # spegneva, il video andava a scatti e l'audio non arrivava affatto.
+        sdp = p["early_sdp"]
+    else:
+        sdp = build_sdp(
+            enc=offered_enc if p["body"] else None,
+            video=want_video,
+            decline_video=offered_video and not want_video,
+        )
+    if p["body"] and not offered_video:
+        _LOGGER.info("Chiamata solo audio: nessun flusso video offerto")
 
     await send(
         f"SIP/2.0 200 OK\r\n"
@@ -1384,21 +1762,35 @@ async def do_answer_incoming():
         f"Content-Length: {_clen(sdp)}\r\n\r\n{sdp}")
 
     _set_in_call(True)
+    call_state.update(_DIALOG_RESET)
+    call_state["local_sdp"] = sdp
     call_state["call_id"] = p["cid"]
     call_state["from_tag"] = p["my_tag"]
     call_state["to_tag"] = p["caller_tag"]
-    call_state["remote_contact"] = p["caller_uri"]
+    call_state["remote_contact"] = p.get("caller_contact") or p["caller_uri"]
     # Per il BYE (do_hangup) di una chiamata IN ARRIVO: il To: e la request-URI
     # devono puntare al CHIAMANTE, non alla targa di default (R.INTERCOM).
     call_state["original_target"] = p["caller_uri"]
+    # Da chiamati vale l'ordine in cui sono arrivati, non al contrario
+    # (RFC 3261 §12.1.1). Senza, il BYE di una chiamata dalla strada non
+    # arriva, e il posto esterno resta occupato per due minuti.
+    call_state["route_set"] = list(p.get("record_route") or [])
 
     if p["body"]:
-        remote = parse_sdp(p["body"])
+        if not want_video:
+            # Evita di aprire la ricezione video per un flusso che non esiste.
+            remote = {**remote, "video": {}}
         call_state["remote_sdp"] = remote
         _LOGGER.info("Answer SDP: audio=%s video=%s", remote.get('audio'), remote.get('video'))
-        await media.setup_media(remote, _local_crypto_key, _local_video_crypto_key)
+        if p.get("early") and p.get("early_sdp") and want_video:
+            # Il media è già in piedi dallo squillo, con queste stesse chiavi:
+            # rifarlo adesso vuol dire buttare giù i contesti SRTP e riaprirli
+            # sotto un flusso che sta già scorrendo, cioè perdere i pacchetti
+            # in volo proprio nell'istante in cui si guarda.
+            _LOGGER.info("Media già in piedi dal 183: non lo si rifà")
+        else:
+            await media.setup_media(remote, _local_crypto_key, _local_video_crypto_key)
 
-    pending_incoming["active"] = False
     await broadcast("call_started", "Chiamata attiva!")
     # Request keyframe for video
     await send_keyframe_request()
@@ -1411,18 +1803,11 @@ async def do_decline_incoming():
 
     p = pending_incoming
     await send(
-        f"SIP/2.0 603 Decline\r\n"
+        f"SIP/2.0 486 Busy Here\r\n"
         f"{p['via_block']}To: {p['to_hdr']};tag={p['my_tag']}\r\nFrom: {p['from_hdr']}\r\n"
         f"Call-ID: {p['cid']}\r\nCSeq: {p['cseq']}\r\n"
         f"Content-Length: 0\r\n\r\n")
     pending_incoming["active"] = False
-
-
-def _via_block(hdrs):
-    via_all = hdrs.get("_via_all", [])
-    if via_all:
-        return "".join(f"Via: {v}\r\n" for v in via_all)
-    return f"Via: {hdrs.get('via', '')}\r\n"
 
 
 async def handle_incoming_bye(raw):
@@ -1432,6 +1817,18 @@ async def handle_incoming_bye(raw):
     to_hdr = hdrs.get("to", "")
     cseq = hdrs.get("cseq", "1 BYE")
 
+    if cid != call_state.get("call_id"):
+        # Un BYE per un dialogo che non è il nostro (un altro dispositivo
+        # dello stesso utente, o una chiamata già chiusa) non deve chiudere
+        # quella in corso: RFC 3261 §15.1.2, 481.
+        await send(
+            f"SIP/2.0 481 Call/Transaction Does Not Exist\r\n"
+            f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
+            f"Call-ID: {cid}\r\nCSeq: {cseq}\r\n"
+            f"Content-Length: 0\r\n\r\n")
+        _LOGGER.debug("BYE per un dialogo sconosciuto (%s): 481", cid[:24])
+        return
+
     await send(
         f"SIP/2.0 200 OK\r\n"
         f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
@@ -1439,8 +1836,7 @@ async def handle_incoming_bye(raw):
         f"Content-Length: 0\r\n\r\n")
 
     _set_in_call(False)
-    call_state.update(call_id=None, from_tag=None, to_tag=None,
-                      remote_contact=None, remote_sdp=None, original_target=None)
+    call_state.update(_DIALOG_RESET)
     await media.stop_media()
     await broadcast("call_ended", "Chiamata terminata")
 
@@ -1483,8 +1879,35 @@ async def handle_incoming_cancel(raw):
             f"Call-ID: {cid}\r\nCSeq: {invite_cseq}\r\n"
             f"Content-Length: 0\r\n\r\n")
         pending_incoming["active"] = False
+        if p.get("early") and not in_call:
+            # Il media aperto dal 183 non ha più una chiamata dietro.
+            await media.stop_media()
+        p["early"], p["early_sdp"] = False, None
+        await broadcast("ring_ended", "Chiamata cancellata")
 
-    await broadcast("ring_ended", "Chiamata cancellata")
+
+# Il relay consegna ogni richiesta DUE volte, a pochi millisecondi di distanza,
+# con branch Via diversi ma stessa transazione. Senza filtro ogni squillo
+# diventa due notifiche, ogni messaggio conta doppio, e la seconda INVITE
+# sovrascrive lo stato della chiamata che stiamo già rispondendo.
+_seen_requests: dict = {}
+DUPLICATE_WINDOW = 30.0
+
+
+def _is_duplicate(kind: str, hdrs) -> bool:
+    """Vero se questa richiesta è la copia di una già presa in carico."""
+    key = (kind, _call_id(hdrs), hdrs.get("cseq", ""))
+    if not key[1]:
+        return False
+    now = time.monotonic()
+    for old_key, seen_at in list(_seen_requests.items()):
+        if now - seen_at > DUPLICATE_WINDOW:
+            del _seen_requests[old_key]
+    if key in _seen_requests:
+        _seen_requests[key] = now
+        return True
+    _seen_requests[key] = now
+    return False
 
 
 async def request_processor():
@@ -1498,70 +1921,120 @@ async def request_processor():
 
     while True:
         raw = await incoming_requests.get()
-        kind, hdrs, body, first = _parse(raw)
-        if kind == "INVITE":
-            _fire(handle_incoming_invite(raw), "INVITE")
-        elif kind == "CANCEL":
-            _fire(handle_incoming_cancel(raw), "CANCEL")
-        elif kind == "BYE":
-            _fire(handle_incoming_bye(raw), "BYE")
-        elif kind == "OPTIONS":
-            _fire(handle_incoming_options(raw), "OPTIONS")
-        elif kind == "MESSAGE":
-            _LOGGER.debug("SIP MESSAGE body=%r from=%s", body, hdrs.get("from",""))
-            # Cap generoso (era 200: troncava GET_INIT_STATUS_REPLY ~266B → perdeva dnd/voicemail).
-            await broadcast("message", (body or "")[:4096])
-            from_hdr = hdrs.get("from", "")
-            to_hdr = hdrs.get("to", "")
-            msg_cid = hdrs.get("call-id", "")
-            msg_cseq = hdrs.get("cseq", "1 MESSAGE")
-            await send(
-                f"SIP/2.0 200 OK\r\n"
-                f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
-                f"Call-ID: {msg_cid}\r\nCSeq: {msg_cseq}\r\n"
-                f"Content-Length: 0\r\n\r\n")
-        elif kind == "INFO":
-            from_hdr = hdrs.get("from", "")
-            to_hdr = hdrs.get("to", "")
-            info_cid = hdrs.get("call-id", "")
-            info_cseq = hdrs.get("cseq", "1 INFO")
-            await send(
-                f"SIP/2.0 200 OK\r\n"
-                f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
-                f"Call-ID: {info_cid}\r\nCSeq: {info_cseq}\r\n"
-                f"Content-Length: 0\r\n\r\n")
-        elif kind == "NOTIFY":
-            # Il Tab può notificare cambi di stato (segreteria, DND, ...) via
-            # NOTIFY. Catturiamo body + evento SIP e rispondiamo 200 OK.
-            ev = hdrs.get("event", "")
-            _LOGGER.info("SIP NOTIFY event=%s body=%s hdrs=%s",
-                         ev, (body or "")[:300], first[:80])
-            await broadcast("message", f"NOTIFY {ev}: {(body or '')[:200]}")
-            from_hdr = hdrs.get("from", "")
-            to_hdr = hdrs.get("to", "")
-            n_cid = hdrs.get("call-id", "")
-            n_cseq = hdrs.get("cseq", "1 NOTIFY")
-            await send(
-                f"SIP/2.0 200 OK\r\n"
-                f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
-                f"Call-ID: {n_cid}\r\nCSeq: {n_cseq}\r\n"
-                f"Content-Length: 0\r\n\r\n")
-        elif kind != "ACK":
-            _LOGGER.debug("Unhandled SIP request: %s", kind)
+        try:
+            await _process_request(raw, _fire)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            # Una risposta che non parte (connessione giù durante una
+            # riconnessione) non deve fermare per sempre la lettura delle
+            # richieste: prima da lì in poi nessuno squillo arrivava più.
+            _LOGGER.warning("Richiesta SIP non gestita: %s", e)
 
 
-async def udp_register_refresh_task():
-    """Per la modalità UDP locale: re-registra ogni 3400 s (poco prima che scada l'expiry 3600 s)."""
-    if not R.USE_LOCAL_UDP:
+async def _process_request(raw, _fire):
+    kind, hdrs, body, first = _parse(raw)
+    try:
+        DEVICES.note_peer(hdrs, own_device_id=R.DEVICE_IMEI)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Device inventory (peer) skipped: %s", e)
+    duplicate = _is_duplicate(kind, hdrs)
+    if duplicate and kind in ("INVITE", "CANCEL", "BYE", "MESSAGE"):
+        # Alla copia si risponde comunque — il mittente la ritrasmette
+        # finché non riceve qualcosa — ma non la si esegue una seconda volta.
+        _LOGGER.debug("Richiesta %s duplicata dal relay: ignorata", kind)
+        if kind == "INVITE" and in_call and _call_id(hdrs) == call_state.get("call_id"):
+            await _answer_reinvite(hdrs)
+        elif kind == "INVITE" and pending_incoming.get("cid") == _call_id(hdrs):
+            await _resend_ringing()
+        elif kind in ("CANCEL", "BYE", "MESSAGE"):
+            await _ack_request(hdrs)
         return
+    if kind == "INVITE":
+        _fire(handle_incoming_invite(raw), "INVITE")
+    elif kind == "CANCEL":
+        _fire(handle_incoming_cancel(raw), "CANCEL")
+    elif kind == "BYE":
+        _fire(handle_incoming_bye(raw), "BYE")
+    elif kind == "OPTIONS":
+        _fire(handle_incoming_options(raw), "OPTIONS")
+    elif kind == "MESSAGE":
+        _LOGGER.debug("SIP MESSAGE body=%r from=%s", body, hdrs.get("from",""))
+        # Cap generoso (era 200: troncava GET_INIT_STATUS_REPLY ~266B → perdeva dnd/voicemail).
+        await broadcast("message", (body or "")[:4096])
+        from_hdr = hdrs.get("from", "")
+        to_hdr = hdrs.get("to", "")
+        msg_cid = hdrs.get("call-id", "")
+        msg_cseq = hdrs.get("cseq", "1 MESSAGE")
+        await send(
+            f"SIP/2.0 200 OK\r\n"
+            f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
+            f"Call-ID: {msg_cid}\r\nCSeq: {msg_cseq}\r\n"
+            f"Content-Length: 0\r\n\r\n")
+    elif kind == "INFO":
+        from_hdr = hdrs.get("from", "")
+        to_hdr = hdrs.get("to", "")
+        info_cid = hdrs.get("call-id", "")
+        info_cseq = hdrs.get("cseq", "1 INFO")
+        await send(
+            f"SIP/2.0 200 OK\r\n"
+            f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
+            f"Call-ID: {info_cid}\r\nCSeq: {info_cseq}\r\n"
+            f"Content-Length: 0\r\n\r\n")
+    elif kind == "NOTIFY":
+        # Il Tab può notificare cambi di stato (segreteria, DND, ...) via
+        # NOTIFY. Catturiamo body + evento SIP e rispondiamo 200 OK.
+        ev = hdrs.get("event", "")
+        _LOGGER.info("SIP NOTIFY event=%s body=%s hdrs=%s",
+                     ev, (body or "")[:300], first[:80])
+        await broadcast("message", f"NOTIFY {ev}: {(body or '')[:200]}")
+        from_hdr = hdrs.get("from", "")
+        to_hdr = hdrs.get("to", "")
+        n_cid = hdrs.get("call-id", "")
+        n_cseq = hdrs.get("cseq", "1 NOTIFY")
+        await send(
+            f"SIP/2.0 200 OK\r\n"
+            f"{_via_block(hdrs)}To: {to_hdr}\r\nFrom: {from_hdr}\r\n"
+            f"Call-ID: {n_cid}\r\nCSeq: {n_cseq}\r\n"
+            f"Content-Length: 0\r\n\r\n")
+    elif kind != "ACK":
+        _LOGGER.debug("Unhandled SIP request: %s", kind)
+
+
+# Si rinnova con questo anticipo sulla scadenza; su lease brevi l'anticipo si
+# riduce in proporzione, e comunque non si rinnova più spesso di così.
+REGISTER_MARGIN = 60
+MIN_REGISTER_INTERVAL = 5
+
+
+def _renew_delay() -> float:
+    """Seconds to wait before renewing, from what the registrar granted.
+
+    Con lease brevi sottrarre un margine fisso porta il rinnovo esattamente
+    sulla scadenza (60 - 60 = 0, poi alzato dal minimo a 60): per questo il
+    margine diventa proporzionale quando il lease è corto.
+    """
+    granted = granted_expiry or 3600
+    margin = min(REGISTER_MARGIN, granted * 0.2)
+    return max(MIN_REGISTER_INTERVAL, granted - margin)
+
+
+async def register_refresh_task():
+    """Keep the registration alive on every transport.
+
+    Cloud registrations expire exactly like local ones. Without this the binding
+    lapses after the granted lifetime and the intercom stops delivering calls
+    until something else happens to force a reconnect.
+    """
     while True:
-        await asyncio.sleep(3400)
-        if registered:
-            _LOGGER.info("SIP UDP: re-registrazione periodica...")
-            try:
-                ok = await do_register()
-                if not ok:
-                    _LOGGER.warning("SIP UDP re-registrazione fallita, riprovo tramite reconnect")
-                    asyncio.create_task(reconnect())
-            except Exception as e:
-                _LOGGER.error("SIP UDP re-registrazione errore: %s", e)
+        await asyncio.sleep(_renew_delay())
+        if not registered:
+            continue
+        _LOGGER.info("SIP: periodic re-registration...")
+        try:
+            ok = await do_register()
+            if not ok:
+                _LOGGER.warning("SIP re-registration failed, reconnecting")
+                _spawn_reconnect()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.error("SIP re-registration error: %s", e)

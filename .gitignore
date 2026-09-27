@@ -3,3 +3,5 @@ __pycache__/
 *.bak
 .pytest_cache/
 .ruff_cache/
+graft/
+.coverage

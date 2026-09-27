@@ -6,6 +6,101 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-27
+
+Two-way audio in Apple Home, and the fixes from a full review of the repository. Developed and
+tested on an Elvox Tab 7S Up (40517) on a 2FV2 plant over the cloud relay.
+
+### Added
+
+- Optional HomeKit video doorbell published by the integration itself (`homekit_accessory.py`): ring
+  notification, live video, two-way audio and the gate in one accessory. Off by default; turning it
+  on in Options → HomeKit shows a pairing QR code. Home Assistant's own HomeKit bridge cannot carry
+  the talk direction (see `docs/HOMEKIT.md`).
+- Re-encoded HomeKit video, on by default: one keyframe per second, so a packet lost on the cloud
+  relay is a brief smear instead of a freeze of up to 3 s.
+- Early media: the integration answers a ring with `183 Session Progress`, so the video is already
+  flowing when someone opens the notification. The `200 OK` repeats the `183` SDP byte for byte.
+- The panel's SPS/PPS are saved to `.storage`, so the first view after a restart does not wait for
+  the next keyframe.
+- `door_target` option: the panel that receives the door command. The phonebook import and download
+  fill it in from the door actuator's `GID_PE`. On a 2FV2 plant the SGA (`61000`) and the door panel
+  (`55001`) differ, and the phonebook addresses the door command to the panel. When the option is
+  empty, entries that already imported the phonebook use the door actuator's panel, and the others
+  keep the 1.0.7 behaviour (the SGA).
+- When the default video panel (`55100`) does not exist, auto-call tries the panel that last rang and
+  remembers it. An explicit `camera_target` is never replaced.
+- The HomeKit gate reports unlocked when it opens and then returns to an unknown state. It never
+  reports locked: the intercom only pulses the strike, and iOS announced the automatic relock as
+  "locked again".
+- A hang-up while an outgoing call is still ringing now sends a SIP `CANCEL`. Before, the call
+  connected anyway with nobody watching.
+- `single_config_entry` in the manifest: the SIP and media state is per process.
+
+### Fixed
+
+- Every `vimar_intercom.*` service failed after a reload of the entry with
+  `'bool' object is not subscriptable`: HomeKit state was stored next to the entries in
+  `hass.data[DOMAIN]`.
+- The voice sent to the panel ran ahead of real time: silence frames were slipped between voice
+  frames, and the panel received 12.5 to 13.7 s of audio for 10 s of speech, which built up about a
+  second of delay. A pacer now sends one 20 ms frame per tick.
+- After a TLS drop the SIP reader waited for its own reconnection, whose REGISTER answer only the
+  reader could deliver, so rings were lost for minutes. The reader now hands reconnection to a
+  separate task, and concurrent reconnects share one attempt.
+- A malformed `Content-Length` from the relay (negative or huge) could spin the framer on the event
+  loop forever. A lone CRLF keepalive pong no longer swallows the first line of the next message.
+- A second ring during a call no longer triggers early media, which replaced the call's SRTP keys.
+  A re-INVITE is answered in the dialog instead of being treated as a new ring. A BYE for another
+  dialog gets a `481` and leaves the call up. A `CANCEL` during early media stops the media.
+- The RTP reorder buffer kept packets that arrived after their slot had been skipped, and its flush
+  could walk the whole 16-bit sequence space on the event loop.
+- HomeKit: a stop that arrived while a view was still starting closed the sockets under it and left
+  a dead video sink behind. Session start and close are now serialised, and the three parties that
+  can close a session share one close.
+- A `call_ended` that arrived after a new call had started cancelled that call's timers and closed
+  its views. Opening a view while an automatic hang-up was sending its BYE interrupted the BYE.
+- A transcoder started at a ring nobody answered stayed allocated.
+- A ring answered by opening a HomeKit view kept the call up for 30 s after the view closed, and
+  views reopened meanwhile attached to it. For the indoor monitor's call, which has no video, the
+  street could not be seen for about a minute. It now ends 2 s after the last view closes.
+- Saving the detected model into the entry reloaded the integration, even mid-call.
+- The options-flow SIP test ran without the paired device identity and could be refused with `503`.
+  The duplicate-entry check now runs before the live REGISTER.
+- Setup that cannot reach the relay raises `ConfigEntryNotReady`, so Home Assistant retries.
+  Unloading hangs up an active call and resets the SIP state.
+
+### Security
+
+- `/api/vimar_intercom/av` requires Home Assistant authentication (Home Assistant's ffmpeg uses a
+  signed URL) in addition to the local-network check.
+- `send_command` and `fetch_local`, and the WebSocket actions `command`, `register`, `probe`, `scan`
+  and `reconnect`, are for administrators only.
+- SRTP master keys in SDP lines and parsed SDP are masked in both logs.
+- In local UDP mode SIP is accepted only from the configured intercom, and plain RTP only from the
+  other end of the current call.
+- SIP tags, Call-IDs and digest cnonces come from `secrets`.
+- The HomeKit setup code is stored with mode 0600, and the pairing QR link stops working once paired.
+
+### Removed
+
+- `push_sender.py` and the `/api/vimar_intercom/push_token` endpoint: APNs requires HTTP/2, which
+  aiohttp does not speak, so it could not deliver a push.
+- The MJPEG view `/api/vimar_intercom/video`, which could not produce a frame, and other dead code
+  (unused RTCP keyframe requests, legacy SDP writer, unused constants).
+
+### Changed
+
+- Entries created by the m4r1k fork keep their device identity: `device_id` becomes `device_imei`
+  and `device_uuid`, and `sip_cloud_domain` is read as `cloud_domain`.
+- Stateless code moved out of the three largest modules: `g711.py`, `rtp_h264.py`, `rtcp.py`,
+  `sip_message.py`, `hub_messages.py`.
+- The hub keeps the relay connection alive with a CRLF ping; renewal follows the lifetime the
+  registrar grants.
+- Tests: SRTP and SRTCP checked byte for byte against libsrtp, including the sequence wrap; SIP
+  dialogs driven through the real handlers; HomeKit `set_endpoints` and session lifecycle; options
+  flow. Tautological tests were replaced. Line coverage went from 41% to 53%.
+
 ## [1.0.7] - 2026-09-21
 
 Stability release from a full debug pass against the decompiled VIEW app, the SIP logs of

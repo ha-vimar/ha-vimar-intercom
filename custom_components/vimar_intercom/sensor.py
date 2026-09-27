@@ -52,6 +52,19 @@ def _status_attrs(hub) -> dict:
 
 SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
+        key="devices",
+        name="Intercom Dispositivi",
+        icon="mdi:devices",
+        # Tutti i dispositivi mobili condividono un unico utente SIP: senza
+        # questo elenco non c'è modo di sapere quali telefoni sono abbinati,
+        # e generare un nuovo QR ruota la credenziale condivisa sganciandoli.
+        value_fn=lambda hub: len(hub.devices),
+        attrs_fn=lambda hub: {
+            "dispositivi": hub.devices,
+            "riepilogo": hub.devices_summary,
+        },
+    ),
+    VimarSensorDescription(
         key="status",
         name="Intercom Stato",
         icon="mdi:doorbell-video",

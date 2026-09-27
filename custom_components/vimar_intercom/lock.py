@@ -24,11 +24,10 @@ async def async_setup_entry(
 ) -> None:
     hub = hass.data[DOMAIN][entry.entry_id]["hub"]
     async_add_entities([
-        # door_target=None → hub.async_door usa runtime.DOOR_ESTERNO, cioè
-        # l'SGA configurato (options o import da rubrica.db). Con il letterale
-        # "55001" che c'era prima, su un impianto con MAGIC_APT_INTERCOM diverso
-        # il comando partiva verso l'indirizzo sbagliato, tornava 200 senza
-        # effetto e la serratura mostrava "sbloccata" con la porta chiusa.
+        # door_target=None → hub.async_door usa runtime.DOOR_ESTERNO: la targa
+        # dell'attuatore porta nella rubrica (door_target), o l'SGA se la
+        # rubrica non è stata importata. Un indirizzo sbagliato risponde 200
+        # senza effetto e la serratura mostra "sbloccata" con la porta chiusa.
         VimarIntercomLock(hub, entry.entry_id, key="lock", name="Serratura",
                           door_target=None, door_command=C.DOOR_COMMAND),
     ])

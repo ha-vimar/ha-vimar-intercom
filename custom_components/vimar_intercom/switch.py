@@ -14,6 +14,7 @@ sul Tab (i vecchi tentativi verso 55002 davano 200 senza effetto = target sbagli
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.components.switch import SwitchEntity
@@ -59,6 +60,12 @@ async def async_setup_entry(
     ])
 
 
+# Quanto attendere l'annuncio spontaneo del Tab dopo un comando, e quanto
+# attendere la risposta quando lo stato viene richiesto esplicitamente.
+VERIFY_ANNOUNCE_WAIT = 2.0
+VERIFY_REPLY_WAIT = 3.0
+
+
 class VimarModeSwitch(SwitchEntity, RestoreEntity):
     """Switch per una modalità del Tab (segreteria / non disturbare)."""
 
@@ -81,6 +88,13 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
         self._attr_device_info = device_info(entry_id)
         self._is_on = False
         self._last_result: str | None = None
+        self._verified: bool | None = None
+        self._verify_task: asyncio.Task | None = None
+        # Stato richiesto e non ancora confermato. Finché è valorizzato è lui a
+        # comandare quello che si vede: senza, l'interruttore resta sullo stato
+        # vecchio per i secondi della verifica e invita a premere di nuovo —
+        # e ogni pressione è un comando in più che l'impianto esegue davvero.
+        self._pending: bool | None = None
 
     def _real(self) -> bool | None:
         return self._hub.stats.get(self._state_attr)
@@ -93,16 +107,23 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         self._hub.unregister_state_callback(self._on_state_change)
+        if self._verify_task and not self._verify_task.done():
+            self._verify_task.cancel()
 
     @callback
     def _on_state_change(self) -> None:
         real = self._real()
         if real is not None:
             self._is_on = real
+            if self._pending is not None and real == self._pending:
+                # Confermato dall'impianto: l'ottimismo ha esaurito il suo compito.
+                self._pending = None
         self.async_write_ha_state()
 
     @property
     def is_on(self) -> bool:
+        if self._pending is not None:
+            return self._pending
         real = self._real()
         return real if real is not None else self._is_on
 
@@ -125,6 +146,7 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
             "comando_off": self._cmd_off,
             "stato_reale": self._real(),
             "ultimo_esito": self._last_result,
+            "ultimo_comando_verificato": self._verified,
             "nota": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab.",
         }
 
@@ -139,13 +161,74 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
             body=body, target=self._target,
             header_name=self._hname or None, header_value=self._hvalue or None)
         self._last_result = msg
-        # Fino alla 1.0.6 lo stato cambiava anche a comando fallito (404, timeout,
-        # «Non registrato»): lo switch mostrava ON con la segreteria spenta, e
-        # senza un annuncio del Tab a smentirlo lo stato falso sopravviveva anche
-        # al riavvio (RestoreEntity). Ora solo un invio riuscito sposta lo stato
-        # supposto; quello reale arriva comunque dall'annuncio VOICEMAIL;/DND;.
-        if ok and self._real() is None:
+        if ok:
             self._is_on = new_state
+        self._pending = new_state if ok else None
         _LOGGER.info("%s %s → ok=%s msg=%s", self._attr_name,
                      "ON" if new_state else "OFF", ok, msg)
+        self.async_write_ha_state()
+        if ok:
+            if self._verify_task and not self._verify_task.done():
+                self._verify_task.cancel()
+            self._verify_task = asyncio.create_task(self._verify(new_state))
+
+    async def _verify(self, expected: bool) -> None:
+        """Controlla che il comando abbia avuto effetto, non solo che sia stato accettato.
+
+        Un 200 OK dice che il messaggio è stato consegnato, non che qualcuno
+        lo abbia eseguito: un target sbagliato risponde 200 e ignora tutto, ed
+        è esattamente così che questi due comandi possono sembrare funzionanti
+        mentre sul Tab non cambia nulla.
+        """
+        try:
+            await asyncio.sleep(VERIFY_ANNOUNCE_WAIT)
+            if self._real() == expected:
+                self._set_verified(True)
+                return
+            # Nessun annuncio spontaneo: chiediamo esplicitamente lo stato.
+            await self._hub.async_request_init_status()
+            await asyncio.sleep(VERIFY_REPLY_WAIT)
+            real = self._real()
+            if real == expected:
+                self._set_verified(True)
+                return
+            if real is None:
+                self._pending = None
+                self._last_result = (
+                    f"{self._last_result} — stato non riportato dall'impianto, "
+                    "impossibile verificare"
+                )
+                self._set_verified(None)
+                _LOGGER.warning(
+                    "%s: comando accettato ma l'impianto non riporta lo stato; "
+                    "non è possibile confermare che abbia avuto effetto.",
+                    self._attr_name,
+                )
+                return
+            self._last_result = (
+                f"{self._last_result} — nessun effetto: {self._target} ha risposto 200 "
+                "ma lo stato non è cambiato"
+            )
+            self._set_verified(False)
+            self._is_on = real
+            _LOGGER.warning(
+                "%s: %s ha accettato «%s» (200 OK) ma lo stato è rimasto %s. "
+                "Di solito significa che il destinatario è sbagliato: questi comandi "
+                "vanno all'SGA dell'appartamento, che non su tutti gli impianti "
+                "coincide con la targa. Cambia «sga_target» nelle opzioni "
+                "dell'integrazione.",
+                self._attr_name, self._target,
+                self._cmd_on if expected else self._cmd_off,
+                "ON" if real else "OFF",
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("%s: verifica non riuscita: %s", self._attr_name, e)
+
+    def _set_verified(self, value: bool | None) -> None:
+        self._verified = value
+        # Verifica conclusa, in un senso o nell'altro: da qui in poi comanda
+        # lo stato reale, non più quello che speravamo.
+        self._pending = None
         self.async_write_ha_state()

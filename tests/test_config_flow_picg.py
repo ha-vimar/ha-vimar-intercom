@@ -147,12 +147,27 @@ def test_the_homekit_page_keeps_the_network_settings(of):
     assert out["data"]["homekit_accessory"] is False
     assert out["data"]["homekit_answer"] == "talk"
     assert out["data"]["homekit_ring_button"] is False, "off unless ticked"
+
+
+SETTINGS = {"local_proxy": "192.0.2.1", "use_local_udp": False, "local_udp_port": 5060,
+            "media_enc": False, "actuators": "", "sga_target": "61000",
+            "picg_target": "61000", "camera_target": "55001", "door_target": "55001"}
+
+
+def test_the_settings_page_saves_the_video_bandwidth(of):
+    """It changes every video from the panel, so it lives on the general page."""
+    out = _save(of, "async_step_settings", {**SETTINGS, "video_bandwidth": "2048"}, FOREIGN)
+    assert out["type"] == "create_entry", out
+    assert out["data"]["video_bandwidth"] == "2048"
+    out = _save(of, "async_step_settings", SETTINGS, FOREIGN)
     assert out["data"]["video_bandwidth"] == "256", "the default when not chosen"
+    out = _save(of, "async_step_settings", SETTINGS, {**FOREIGN, "video_bandwidth": "2048"})
+    assert out["data"]["video_bandwidth"] == "2048", "a saved choice is kept"
 
 
-def test_the_homekit_page_saves_the_video_bandwidth(of):
-    out = _save(of, "async_step_homekit",
-                {"homekit_accessory": True, "video_bandwidth": "2048"}, FOREIGN)
+def test_the_homekit_page_keeps_the_video_bandwidth(of):
+    out = _save(of, "async_step_homekit", {"homekit_accessory": True},
+                {**FOREIGN, "video_bandwidth": "2048"})
     assert out["data"]["video_bandwidth"] == "2048"
 
 

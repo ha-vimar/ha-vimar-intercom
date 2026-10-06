@@ -112,7 +112,8 @@
           "view_keepalive": "Seconds of silence for “Vedi esterno” (0 = none)",
           "allowed_users": "Users allowed to see rings and live media (empty = everyone)",
           "ring_webhook_url": "Ring-start webhook (URL)",
-          "ring_end_webhook_url": "Ring-end webhook (URL)"
+          "ring_end_webhook_url": "Ring-end webhook (URL)",
+          "video_bandwidth": "Video quality from the panel"
         },
         "data_description": {
           "voice_answer": "Who can answer the call by talking while it rings. Declared only: only connections using /audio_ws?voice_answer=1 (Echo Show, HomeKit via Scrypted). Never: talking never answers. Anyone: any connection with a microphone can answer; beware, a wall tablet whose microphone was left open can answer by itself with household noise.",
@@ -133,7 +134,8 @@
           "view_keepalive": "While viewing the outside the integration sends audio silence; without it, over the cloud the panel closes the view after ~10 s. It stops this many seconds after the view starts (the view then ends by itself). On the 2-wire plant in local mode the silence keeps the apartment busy: the default is 0 in local mode and 120 over the cloud; 0 = no silence (on the 2-wire use 0 or 30).",
           "allowed_users": "Limits the card, the ring history (photos and clips) and /audio_ws to these Home Assistant users. Admins always. Empty = every logged-in user. It does NOT limit the camera entity or /av from the local network: anyone who can open the camera sees (and hears) the stream; and if the photo folder is under an HA media directory, photos and clips show up in the media browser for every user.",
           "ring_webhook_url": "GET (fire-and-forget) sent when a ring starts, e.g. to turn on a dummy switch (Scrypted Dummy Switch) linked to a Custom Doorbell Button. A failure is only logged as a warning and never stops the ring. Empty = off.",
-          "ring_end_webhook_url": "GET (fire-and-forget) sent when the ring ends, answered, cancelled or timed out: same idea as above, to turn the switch off. Empty = off."
+          "ring_end_webhook_url": "GET (fire-and-forget) sent when the ring ends, answered, cancelled or timed out: same idea as above, to turn the switch off. Empty = off.",
+          "video_bandwidth": "Applies to every video from the panel: the card, the camera, /av and HomeKit. 256 kbit/s (recommended over the cloud): a lighter stream, fewer packets lost on the cloud relay. 2 Mbit/s: a sharper picture on panels that support it (measured on a Tab 5S Up 40515), but ten times the traffic; on a relay that loses packets (measured on a Tab 7S Up 40517) the video smears, freezes and lags."
         }
       },
       "homekit": {
@@ -143,15 +145,13 @@
           "homekit_accessory": "Publish to HomeKit",
           "homekit_video_smooth": "Smoother video (re-encode)",
           "homekit_answer": "During a ring",
-          "homekit_ring_button": "Ring button for Home automations",
-          "video_bandwidth": "Video quality from the panel"
+          "homekit_ring_button": "Ring button for Home automations"
         },
         "data_description": {
           "homekit_accessory": "Turns on the HomeKit video doorbell. Until it is paired, the setup code and the QR code to scan with the Home app appear above; a notification says that pairing is waiting. After 10 wrong codes in a row the code changes.",
           "homekit_video_smooth": "On (recommended): Home Assistant re-encodes the panel's video with a keyframe every second, so a packet lost on the cloud relay shows as a brief smear instead of a freeze. Opening takes about half a second longer and uses some CPU. Off: the video goes straight to the phone and opens faster, but a lost packet can freeze the picture for up to 3 seconds.",
           "homekit_answer": "Answer when you talk: opening the notification shows and plays the street without answering, so the Tab and the app can still answer; your first word (Talk) answers. Answer when the view opens: opening the notification answers at once and the Tab stops ringing.",
-          "homekit_ring_button": "Adds a programmable button that is pressed at every ring, to use as a trigger in Home app automations. Off: one tile less in the Home app; the ring notification, video, Talk and the gate are unchanged.",
-          "video_bandwidth": "Applies to every video from the panel: the card, the camera, /av and HomeKit. 256 kbit/s (recommended over the cloud): a lighter stream, fewer packets lost on the cloud relay. 2 Mbit/s: a sharper picture on panels that support it (measured on a Tab 5S Up 40515), but ten times the traffic; on a relay that loses packets (measured on a Tab 7S Up 40517) the video smears, freezes and lags."
+          "homekit_ring_button": "Adds a programmable button that is pressed at every ring, to use as a trigger in Home app automations. Off: one tile less in the Home app; the ring notification, video, Talk and the gate are unchanged."
         }
       },
       "import_rubrica": {

@@ -112,7 +112,8 @@
           "view_keepalive": "Secondi di silenzio a «Vedi esterno» (0 = nessuno)",
           "allowed_users": "Utenti ammessi a squilli e media live (vuoto = tutti)",
           "ring_webhook_url": "Webhook a inizio squillo (URL)",
-          "ring_end_webhook_url": "Webhook a fine squillo (URL)"
+          "ring_end_webhook_url": "Webhook a fine squillo (URL)",
+          "video_bandwidth": "Qualità video dalla targa"
         },
         "data_description": {
           "voice_answer": "Chi può rispondere alla chiamata parlando mentre squilla. Solo dichiarato: risponde solo chi si collega con /audio_ws?voice_answer=1 (Echo Show, HomeKit via Scrypted). Mai: la voce non risponde. Chiunque: risponde qualsiasi connessione con microfono; attenzione, un tablet a muro con il microfono rimasto aperto può rispondere da solo con i rumori di casa.",
@@ -133,7 +134,8 @@
           "view_keepalive": "Durante la vista dell'esterno l'integrazione manda silenzio audio, senza il quale via cloud la targa chiude la vista dopo ~10 s. Si ferma dopo questi secondi dall'inizio della vista (poi la vista si chiude da sola). Sul 2 fili in locale il silenzio tiene occupato l'appartamento: il predefinito è 0 in locale e 120 via cloud; 0 = nessun silenzio (sul 2 fili va bene 0 o 30).",
           "allowed_users": "Limita la card, lo storico squilli (foto e clip) e /audio_ws a questi utenti di Home Assistant. Gli amministratori sempre. Vuoto = ogni utente autenticato. NON limita l'entità camera né /av dalla rete locale: chi può aprire la camera vede (e sente) lo stream; e se la cartella foto è sotto una cartella media di HA, foto e clip compaiono nel browser media per tutti gli utenti.",
           "ring_webhook_url": "GET (fire-and-forget) inviata quando inizia uno squillo, es. per accendere un interruttore fittizio (Scrypted Dummy Switch) collegato a un Custom Doorbell Button. Un fallimento si logga come warning e non ferma lo squillo. Vuoto = disattivato.",
-          "ring_end_webhook_url": "GET (fire-and-forget) inviata quando lo squillo finisce, risposto, annullato o scaduto: stessa idea di sopra, per spegnere l'interruttore. Vuoto = disattivato."
+          "ring_end_webhook_url": "GET (fire-and-forget) inviata quando lo squillo finisce, risposto, annullato o scaduto: stessa idea di sopra, per spegnere l'interruttore. Vuoto = disattivato.",
+          "video_bandwidth": "Vale per tutto il video della targa: card, camera, /av e HomeKit. 256 kbit/s (consigliato in cloud): flusso più leggero, meno pacchetti persi sul relay. 2 Mbit/s: immagine più nitida sulle targhe che lo supportano (misurato su un Tab 5S Up 40515), ma dieci volte il traffico; con un relay che perde pacchetti (misurato su un Tab 7S Up 40517) il video si sgrana, si blocca e va in ritardo."
         }
       },
       "homekit": {
@@ -143,15 +145,13 @@
           "homekit_accessory": "Pubblica in HomeKit",
           "homekit_video_smooth": "Video più fluido (ricodifica)",
           "homekit_answer": "Durante uno squillo",
-          "homekit_ring_button": "Pulsante squillo per le automazioni Casa",
-          "video_bandwidth": "Qualità video dalla targa"
+          "homekit_ring_button": "Pulsante squillo per le automazioni Casa"
         },
         "data_description": {
           "homekit_accessory": "Accende il videocitofono in HomeKit. Finché non è abbinato, il codice e il QR da inquadrare con l'app Casa compaiono qui sopra; una notifica ricorda che l'abbinamento è in attesa. Dopo 10 codici sbagliati di fila il codice cambia.",
           "homekit_video_smooth": "Acceso (consigliato): Home Assistant ricodifica il video della targa con un keyframe al secondo, così un pacchetto perso dal relay diventa una breve sbavatura invece di un blocco. L'apertura richiede circa mezzo secondo in più e un po' di CPU. Spento: il video va dritto al telefono e si apre prima, ma un pacchetto perso può fermare l'immagine fino a 3 secondi.",
           "homekit_answer": "Rispondi quando parli: aprire la notifica mostra e fa sentire la strada senza rispondere, così il Tab e l'app possono ancora rispondere; la prima parola (Parla) risponde. Rispondi all'apertura: aprire la notifica risponde subito e il Tab smette di suonare.",
-          "homekit_ring_button": "Aggiunge all'accessorio un pulsante programmabile che si preme a ogni squillo, da usare come attivatore nelle automazioni dell'app Casa. Spento: una voce in meno nell'app Casa; notifica, video, Parla e cancello non cambiano.",
-          "video_bandwidth": "Vale per tutto il video della targa: card, camera, /av e HomeKit. 256 kbit/s (consigliato in cloud): flusso più leggero, meno pacchetti persi sul relay. 2 Mbit/s: immagine più nitida sulle targhe che lo supportano (misurato su un Tab 5S Up 40515), ma dieci volte il traffico; con un relay che perde pacchetti (misurato su un Tab 7S Up 40517) il video si sgrana, si blocca e va in ritardo."
+          "homekit_ring_button": "Aggiunge all'accessorio un pulsante programmabile che si preme a ogni squillo, da usare come attivatore nelle automazioni dell'app Casa. Spento: una voce in meno nell'app Casa; notifica, video, Parla e cancello non cambiano."
         }
       },
       "import_rubrica": {

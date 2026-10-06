@@ -289,6 +289,15 @@ def _photos_schema(form: dict) -> dict:
             default=form.get(KEY_VIEW_KA, view_keepalive_default(
                 form.get(KEY_USE_LOCAL_UDP, True))),
         ): vol.All(vol.Coerce(int), vol.Range(min=0, max=3600)),
+        # Every video from the panel: card, camera, /av and HomeKit.
+        vol.Optional(
+            CONF_VIDEO_BANDWIDTH,
+            default=form.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
+        ): selector.SelectSelector(selector.SelectSelectorConfig(
+            options=[VIDEO_BANDWIDTH_LOW, VIDEO_BANDWIDTH_HIGH],
+            translation_key="video_bandwidth",
+            mode=selector.SelectSelectorMode.LIST,
+        )),
     }
 
 
@@ -385,6 +394,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         KEY_SNAP_DIR:       snap_dir,
                         KEY_SNAP_DELAY:     snap_delay,
                         KEY_VIEW_KA:        view_ka,
+                        CONF_VIDEO_BANDWIDTH: user_input.get(
+                            CONF_VIDEO_BANDWIDTH,
+                            current.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH)),
                         KEY_ALLOWED_USERS:  allowed_users,
                         KEY_RING_WEBHOOK_URL:     ring_webhook_url,
                         KEY_RING_END_WEBHOOK_URL: ring_end_webhook_url,
@@ -574,8 +586,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_HOMEKIT_ANSWER: user_input.get(
                         CONF_HOMEKIT_ANSWER, DEFAULT_HOMEKIT_ANSWER),
                     CONF_HOMEKIT_RING_BUTTON: bool(user_input.get(CONF_HOMEKIT_RING_BUTTON)),
-                    CONF_VIDEO_BANDWIDTH: user_input.get(
-                        CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
                 },
             )
         current = self._entry.options
@@ -604,15 +614,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_HOMEKIT_RING_BUTTON,
                     default=current.get(CONF_HOMEKIT_RING_BUTTON, DEFAULT_HOMEKIT_RING_BUTTON),
                 ): bool,
-                # Not HomeKit only: every video from the panel (card, camera, /av).
-                vol.Optional(
-                    CONF_VIDEO_BANDWIDTH,
-                    default=current.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
-                ): selector.SelectSelector(selector.SelectSelectorConfig(
-                    options=[VIDEO_BANDWIDTH_LOW, VIDEO_BANDWIDTH_HIGH],
-                    translation_key="video_bandwidth",
-                    mode=selector.SelectSelectorMode.LIST,
-                )),
             }),
         )
 

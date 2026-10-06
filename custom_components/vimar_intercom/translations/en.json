@@ -143,13 +143,15 @@
           "homekit_accessory": "Publish to HomeKit",
           "homekit_video_smooth": "Smoother video (re-encode)",
           "homekit_answer": "During a ring",
-          "homekit_ring_button": "Ring button for Home automations"
+          "homekit_ring_button": "Ring button for Home automations",
+          "video_bandwidth": "Video quality from the panel"
         },
         "data_description": {
           "homekit_accessory": "Turns on the HomeKit video doorbell. Until it is paired, the setup code and the QR code to scan with the Home app appear above; a notification says that pairing is waiting. After 10 wrong codes in a row the code changes.",
           "homekit_video_smooth": "On (recommended): Home Assistant re-encodes the panel's video with a keyframe every second, so a packet lost on the cloud relay shows as a brief smear instead of a freeze. Opening takes about half a second longer and uses some CPU. Off: the video goes straight to the phone and opens faster, but a lost packet can freeze the picture for up to 3 seconds.",
           "homekit_answer": "Answer when you talk: opening the notification shows and plays the street without answering, so the Tab and the app can still answer; your first word (Talk) answers. Answer when the view opens: opening the notification answers at once and the Tab stops ringing.",
-          "homekit_ring_button": "Adds a programmable button that is pressed at every ring, to use as a trigger in Home app automations. Off: one tile less in the Home app; the ring notification, video, Talk and the gate are unchanged."
+          "homekit_ring_button": "Adds a programmable button that is pressed at every ring, to use as a trigger in Home app automations. Off: one tile less in the Home app; the ring notification, video, Talk and the gate are unchanged.",
+          "video_bandwidth": "Applies to every video from the panel: the card, the camera, /av and HomeKit. 256 kbit/s (recommended over the cloud): a lighter stream, fewer packets lost on the cloud relay. 2 Mbit/s: a sharper picture on panels that support it (measured on a Tab 5S Up 40515), but ten times the traffic; on a relay that loses packets (measured on a Tab 7S Up 40517) the video smears, freezes and lags."
         }
       },
       "import_rubrica": {
@@ -441,6 +443,12 @@
       "options": {
         "talk": "Answer when you talk",
         "open": "Answer when the view opens"
+      }
+    },
+    "video_bandwidth": {
+      "options": {
+        "256": "256 kbit/s (recommended)",
+        "2048": "2 Mbit/s (sharper, needs a clean connection)"
       }
     }
   },

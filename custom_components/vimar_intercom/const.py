@@ -40,8 +40,15 @@ RTP_VIDEO_PORT     = 9200
 # Bandwidth we declare in the SDP (b=AS, kbit/s). The 40515 panel's encoder honours it:
 # 256 gave ~14 KB keyframes at 16 fps, 2048 gives 30-58 KB at 25 fps (~1.5 Mbit/s, its
 # ceiling: 4096 is the same), same 720x576, no loss over the cloud. Session = video + audio.
-SDP_VIDEO_BANDWIDTH = 2048
-SDP_SESSION_BANDWIDTH = 2200
+# The video bandwidth is an option (CONF_VIDEO_BANDWIDTH): 2048 suits the 40515, but
+# the 40517 honours it too, and through a cloud relay that loses packets ten times
+# the traffic means ten times the losses (smeared, frozen, laggy video). 256 is the
+# value before 1.0.19 and the default. Session = video + audio.
+CONF_VIDEO_BANDWIDTH = "video_bandwidth"
+VIDEO_BANDWIDTH_LOW = "256"
+VIDEO_BANDWIDTH_HIGH = "2048"
+DEFAULT_VIDEO_BANDWIDTH = VIDEO_BANDWIDTH_LOW
+SDP_BANDWIDTH = {VIDEO_BANDWIDTH_LOW: (256, 512), VIDEO_BANDWIDTH_HIGH: (2048, 2200)}
 # Porte locali dell'ffmpeg AV (/api/vimar_intercom/av). Devono essere PARI e
 # distanti almeno 2: per ogni riga m= dell'SDP ffmpeg apre la porta RTP **e** la
 # RTCP (= RTP + 1). Fino alla 1.0.7 erano 19201/19202: l'RTCP del video cadeva

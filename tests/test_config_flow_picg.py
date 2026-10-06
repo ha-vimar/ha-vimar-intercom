@@ -147,6 +147,13 @@ def test_the_homekit_page_keeps_the_network_settings(of):
     assert out["data"]["homekit_accessory"] is False
     assert out["data"]["homekit_answer"] == "talk"
     assert out["data"]["homekit_ring_button"] is False, "off unless ticked"
+    assert out["data"]["video_bandwidth"] == "256", "the default when not chosen"
+
+
+def test_the_homekit_page_saves_the_video_bandwidth(of):
+    out = _save(of, "async_step_homekit",
+                {"homekit_accessory": True, "video_bandwidth": "2048"}, FOREIGN)
+    assert out["data"]["video_bandwidth"] == "2048"
 
 
 def test_the_settings_page_keeps_homekit_and_unknown_keys(of):

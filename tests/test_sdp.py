@@ -33,13 +33,25 @@ def test_build_sdp_plain_rtp_default():
     assert sip.SDP._local_video_crypto_key is None
 
 
-def test_build_sdp_asks_the_panel_for_2_mbit_video():
-    """256 kbit/s made the 40515 send 16 fps blocky video; it honours 2048."""
+@pytest.mark.parametrize("option, video, session", [
+    (None, 256, 512),          # the default: what the integration asked before 1.0.19
+    ("256", 256, 512),
+    ("2048", 2048, 2200),      # the 40515's sharper picture, on request
+    ("bogus", 256, 512),
+])
+def test_build_sdp_asks_for_the_chosen_video_bandwidth(monkeypatch, option, video, session):
+    """2048 kbit/s made a 40517 send ten times the packets through a cloud relay
+    that loses them (smeared, frozen, laggy video): it is an option, 256 by default."""
+    from custom_components.vimar_intercom import runtime as R
     S.MEDIA_ENC = False
+    data = {"sip_user": "1001", "sip_domain": "example.invalid"}
+    if option is not None:
+        data["video_bandwidth"] = option
+    R.configure(data)
     offer = sip.parse_sdp(sip.build_sdp())
     for sdp in (sip.build_sdp(), sip.build_sdp(offer)):
-        assert "b=AS:2200\r\nt=0 0" in sdp
-        assert "m=video" in sdp and "b=AS:2048\r\n" in sdp.split("m=video")[1]
+        assert f"b=AS:{session}\r\nt=0 0" in sdp
+        assert "m=video" in sdp and f"b=AS:{video}\r\n" in sdp.split("m=video")[1]
 
 
 def test_build_sdp_srtp_when_enabled():

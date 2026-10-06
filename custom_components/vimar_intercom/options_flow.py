@@ -57,11 +57,13 @@ from .const import (
     CONF_HOMEKIT_ANSWER,
     CONF_HOMEKIT_RING_BUTTON,
     CONF_HOMEKIT_SMOOTH,
+    CONF_VIDEO_BANDWIDTH,
     DEFAULT_HOMEKIT_ACCESSORY,
     DEFAULT_HOMEKIT_ANSWER,
     DEFAULT_HOMEKIT_RING_BUTTON,
     DEFAULT_HOMEKIT_SMOOTH,
     DEFAULT_SNAPSHOT_DELAY,
+    DEFAULT_VIDEO_BANDWIDTH,
     DOMAIN,
     HOMEKIT_ANSWER_OPEN,
     HOMEKIT_ANSWER_TALK,
@@ -71,6 +73,8 @@ from .const import (
     MY_NAME,
     PICG_TARGET,
     SGA_TARGET,
+    VIDEO_BANDWIDTH_HIGH,
+    VIDEO_BANDWIDTH_LOW,
 )
 from .runtime import (
     MEDIA_ENC_MODES,
@@ -570,6 +574,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_HOMEKIT_ANSWER: user_input.get(
                         CONF_HOMEKIT_ANSWER, DEFAULT_HOMEKIT_ANSWER),
                     CONF_HOMEKIT_RING_BUTTON: bool(user_input.get(CONF_HOMEKIT_RING_BUTTON)),
+                    CONF_VIDEO_BANDWIDTH: user_input.get(
+                        CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
                 },
             )
         current = self._entry.options
@@ -598,6 +604,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_HOMEKIT_RING_BUTTON,
                     default=current.get(CONF_HOMEKIT_RING_BUTTON, DEFAULT_HOMEKIT_RING_BUTTON),
                 ): bool,
+                # Not HomeKit only: every video from the panel (card, camera, /av).
+                vol.Optional(
+                    CONF_VIDEO_BANDWIDTH,
+                    default=current.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
+                ): selector.SelectSelector(selector.SelectSelectorConfig(
+                    options=[VIDEO_BANDWIDTH_LOW, VIDEO_BANDWIDTH_HIGH],
+                    translation_key="video_bandwidth",
+                    mode=selector.SelectSelectorMode.LIST,
+                )),
             }),
         )
 

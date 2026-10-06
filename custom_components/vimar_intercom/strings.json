@@ -143,13 +143,15 @@
           "homekit_accessory": "Pubblica in HomeKit",
           "homekit_video_smooth": "Video più fluido (ricodifica)",
           "homekit_answer": "Durante uno squillo",
-          "homekit_ring_button": "Pulsante squillo per le automazioni Casa"
+          "homekit_ring_button": "Pulsante squillo per le automazioni Casa",
+          "video_bandwidth": "Qualità video dalla targa"
         },
         "data_description": {
           "homekit_accessory": "Accende il videocitofono in HomeKit. Finché non è abbinato, il codice e il QR da inquadrare con l'app Casa compaiono qui sopra; una notifica ricorda che l'abbinamento è in attesa. Dopo 10 codici sbagliati di fila il codice cambia.",
           "homekit_video_smooth": "Acceso (consigliato): Home Assistant ricodifica il video della targa con un keyframe al secondo, così un pacchetto perso dal relay diventa una breve sbavatura invece di un blocco. L'apertura richiede circa mezzo secondo in più e un po' di CPU. Spento: il video va dritto al telefono e si apre prima, ma un pacchetto perso può fermare l'immagine fino a 3 secondi.",
           "homekit_answer": "Rispondi quando parli: aprire la notifica mostra e fa sentire la strada senza rispondere, così il Tab e l'app possono ancora rispondere; la prima parola (Parla) risponde. Rispondi all'apertura: aprire la notifica risponde subito e il Tab smette di suonare.",
-          "homekit_ring_button": "Aggiunge all'accessorio un pulsante programmabile che si preme a ogni squillo, da usare come attivatore nelle automazioni dell'app Casa. Spento: una voce in meno nell'app Casa; notifica, video, Parla e cancello non cambiano."
+          "homekit_ring_button": "Aggiunge all'accessorio un pulsante programmabile che si preme a ogni squillo, da usare come attivatore nelle automazioni dell'app Casa. Spento: una voce in meno nell'app Casa; notifica, video, Parla e cancello non cambiano.",
+          "video_bandwidth": "Vale per tutto il video della targa: card, camera, /av e HomeKit. 256 kbit/s (consigliato in cloud): flusso più leggero, meno pacchetti persi sul relay. 2 Mbit/s: immagine più nitida sulle targhe che lo supportano (misurato su un Tab 5S Up 40515), ma dieci volte il traffico; con un relay che perde pacchetti (misurato su un Tab 7S Up 40517) il video si sgrana, si blocca e va in ritardo."
         }
       },
       "import_rubrica": {
@@ -441,6 +443,12 @@
       "options": {
         "talk": "Rispondi quando parli",
         "open": "Rispondi all'apertura"
+      }
+    },
+    "video_bandwidth": {
+      "options": {
+        "256": "256 kbit/s (consigliato)",
+        "2048": "2 Mbit/s (più nitido, serve una connessione pulita)"
       }
     }
   },

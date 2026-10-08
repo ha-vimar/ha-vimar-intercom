@@ -23,7 +23,9 @@ your network or through the Vimar cloud. No RTSP, and no Vimar account needed.
 | Tab 5S Up 2 Wire WiFi | 40515 | 2FV2 | cloud TLS | Working (ring, video, audio, door). On some plants the cloud does not deliver the status commands ([#14](https://github.com/ha-vimar/ha-vimar-intercom/issues/14)) |
 | Tab 7S Up | 40517 | 2FV2 | cloud TLS | Working, HomeKit included |
 
-Other Vimar 2F / 2FV2 / IP Tabs should work too: the setup comes from the pairing QR code. Got it
+Other Vimar 2F / 2FV2 / IP Tabs should work too: the setup comes from the pairing QR code the Tab
+shows for the VIEW app. Wi-Fi kits that use the **View Door** app (e.g. K40955) are not supported: as
+far as we know they have no such QR code ([#167](https://github.com/ha-vimar/ha-vimar-intercom/issues/167)). Got it
 running, or not? Please open a [compatibility report](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 What changes from one plant to another: [Configuration](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.md#what-differs-between-plants).
 

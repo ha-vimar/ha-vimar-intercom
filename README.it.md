@@ -24,7 +24,8 @@ oppure attraverso il cloud Vimar. Niente RTSP, e non serve un account Vimar.
 | Tab 7S Up | 40517 | 2FV2 | TLS cloud | Funziona, HomeKit compreso |
 
 Anche gli altri Tab Vimar 2F / 2FV2 / IP dovrebbero funzionare: la configurazione arriva dal QR di
-abbinamento. Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
+abbinamento che il Tab mostra per l'app VIEW. I kit Wi-Fi che usano l'app **View Door** (per esempio
+K40955) non sono supportati: per quanto ne sappiamo non hanno questo QR ([#167](https://github.com/ha-vimar/ha-vimar-intercom/issues/167)). Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 Cosa cambia da un impianto all'altro: [Configurazione](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.it.md#cosa-cambia-da-impianto-a-impianto).
 
 ## Installazione

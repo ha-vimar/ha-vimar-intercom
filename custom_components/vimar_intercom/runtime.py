@@ -123,7 +123,18 @@ def away_message_configured() -> bool:
 # Foto di chi suona: cartella (vuoto = non salvare) e secondi dopo lo squillo.
 SNAPSHOT_DIR: str = ""
 SNAPSHOT_DELAY: int = _const.DEFAULT_SNAPSHOT_DELAY
+# kbit/s declared in the SDP (b=AS) for the video and the session: see const.SDP_BANDWIDTH.
+VIDEO_BANDWIDTH, SESSION_BANDWIDTH = _const.SDP_BANDWIDTH[_const.VIDEO_BANDWIDTH_LOW]
 VIEW_KEEPALIVE: float = _const.DEFAULT_VIEW_KEEPALIVE_CLOUD   # s di silenzio a "Vedi esterno", 0 = nessuno
+
+
+def video_bandwidth_choice(option, use_local_udp: bool) -> str:
+    """The bandwidth to ask for (const.SDP_BANDWIDTH key): the option when it is
+    one of the values, else (automatic, unset, unknown) by transport: 2048 on
+    local UDP, 256 over the cloud relay, which loses packets (#161)."""
+    if str(option) in _const.SDP_BANDWIDTH:
+        return str(option)
+    return _const.VIDEO_BANDWIDTH_HIGH if use_local_udp else _const.VIDEO_BANDWIDTH_LOW
 
 
 def view_keepalive_default(use_local_udp: bool) -> int:
@@ -259,6 +270,7 @@ def configure(data: dict) -> None:
     global CAMERA_TARGET, INTERNAL_PANEL_TARGET, DOOR_TARGET, CAMERA_TARGET_CONFIGURED
     global AWAY_MESSAGE_FILE, AWAY_MESSAGE_TEXT, AWAY_MESSAGE_TTS, AWAY_MESSAGE_DELAY
     global SNAPSHOT_DIR, SNAPSHOT_DELAY, VIEW_KEEPALIVE, ALLOWED_USERS
+    global VIDEO_BANDWIDTH, SESSION_BANDWIDTH
     global RING_WEBHOOK_URL, RING_END_WEBHOOK_URL
     global DEVICE_IMEI, DEVICE_UUID, DEVICE_NAME, AV_KEY
 
@@ -355,6 +367,8 @@ def configure(data: dict) -> None:
     SNAPSHOT_DELAY = int(data.get("snapshot_delay", _const.DEFAULT_SNAPSHOT_DELAY))
     _ka = data.get("view_keepalive")
     VIEW_KEEPALIVE = int(_ka) if _ka is not None else view_keepalive_default(USE_LOCAL_UDP)
+    VIDEO_BANDWIDTH, SESSION_BANDWIDTH = _const.SDP_BANDWIDTH[
+        video_bandwidth_choice(data.get(_const.CONF_VIDEO_BANDWIDTH), USE_LOCAL_UDP)]
     ALLOWED_USERS  = [str(u) for u in data.get("allowed_users") or []]
     RING_WEBHOOK_URL     = str(data.get("ring_webhook_url") or "").strip()
     RING_END_WEBHOOK_URL = str(data.get("ring_end_webhook_url") or "").strip()

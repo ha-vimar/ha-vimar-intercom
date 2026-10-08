@@ -57,11 +57,13 @@ from .const import (
     CONF_HOMEKIT_ANSWER,
     CONF_HOMEKIT_RING_BUTTON,
     CONF_HOMEKIT_SMOOTH,
+    CONF_VIDEO_BANDWIDTH,
     DEFAULT_HOMEKIT_ACCESSORY,
     DEFAULT_HOMEKIT_ANSWER,
     DEFAULT_HOMEKIT_RING_BUTTON,
     DEFAULT_HOMEKIT_SMOOTH,
     DEFAULT_SNAPSHOT_DELAY,
+    DEFAULT_VIDEO_BANDWIDTH,
     DOMAIN,
     HOMEKIT_ANSWER_OPEN,
     HOMEKIT_ANSWER_TALK,
@@ -71,6 +73,9 @@ from .const import (
     MY_NAME,
     PICG_TARGET,
     SGA_TARGET,
+    VIDEO_BANDWIDTH_AUTO,
+    VIDEO_BANDWIDTH_HIGH,
+    VIDEO_BANDWIDTH_LOW,
 )
 from .runtime import (
     MEDIA_ENC_MODES,
@@ -285,6 +290,15 @@ def _photos_schema(form: dict) -> dict:
             default=form.get(KEY_VIEW_KA, view_keepalive_default(
                 form.get(KEY_USE_LOCAL_UDP, True))),
         ): vol.All(vol.Coerce(int), vol.Range(min=0, max=3600)),
+        # Every video from the panel: card, camera, /av and HomeKit.
+        vol.Optional(
+            CONF_VIDEO_BANDWIDTH,
+            default=form.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
+        ): selector.SelectSelector(selector.SelectSelectorConfig(
+            options=[VIDEO_BANDWIDTH_AUTO, VIDEO_BANDWIDTH_LOW, VIDEO_BANDWIDTH_HIGH],
+            translation_key="video_bandwidth",
+            mode=selector.SelectSelectorMode.LIST,
+        )),
     }
 
 
@@ -381,6 +395,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         KEY_SNAP_DIR:       snap_dir,
                         KEY_SNAP_DELAY:     snap_delay,
                         KEY_VIEW_KA:        view_ka,
+                        CONF_VIDEO_BANDWIDTH: user_input.get(
+                            CONF_VIDEO_BANDWIDTH,
+                            current.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH)),
                         KEY_ALLOWED_USERS:  allowed_users,
                         KEY_RING_WEBHOOK_URL:     ring_webhook_url,
                         KEY_RING_END_WEBHOOK_URL: ring_end_webhook_url,

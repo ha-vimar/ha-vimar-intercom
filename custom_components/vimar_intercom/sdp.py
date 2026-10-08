@@ -177,7 +177,7 @@ def build_sdp(offer: dict | None = None, reuse_keys: bool = False):
         ),
         "video": (
             f"m=video {video_port} {video_proto} {' '.join(pt for pt, _ in h264)}\r\n"
-            f"b=AS:{C.SDP_VIDEO_BANDWIDTH}\r\n"
+            f"b=AS:{R.VIDEO_BANDWIDTH}\r\n"
             f"{h264_lines}"
             f"a=sendrecv\r\n"
             f"{video_crypto}"
@@ -191,7 +191,7 @@ def build_sdp(offer: dict | None = None, reuse_keys: bool = False):
         f"o=- {sid} {sid} IN IP4 {MY_IP}\r\n"
         f"s=Talk\r\n"
         f"c=IN IP4 {MY_IP}\r\n"
-        f"b=AS:{C.SDP_SESSION_BANDWIDTH}\r\n"
+        f"b=AS:{R.SESSION_BANDWIDTH}\r\n"
         f"t=0 0\r\n"
         f"a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r\n"
         + "".join(blocks.get(kind) or _refused_block(offer[kind])

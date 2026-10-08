@@ -37,17 +37,21 @@ DOOR_COMMAND = "OPEN_2F"
 # ─── RTP / Media ──────────────────────────────────────────────────────────────
 RTP_AUDIO_PORT     = 7200
 RTP_VIDEO_PORT     = 9200
-# Bandwidth we declare in the SDP (b=AS, kbit/s). The 40515 panel's encoder honours it:
-# 256 gave ~14 KB keyframes at 16 fps, 2048 gives 30-58 KB at 25 fps (~1.5 Mbit/s, its
-# ceiling: 4096 is the same), same 720x576, no loss over the cloud. Session = video + audio.
-# The video bandwidth is an option (CONF_VIDEO_BANDWIDTH): 2048 suits the 40515, but
-# the 40517 honours it too, and through a cloud relay that loses packets ten times
-# the traffic means ten times the losses (smeared, frozen, laggy video). 256 is the
-# value before 1.0.19 and the default. Session = video + audio.
+# Bandwidth we declare in the SDP (b=AS, kbit/s); the panels' encoders honour it.
+# Measured over the cloud relay (#161):
+# - Tab 5S Up 40515: 2048 gives 720x576 at 24 fps (~1.9 Mbit/s, its ceiling: 4096 is
+#   the same); 256 drops to 320x240 at 15 fps (~240 kbit/s). No loss on that path at
+#   either value, first frame ~1.8-1.9 s at both.
+# - Tab 7S Up 40517: 2048 gives about ten times the packets of 256 through a relay that
+#   loses a few percent of them: ten times the damaged frames (smeared, frozen, laggy).
+# CONF_VIDEO_BANDWIDTH chooses: "auto" (default) is 2048 on local UDP (no relay in the
+# way) and 256 over the cloud, as view_keepalive's default follows the transport;
+# "256" and "2048" force one. Session = video + audio.
 CONF_VIDEO_BANDWIDTH = "video_bandwidth"
+VIDEO_BANDWIDTH_AUTO = "auto"
 VIDEO_BANDWIDTH_LOW = "256"
 VIDEO_BANDWIDTH_HIGH = "2048"
-DEFAULT_VIDEO_BANDWIDTH = VIDEO_BANDWIDTH_LOW
+DEFAULT_VIDEO_BANDWIDTH = VIDEO_BANDWIDTH_AUTO
 SDP_BANDWIDTH = {VIDEO_BANDWIDTH_LOW: (256, 512), VIDEO_BANDWIDTH_HIGH: (2048, 2200)}
 # Porte locali dell'ffmpeg AV (/api/vimar_intercom/av). Devono essere PARI e
 # distanti almeno 2: per ogni riga m= dell'SDP ffmpeg apre la porta RTP **e** la

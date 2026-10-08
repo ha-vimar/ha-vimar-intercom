@@ -135,7 +135,7 @@
           "allowed_users": "Limita la card, lo storico squilli (foto e clip) e /audio_ws a questi utenti di Home Assistant. Gli amministratori sempre. Vuoto = ogni utente autenticato. NON limita l'entità camera né /av dalla rete locale: chi può aprire la camera vede (e sente) lo stream; e se la cartella foto è sotto una cartella media di HA, foto e clip compaiono nel browser media per tutti gli utenti.",
           "ring_webhook_url": "GET (fire-and-forget) inviata quando inizia uno squillo, es. per accendere un interruttore fittizio (Scrypted Dummy Switch) collegato a un Custom Doorbell Button. Un fallimento si logga come warning e non ferma lo squillo. Vuoto = disattivato.",
           "ring_end_webhook_url": "GET (fire-and-forget) inviata quando lo squillo finisce, risposto, annullato o scaduto: stessa idea di sopra, per spegnere l'interruttore. Vuoto = disattivato.",
-          "video_bandwidth": "Vale per tutto il video della targa: card, camera, /av e HomeKit. 256 kbit/s (consigliato in cloud): flusso più leggero, meno pacchetti persi sul relay. 2 Mbit/s: immagine più nitida sulle targhe che lo supportano (misurato su un Tab 5S Up 40515), ma dieci volte il traffico; con un relay che perde pacchetti (misurato su un Tab 7S Up 40517) il video si sgrana, si blocca e va in ritardo."
+          "video_bandwidth": "Vale per tutto il video della targa: card, camera, /av e HomeKit. Automatico (consigliato): 2 Mbit/s in UDP locale, 256 kbit/s tramite il relay cloud, che perde qualche pacchetto su cento. 256 kbit/s: flusso più leggero, meno fotogrammi rovinati con un relay che perde pacchetti, ma immagine più piccola su alcune targhe (un Tab 5S Up 40515 scende a 320x240 a 15 fps). 2 Mbit/s: l'immagine più nitida (720x576 a 24 fps su un 40515) e dieci volte il traffico; con un relay che perde pacchetti (misurato su un Tab 7S Up 40517) il video si sgrana, si blocca e va in ritardo."
         }
       },
       "homekit": {
@@ -447,7 +447,8 @@
     },
     "video_bandwidth": {
       "options": {
-        "256": "256 kbit/s (consigliato)",
+        "auto": "Automatico (2 Mbit/s in locale, 256 kbit/s in cloud)",
+        "256": "256 kbit/s (risoluzione più bassa su alcune targhe)",
         "2048": "2 Mbit/s (più nitido, serve una connessione pulita)"
       }
     }

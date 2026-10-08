@@ -33,18 +33,24 @@ def test_build_sdp_plain_rtp_default():
     assert sip.SDP._local_video_crypto_key is None
 
 
-@pytest.mark.parametrize("option, video, session", [
-    (None, 256, 512),          # the default: what the integration asked before 1.0.19
-    ("256", 256, 512),
-    ("2048", 2048, 2200),      # the 40515's sharper picture, on request
-    ("bogus", 256, 512),
+@pytest.mark.parametrize("option, local_udp, video, session", [
+    (None, False, 256, 512),          # automatic over the cloud relay
+    (None, True, 2048, 2200),         # automatic on local UDP
+    ("auto", False, 256, 512),
+    ("auto", True, 2048, 2200),
+    ("256", True, 256, 512),          # forced either way
+    ("2048", False, 2048, 2200),
+    ("bogus", False, 256, 512),       # an unknown value is automatic
 ])
-def test_build_sdp_asks_for_the_chosen_video_bandwidth(monkeypatch, option, video, session):
+def test_build_sdp_asks_for_the_chosen_video_bandwidth(monkeypatch, option, local_udp, video, session):
     """2048 kbit/s made a 40517 send ten times the packets through a cloud relay
-    that loses them (smeared, frozen, laggy video): it is an option, 256 by default."""
+    that loses them: automatic is 256 over the cloud, 2048 on local UDP (#161)."""
     from custom_components.vimar_intercom import runtime as R
+    for name in dir(R):            # configure() rewrites module globals: put them back
+        if name.isupper():
+            monkeypatch.setattr(R, name, getattr(R, name))
     S.MEDIA_ENC = False
-    data = {"sip_user": "1001", "sip_domain": "example.invalid"}
+    data = {"sip_user": "1001", "sip_domain": "example.invalid", "use_local_udp": local_udp}
     if option is not None:
         data["video_bandwidth"] = option
     R.configure(data)

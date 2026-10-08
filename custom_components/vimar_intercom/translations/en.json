@@ -135,7 +135,7 @@
           "allowed_users": "Limits the card, the ring history (photos and clips) and /audio_ws to these Home Assistant users. Admins always. Empty = every logged-in user. It does NOT limit the camera entity or /av from the local network: anyone who can open the camera sees (and hears) the stream; and if the photo folder is under an HA media directory, photos and clips show up in the media browser for every user.",
           "ring_webhook_url": "GET (fire-and-forget) sent when a ring starts, e.g. to turn on a dummy switch (Scrypted Dummy Switch) linked to a Custom Doorbell Button. A failure is only logged as a warning and never stops the ring. Empty = off.",
           "ring_end_webhook_url": "GET (fire-and-forget) sent when the ring ends, answered, cancelled or timed out: same idea as above, to turn the switch off. Empty = off.",
-          "video_bandwidth": "Applies to every video from the panel: the card, the camera, /av and HomeKit. 256 kbit/s (recommended over the cloud): a lighter stream, fewer packets lost on the cloud relay. 2 Mbit/s: a sharper picture on panels that support it (measured on a Tab 5S Up 40515), but ten times the traffic; on a relay that loses packets (measured on a Tab 7S Up 40517) the video smears, freezes and lags."
+          "video_bandwidth": "Applies to every video from the panel: the card, the camera, /av and HomeKit. Automatic (recommended): 2 Mbit/s on local UDP, 256 kbit/s over the cloud relay, which loses a few packets in a hundred. 256 kbit/s: a lighter stream, fewer damaged frames on a lossy relay, but a smaller picture on some panels (a Tab 5S Up 40515 drops to 320x240 at 15 fps). 2 Mbit/s: the sharpest picture (720x576 at 24 fps on a 40515) and ten times the traffic; on a relay that loses packets (measured on a Tab 7S Up 40517) the video smears, freezes and lags."
         }
       },
       "homekit": {
@@ -447,7 +447,8 @@
     },
     "video_bandwidth": {
       "options": {
-        "256": "256 kbit/s (recommended)",
+        "auto": "Automatic (2 Mbit/s locally, 256 kbit/s over the cloud)",
+        "256": "256 kbit/s (lower resolution on some panels)",
         "2048": "2 Mbit/s (sharper, needs a clean connection)"
       }
     }

@@ -160,7 +160,7 @@ def test_the_settings_page_saves_the_video_bandwidth(of):
     assert out["type"] == "create_entry", out
     assert out["data"]["video_bandwidth"] == "2048"
     out = _save(of, "async_step_settings", SETTINGS, FOREIGN)
-    assert out["data"]["video_bandwidth"] == "256", "the default when not chosen"
+    assert out["data"]["video_bandwidth"] == "auto", "the default when not chosen"
     out = _save(of, "async_step_settings", SETTINGS, {**FOREIGN, "video_bandwidth": "2048"})
     assert out["data"]["video_bandwidth"] == "2048", "a saved choice is kept"
 

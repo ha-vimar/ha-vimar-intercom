@@ -73,6 +73,7 @@ from .const import (
     MY_NAME,
     PICG_TARGET,
     SGA_TARGET,
+    VIDEO_BANDWIDTH_AUTO,
     VIDEO_BANDWIDTH_HIGH,
     VIDEO_BANDWIDTH_LOW,
 )
@@ -294,7 +295,7 @@ def _photos_schema(form: dict) -> dict:
             CONF_VIDEO_BANDWIDTH,
             default=form.get(CONF_VIDEO_BANDWIDTH, DEFAULT_VIDEO_BANDWIDTH),
         ): selector.SelectSelector(selector.SelectSelectorConfig(
-            options=[VIDEO_BANDWIDTH_LOW, VIDEO_BANDWIDTH_HIGH],
+            options=[VIDEO_BANDWIDTH_AUTO, VIDEO_BANDWIDTH_LOW, VIDEO_BANDWIDTH_HIGH],
             translation_key="video_bandwidth",
             mode=selector.SelectSelectorMode.LIST,
         )),

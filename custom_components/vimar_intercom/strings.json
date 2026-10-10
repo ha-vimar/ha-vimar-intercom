@@ -167,7 +167,7 @@
       },
       "import_confirm": {
         "title": "Conferma importazione",
-        "description": "Trovati {count} attuatori per il GID {gid}: {names}.\n\nSGA (MAGIC_APT_INTERCOM) rilevato: {sga_info}\n\nPICG rilevato: {picg_info}\n\nTarga video (camera) rilevata: {camera_info}\n\nTarga che apre la porta rilevata: {door_info}\n\nConfermando, questa lista SOSTITUISCE gli attuatori attualmente configurati e, se rilevato, aggiorna sga_target/picg_target/camera_target/door_target. Per annullare, chiudi questa finestra senza confermare."
+        "description": "Fonte della rubrica: {source}.\n\nTrovati {count} attuatori per il GID {gid}: {names}.\n\nSGA (MAGIC_APT_INTERCOM) rilevato: {sga_info}\n\nPICG rilevato: {picg_info}\n\nTarga video (camera) rilevata: {camera_info}\n\nTarga che apre la porta rilevata: {door_info}\n\nConfermando, questa lista SOSTITUISCE gli attuatori attualmente configurati e, se rilevato, aggiorna sga_target/picg_target/camera_target/door_target. Per annullare, chiudi questa finestra senza confermare."
       },
       "fetch_rubrica": {
         "title": "Scarica dal citofono",

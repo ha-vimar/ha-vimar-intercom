@@ -334,6 +334,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # PICG dichiarato dal citofono stesso (get_info.php?action=nickname).
         # Resta None quando la rubrica arriva da un file caricato a mano.
         self._picg_from_rest: str | None = None
+        self._phonebook_source = "rubrica.db"
 
     async def async_step_init(
         self, user_input: dict | None = None
@@ -720,6 +721,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     self._imported = result
                     self._imported_gid = gid
                     self._picg_from_rest = picg
+                    self._phonebook_source = "Tab"
                     return await self.async_step_import_confirm()
 
         return self.async_show_form(
@@ -823,6 +825,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     self._imported = result
                     self._imported_gid = gid
                     self._picg_from_rest = None
+                    self._phonebook_source = "Vimar cloud"
                     return await self.async_step_import_confirm()
 
         return self.async_show_form(
@@ -873,6 +876,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 else:
                     self._imported = result
                     self._imported_gid = gid
+                    self._picg_from_rest = None
+                    self._phonebook_source = "rubrica.db"
                     return await self.async_step_import_confirm()
 
         return self.async_show_form(
@@ -961,7 +966,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if sga and sga != current_sga:
             sga_info = (
                 f"{sga} — diverso da quello attualmente configurato ({current_sga}); "
-                "confermando verrà impostato come nuovo sga_target/picg_target."
+                "confermando verrà impostato come nuovo sga_target."
             )
         elif sga:
             sga_info = f"{sga} — coincide con quello già in uso."
@@ -980,11 +985,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             picg_info = f"{self._picg_from_rest} — dichiarato dal citofono, coincide con quello già in uso."
         elif configured_picg:
             picg_info = (
-                f"non richiesto (rubrica da file): resta quello già configurato ({configured_picg})."
+                f"non rilevato dalla fonte della rubrica: resta quello già configurato ({configured_picg})."
             )
         else:
             picg_info = (
-                f"non richiesto (rubrica da file) e non ancora configurato: verrà impostato "
+                f"non rilevato dalla fonte della rubrica e non ancora configurato: verrà impostato "
                 f"uguale all'SGA ({new_picg})."
             )
 
@@ -1027,6 +1032,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "count": str(len(actuators)),
                 "names": ", ".join(a["name"] for a in actuators) or "—",
                 "gid": self._imported_gid,
+                "source": self._phonebook_source,
                 "sga_info": sga_info,
                 "picg_info": picg_info,
                 "camera_info": camera_info,

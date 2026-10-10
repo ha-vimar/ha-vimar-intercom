@@ -79,12 +79,20 @@
       "init": {
         "title": "Impostazioni Vimar Intercom",
         "menu_options": {
+          "internal_panel": "Rileva il posto interno",
           "settings": "Impostazioni di rete e attuatori",
           "homekit": "HomeKit",
           "av_key": "Chiave dello stream /av",
           "import_rubrica": "Importa attuatori da rubrica.db",
           "fetch_rubrica": "Scarica la rubrica dal citofono",
           "fetch_rubrica_cloud": "Scarica la rubrica dal cloud Vimar"
+        }
+      },
+      "internal_panel": {
+        "title": "Rileva il posto interno",
+        "description": "L’impianto dichiara {detected} come posto interno capogruppo (PICG). La destinazione attuale di Chiama Casa è {current}. Conferma per usare la destinazione proposta, oppure inserisci l’indirizzo noto di un posto interno. Il salvataggio non avvia una chiamata. La possibilità di chiamare il monitor dipende dall’impianto.",
+        "data": {
+          "internal_panel_target": "Indirizzo SIP del posto interno"
         }
       },
       "settings": {
@@ -207,6 +215,7 @@
       "invalid_actuator_target": "Target attuatore non valido ({actuators_error}): usa solo cifre (es. 55001) oppure AUTO.",
       "rubrica_import_failed": "Importazione fallita. Vedi il dettaglio nella descrizione.",
       "rubrica_no_actuators": "Nessun attuatore trovato per il GID specificato. Vedi la descrizione.",
+      "internal_panel_not_found": "Non è stato dichiarato un posto interno capogruppo univoco. Verifica la connessione e l’indirizzo PICG, oppure inserisci manualmente l’indirizzo noto di un posto interno.",
       "invalid_target": "Valore non valido: usa solo cifre (es. 55001).",
       "invalid_url": "URL non valido: deve iniziare con http:// o https:// e avere un host.",
       "no_local_proxy": "Manca l'indirizzo del citofono: impostalo in «Impostazioni di rete e attuatori».",

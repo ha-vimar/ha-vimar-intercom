@@ -82,6 +82,10 @@ Impostazioni → Vimar Intercom → **Configura**:
 
 L'immagine della camera fra una chiamata e l'altra (l'ultima foto dello squillo) è visibile a ogni utente di Home Assistant che vede l'entità camera; `allowed_users` limita la cronologia degli squilli e i media dal vivo, non l'entità camera.
 
+### Rilevare il posto interno
+
+Configura → **Rileva il posto interno** propone il posto interno capogruppo dichiarato nella risposta `GET_NICKS` (ruolo `PICG`). Usa i nickname già ricevuti oppure li richiede al PICG configurato, senza cercare altri indirizzi. Mostra la destinazione attuale di **Chiama Casa** e salva quella proposta solo dopo conferma. Non modifica SGA, PICG, targa video o attuatori e non avvia chiamate. Se non trova un PICG univoco, non indovina la destinazione; resta possibile inserire un indirizzo noto a mano. Verificato su un Tab 7S Up 40517, SW 2.1.0203, in cloud; la possibilità di chiamare il capogruppo va verificata sugli altri impianti.
+
 ### Segreteria
 
 C'è un solo switch *Segreteria* (Configurazione, pagina del dispositivo). Acceso, usa il

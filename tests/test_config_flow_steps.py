@@ -760,3 +760,66 @@ def test_the_av_key_page_is_translated(of):
         assert set(page["data"]) == {"regenerate"}, name
         # hassfest refuses anything that looks like HTML, `<key>` included.
         assert "<" not in json.dumps(page, ensure_ascii=False), name
+
+
+@pytest.mark.parametrize("data, options, expected", [
+    ({}, {}, True),
+    ({"video_enabled": False}, {}, False),
+    ({"video_enabled": True}, {}, True),
+    ({"video_enabled": False}, {"video_enabled": True}, True),
+    ({"video_enabled": True}, {"video_enabled": False}, False),
+])
+def test_video_settings_default_to_the_qr_unless_overridden(of, monkeypatch, data, options, expected):
+    flow = _options_flow(of, data={**ENTRY_DATA, **data}, options=options)
+    defaults = {}
+
+    def optional(key, default=None, **_kw):
+        defaults[key] = default
+        return key
+
+    monkeypatch.setattr(of.vol, "Optional", optional)
+    asyncio.run(flow.async_step_settings())
+    assert defaults["video_enabled"] is expected
+
+
+@pytest.mark.parametrize("selected", [True, False])
+def test_saved_video_setting_controls_our_offer_and_preserves_other_options(of, selected):
+    from custom_components.vimar_intercom import runtime, sdp
+
+    flow = _options_flow(of, data={**ENTRY_DATA, "video_enabled": not selected},
+                         options={"camera_target": "52011", "homekit_accessory": True})
+    result = asyncio.run(flow.async_step_settings({
+        "local_proxy": "192.0.2.1", "use_local_udp": False,
+        "camera_target": "52011", "video_enabled": selected,
+    }))
+    assert result["type"] == "create_entry"
+    assert result["data"]["video_enabled"] is selected
+    assert result["data"]["camera_target"] == "52011"
+    assert result["data"]["homekit_accessory"] is True
+    assert flow._entry.data["video_enabled"] is not selected
+    runtime.configure({**flow._entry.data, **result["data"]})
+    assert ("m=video " in sdp.build_sdp()) is selected
+
+
+def test_saving_settings_without_video_field_keeps_the_existing_value(of):
+    flow = _options_flow(of, data={**ENTRY_DATA, "video_enabled": True},
+                         options={"video_enabled": False})
+    result = asyncio.run(flow.async_step_settings({"local_proxy": "192.0.2.1", "use_local_udp": False}))
+    assert result["data"]["video_enabled"] is False
+
+
+def test_video_choice_survives_a_settings_validation_error(of, monkeypatch):
+    defaults = {}
+
+    def optional(key, default=None, **_kw):
+        defaults[key] = default
+        return key
+
+    monkeypatch.setattr(of.vol, "Optional", optional)
+    flow = _options_flow(of, data={**ENTRY_DATA, "video_enabled": False})
+    result = asyncio.run(flow.async_step_settings({
+        "local_proxy": "192.0.2.1", "use_local_udp": False,
+        "video_enabled": True, "camera_target": "invalid",
+    }))
+    assert result["errors"]["camera_target"] == "invalid_target"
+    assert defaults["video_enabled"] is True

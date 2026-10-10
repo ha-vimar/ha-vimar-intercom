@@ -96,6 +96,7 @@
           "local_udp_port": "Local UDP port",
           "voice_answer": "Voice answer (mic on /audio_ws)",
           "media_enc": "Media encryption (SRTP)",
+          "video_enabled": "Enable video in outgoing calls",
           "actuators": "Actuators (JSON)",
           "sga_target": "SGA (voicemail/DND SIP id)",
           "picg_target": "PICG (GET_INIT_STATUS SIP id)",
@@ -118,6 +119,7 @@
         "data_description": {
           "voice_answer": "Who can answer the call by talking while it rings. Declared only: only connections using /audio_ws?voice_answer=1 (Echo Show, HomeKit via Scrypted). Never: talking never answers. Anyone: any connection with a microphone can answer; beware, a wall tablet whose microphone was left open can answer by itself with household noise.",
           "media_enc": "Automatic: follows what the system declares in its GET_INIT_STATUS reply (\"media_enc\": \"srtp\" on a cloud Tab 5S Up 40515); when the system does not declare it (short reply, as on the 40507) media stays plain. On/Off force it. If the camera stays black or the call fails with 488, try On.",
+          "video_enabled": "Initially follows the pairing QR. Enable this if the entrance has a camera but View outside connects with audio only (Stream has no video). Disable it for audio-only entrances. Incoming calls still follow the media offered by the system.",
           "actuators": "JSON list of objects name, msg, target, icon. icon: door|light|switch. target \"AUTO\" uses the panel that opens the door. Empty = no buttons.",
           "sga_target": "Target for VOICEMAIL;/DND;, and for the door-open command when “Entrance panel that opens the door” is empty. Empty = historical default (55001). Change it only if your system uses a different SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
           "picg_target": "Target for GET_INIT_STATUS. On systems verified so far it matches the SGA. Empty = historical default (55001).",

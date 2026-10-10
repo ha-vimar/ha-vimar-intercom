@@ -96,6 +96,7 @@
           "local_udp_port": "Porta UDP locale",
           "voice_answer": "Risposta a voce (microfono su /audio_ws)",
           "media_enc": "Cifratura del media (SRTP)",
+          "video_enabled": "Abilita video nelle chiamate in uscita",
           "actuators": "Attuatori (JSON)",
           "sga_target": "SGA (id SIP segreteria/DND)",
           "picg_target": "PICG (id SIP GET_INIT_STATUS)",
@@ -118,6 +119,7 @@
         "data_description": {
           "voice_answer": "Chi può rispondere alla chiamata parlando mentre squilla. Solo dichiarato: risponde solo chi si collega con /audio_ws?voice_answer=1 (Echo Show, HomeKit via Scrypted). Mai: la voce non risponde. Chiunque: risponde qualsiasi connessione con microfono; attenzione, un tablet a muro con il microfono rimasto aperto può rispondere da solo con i rumori di casa.",
           "media_enc": "Automatico: segue quello che dichiara l'impianto nella risposta a GET_INIT_STATUS (\"media_enc\": \"srtp\" su un Tab 5S Up 40515 in cloud); se l'impianto non lo dichiara (risposta corta, come sul 40507) resta in chiaro. Attivo/Disattivo forzano. Se la camera non si accende o la chiamata fallisce con 488, prova Attivo.",
+          "video_enabled": "Inizialmente segue il QR di abbinamento. Attiva se la targa ha una telecamera ma Vedi esterno si collega solo con audio (Stream has no video). Disattiva per targhe solo audio. Le chiamate in arrivo continuano a seguire i media offerti dall’impianto.",
           "actuators": "Lista JSON di oggetti name, msg, target, icon. icon: door|light|switch. target \"AUTO\" usa la targa che apre la porta. Vuoto = nessun bottone.",
           "sga_target": "Destinatario di VOICEMAIL;/DND;, e dell'apertura porta se «Targa che apre la porta» è vuota. Vuoto = default storico (55001). Cambialo solo se il tuo impianto usa un altro SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
           "picg_target": "Destinatario di GET_INIT_STATUS. Sugli impianti verificati finora coincide con l'SGA. Vuoto = default storico (55001).",

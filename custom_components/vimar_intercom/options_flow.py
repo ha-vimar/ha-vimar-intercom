@@ -197,6 +197,10 @@ def _network_schema(form: dict) -> dict:
             "local_udp_port",
             default=form.get(KEY_LOCAL_UDP_PORT, DEFAULT_LOCAL_UDP_PORT)
         ): vol.All(vol.Coerce(int), vol.Range(min=1024, max=65535)),
+        vol.Optional(
+            "video_enabled",
+            default=form.get("video_enabled", True),
+        ): bool,
         # auto (segue il media_enc dichiarato dall'impianto) / on / off (issue #4).
         vol.Optional(
             KEY_MEDIA_ENC,
@@ -385,6 +389,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         KEY_USE_LOCAL_UDP:  use_local_udp,
                         KEY_LOCAL_UDP_PORT: local_udp_port,
                         KEY_MEDIA_ENC:      media_enc,
+                        "video_enabled": user_input.get(
+                            "video_enabled", current.get("video_enabled", True)),
                         KEY_VOICE_ANSWER:   voice_answer,
                         KEY_ACTUATORS:      actuators,
                         **targets,

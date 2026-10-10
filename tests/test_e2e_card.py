@@ -722,10 +722,10 @@ def test_video_webcodecs_primo_fotogramma_subito(monkeypatch, engine):  # noqa: 
                 print(f"\n[Vedi esterno, dal tocco]  INVITE {ms(tl['invite'])}  WS aperto {ms(p['ws'] / 1000)}"
                       f"  200 OK {ms(tl['ok200'])}  IDR targa {ms(idr)}  primo NAL {ms(p['nal'] / 1000)}"
                       f"  primo fotogramma {ms(p['frame'] / 1000)}  ->  IDR->canvas {p['frame'] - idr * 1000:.0f} ms")
-                assert p["frame"] - idr * 1000 < 300, p
+                assert p["frame"] - idr * 1000 < 300, (p, await c.dump_diag())
                 await asyncio.sleep(1)
                 t = await c.T()
-                assert (await c.info())["player"]["frames"] >= 10
+                assert (await c.info())["player"]["frames"] >= 10, await c.dump_diag()
                 assert await c.page.evaluate(  # dipinto davvero: 320x240 e non nero
                     "(() => { const cv = card._player.canvas, d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;"
                     " return cv.width === 320 && cv.height === 240 && d.some((v) => v > 128); })()")
@@ -749,7 +749,7 @@ def test_video_webcodecs_primo_fotogramma_subito(monkeypatch, engine):  # noqa: 
                 p = (await c.info())["player"]
                 print(f"[Squillo, WS aperto {(p['ws'] / 1000 - rig.panel_media.idr_at) * 1000:.0f} ms dopo l'IDR]"
                       f"  WS->primo fotogramma {p['frame'] - p['ws']:.0f} ms")
-                assert p["frame"] - p["ws"] < 300, p
+                assert p["frame"] - p["ws"] < 300, (p, await c.dump_diag())
                 rig.peer.request("CANCEL", "ring-1", 1, "pnl")
                 await c.until(IDLE + " && T.wsClosed === 2 && !info().player")
                 t = await c.T()
@@ -833,6 +833,33 @@ def test_decoder_gets_avc_description_and_length_prefixed_nals(monkeypatch, engi
                 kind, *head = t["chunk"]
                 assert kind == "key" and head[:4] != [0, 0, 0, 1] and head[4] & 0x1F == 5, t["chunk"]
                 assert t["av"] == [] and not t["errors"], t
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_decoder_lento_a_partire_non_perde_il_primo_gop(monkeypatch, engine):  # noqa: F811
+    """#130: in CI il decoder software parte lento e la coda passa 8 chunk prima del primo
+    fotogramma; il player buttava i P fino al prossimo IDR e il video partiva un GOP dopo
+    (3 s). Il decoder finto tiene la coda per 1 s: poi il video deve andare avanti, non
+    fermarsi a IDR + 8 P fino all'IDR dopo."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+    aus = hm.access_units(45)  # IDR ogni 3 s, come la targa
+    monkeypatch.setattr(hm, "access_units", lambda gop=15: aus)
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine, query="&slowwc") as c:
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().player?.frames > 0", 8)
+                await c.until("info().player?.frames >= 20", 2)  # ben prima dell'IDR dopo (3 s)
+                t, p = await c.T(), (await c.info())["player"]
+                assert p["resets"] == 0 and t["av"] == [] and not t["errors"], (p, t, await c.dump_diag())
                 await c.tap("hangup")
                 await c.until(IDLE)
     run(s())

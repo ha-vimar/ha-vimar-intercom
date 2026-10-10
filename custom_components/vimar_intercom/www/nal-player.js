@@ -89,7 +89,10 @@ class NalPlayer {
       }
     } else if (t === 1 && this._dec && !this._skip) {
       // Il decoder non tiene il passo: via i P fino al prossimo IDR, non si accumula ritardo.
-      if (this._dec.decodeQueueSize > 8) this._skip = true;
+      // Until this decoder's first frame allow a longer queue: one that starts slowly
+      // (software, cold) would otherwise lose the whole first GOP and the picture would
+      // show up 3 s late (#130). 60 = 4 s, a decoder that never answers still gets capped.
+      if (this._dec.decodeQueueSize > (this._out ? 8 : 60)) this._skip = true;
       else this._decode("delta", nal);
     }
   }
@@ -116,6 +119,7 @@ class NalPlayer {
     this._dec.configure({ codec, description, colorSpace, optimizeForLatency: !ios });
     this._cfgSps = this._sps;
     this._cfgPps = this._pps;
+    this._out = 0;  // frames out of this decoder
   }
 
   _decode(type, nal) {
@@ -150,6 +154,7 @@ class NalPlayer {
     (this._ctx ||= c.getContext("2d")).drawImage(frame, 0, 0);
     frame.close();
     this.frames++;
+    this._out++;
   }
 
   close() {

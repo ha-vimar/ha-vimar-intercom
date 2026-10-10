@@ -9,7 +9,8 @@ NAL del WebSocket su un canvas (`info().video === "canvas"`). `?nowc` toglie
 VideoDecoder (browser senza WebCodecs), `?badwc` ne mette uno che fallisce la
 configurazione (codec non supportato): in entrambi i casi la card deve tornare a /av.
 `?flakywc` ne mette uno che si rompe al 10° chunk (dati corrotti): la card resta sul
-canvas e riparte dal prossimo IDR.
+canvas e riparte dal prossimo IDR. `&swwc` forza hardwareAcceleration "prefer-software". `&slowwc` (via `query`)
+ne mette uno che per il primo secondo tiene i chunk in coda (decoder software a freddo, come sul runner della CI, #130).
 `?ios` dà alla pagina lo user agent di un iPhone. `?layout=sotto` (o popup) passa `layout` in setConfig. `ha-form` è un finto minimo (label +
 input/select nativi, `value-changed` come quello vero) per provare l'editor visuale.
 """
@@ -27,6 +28,20 @@ PAGE = """<!doctype html><html><head><meta name="viewport" content="width=390"><
 window.T = { av: [], avBytes: 0, live: 0, created: [], rx: 0, ws: 0, sent: 0, frames: [],
              wsClosed: 0, calls: [], errors: [], gumDelay: 0, wcBroken: 0, gum: 0,
              wsOpenAt: 0, firstNalAt: 0, firstFrameAt: 0 };  // epoca in ms, del player corrente: latenza
+// Diagnostica del player (stampata dai test che falliscono, #130): decode [t, key, coda], fotogrammi [t, coda],
+// transizioni di _skip [t, skip, coda, _out], NAL ricevuti {t, nal, sps, pps, dec} (sps/pps/dec: lo stato del
+// player PRIMA di quel NAL); t in ms dall'apertura del WebSocket (diag()).
+const D = window.D = { dec: [], out: [], msg: [], skip: [], lastSkip: false };
+const MSGS = 60;  // NAL ricevuti tenuti
+const lim = (a, x, n = 40) => { if (a.length < n) a.push(x); };
+// Perché il primo IDR non è stato decodificato: lo stato del player nel momento in cui è arrivato.
+const why = () => { const i = D.msg.find((m) => m.nal === 5);
+  return !i ? `nessun IDR nei primi ${MSGS} messaggi` : !(i.sps && i.pps) ? "il primo IDR è arrivato senza SPS/PPS nel player" : "il player aveva SPS+PPS al primo IDR"; };
+window.diag = () => { const o = T.wsOpenAt, r = (t) => t && t - o, pl = window.card?._player, d = pl?._dec;
+  return JSON.stringify({ cores: navigator.hardwareConcurrency, sw: location.search.includes("swwc"), state: d?.state,
+    q: d?.decodeQueueSize, out: pl?._out, nal: r(T.firstNalAt), frame: r(T.firstFrameAt),
+    why: why(), msg: D.msg.map((m) => ({ ...m, t: r(m.t) })), dec: D.dec.map(([t, k, q]) => [r(t), k, q]),
+    frm: D.out.map(([t, q]) => [r(t), q]), skip: D.skip.map(([t, ...x]) => [r(t), ...x]) }); };
 window.onerror = (m) => T.errors.push(String(m));
 window.addEventListener("unhandledrejection", (e) => T.errors.push("REJ " + e.reason));
 if (location.search.includes("insecure")) Object.defineProperty(window, "isSecureContext", { value: false });
@@ -34,9 +49,11 @@ if (location.search.includes("ios")) Object.defineProperty(navigator, "userAgent
 if (window.VideoDecoder) {  // sonda di latenza (il primo fotogramma dipinto), configurazioni e primo chunk
   const VD = window.VideoDecoder;
   window.VideoDecoder = class extends VD {
-    constructor(init) { super({ ...init, output: (f) => { T.firstFrameAt ||= Date.now(); init.output(f); } }); }
-    configure(c) { (T.vdCfg ||= []).push({ codec: c.codec, desc: [...new Uint8Array(c.description || [])], latency: c.optimizeForLatency, cs: c.colorSpace }); super.configure(c); }
-    decode(c) { if (!T.chunk) { const b = new Uint8Array(c.byteLength); c.copyTo(b); T.chunk = [c.type, ...b.slice(0, 5)]; } super.decode(c); }
+    constructor(init) { super({ ...init, output: (f) => { T.firstFrameAt ||= Date.now(); lim(D.out, [Date.now(), this.decodeQueueSize]); init.output(f); } }); }
+    configure(c) { if (location.search.includes("swwc")) c = { ...c, hardwareAcceleration: "prefer-software" };  // senza GPU, come in CI
+      (T.vdCfg ||= []).push({ codec: c.codec, desc: [...new Uint8Array(c.description || [])], latency: c.optimizeForLatency, cs: c.colorSpace }); super.configure(c); }
+    decode(c) { lim(D.dec, [Date.now(), c.type[0], this.decodeQueueSize]);
+      if (!T.chunk) { const b = new Uint8Array(c.byteLength); c.copyTo(b); T.chunk = [c.type, ...b.slice(0, 5)]; } super.decode(c); }
   };
 }
 if (location.search.includes("nowc")) window.VideoDecoder = undefined;
@@ -55,6 +72,18 @@ if (location.search.includes("flakywc") && window.VideoDecoder) {  // si rompe a
       if (++this._n === 10 && !T.wcBroken++) { super.close(); this._err(new DOMException("dati corrotti", "EncodingError")); return; }
       super.decode(c);
     }
+  };
+}
+if (location.search.includes("slowwc") && window.VideoDecoder) {  // parte lento: 1 s di chunk in coda
+  const VD = window.VideoDecoder;
+  window.VideoDecoder = class extends VD {
+    configure(c) {
+      super.configure(c);
+      this._held = [];
+      setTimeout(() => { const h = this._held; this._held = null; if (h && this.state === "configured") h.forEach((k) => super.decode(k)); }, 1000);
+    }
+    decode(c) { this._held ? this._held.push(c) : super.decode(c); }
+    get decodeQueueSize() { return (this._held?.length || 0) + super.decodeQueueSize; }
   };
 }
 if (window.AudioContext && navigator.mediaDevices) {  // microfono finto, con il tempo del permesso
@@ -106,9 +135,16 @@ const WS = window.WebSocket;
 window.WebSocket = class extends WS {
   constructor(u) { super(u); T.ws++;
     T.wsOpenAt = T.firstNalAt = T.firstFrameAt = 0;  // WebSocket nuovo = player nuovo
+    D.dec = []; D.out = []; D.msg = []; D.skip = []; D.lastSkip = false;
     this.addEventListener("open", () => (T.wsOpenAt = Date.now()));
-    this.addEventListener("message", (e) => { if (typeof e.data !== "string") T.rx++;
-      if (typeof e.data !== "string" && new Uint8Array(e.data, 0, 1)[0] === 3) T.firstNalAt ||= Date.now(); }); }
+    this.addEventListener("message", (e) => { if (typeof e.data === "string") return; T.rx++;
+      const h = new Uint8Array(e.data, 0, Math.min(e.data.byteLength, 6));  // sotto i 6 byte niente tipo NAL: niente RangeError
+      if (h[0] !== 3) return;
+      T.firstNalAt ||= Date.now();
+      const pl = window.card?._player;  // gira prima dell'onmessage del player: lo stato è di prima di questo NAL
+      lim(D.msg, { t: Date.now(), nal: h[5] & 0x1f, sps: +!!pl?._sps, pps: +!!pl?._pps, dec: +!!pl?._dec }, MSGS);
+      setTimeout(() => { const p = window.card?._player, s = !!p?._skip;  // dopo che il player ha letto il NAL (a campione, due transizioni nello stesso tick si perdono)
+        if (p && s !== D.lastSkip) { D.lastSkip = s; D.skip.push([Date.now(), +s, p._dec?.decodeQueueSize, p._out]); } }, 0); }); }
   send(b) { T.sent++; if (T.frames.length < 5 && b.byteLength) T.frames.push([new Uint8Array(b)[0], b.byteLength]); super.send(b); }
   close() { T.wsClosed++; super.close(); }
 };
@@ -234,6 +270,15 @@ class Card:
     async def T(self):
         return await self.page.evaluate("T")
 
+    async def dump_diag(self) -> str:
+        """Stampa la diagnostica del player per intero, una volta (la CI lancia pytest con -s); ritorna un
+        rimando corto per il messaggio dell'assert."""
+        try:
+            print("DIAG", await self.page.evaluate("diag()"))
+        except Exception as e:  # noqa: BLE001 - una pagina chiusa non deve nascondere il fallimento originale
+            print(f"DIAG non disponibile: {e}")
+        return "(DIAG stampata sopra)"
+
     async def info(self):
         return await self.page.evaluate("info()")
 
@@ -244,5 +289,5 @@ class Card:
         end = asyncio.get_running_loop().time() + timeout
         while not await self.page.evaluate(js):
             if asyncio.get_running_loop().time() > end:
-                raise AssertionError(f"mai vero: {js} T={await self.T()} info={await self.info()}")
+                raise AssertionError(f"mai vero: {js} T={await self.T()} info={await self.info()} {await self.dump_diag()}")
             await asyncio.sleep(0.05)

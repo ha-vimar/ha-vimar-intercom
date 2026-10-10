@@ -167,7 +167,7 @@
       },
       "import_confirm": {
         "title": "Confirm import",
-        "description": "Found {count} actuators for GID {gid}: {names}.\n\nDetected SGA (MAGIC_APT_INTERCOM): {sga_info}\n\nPICG detected: {picg_info}\n\nVideo entrance panel (camera) detected: {camera_info}\n\nDoor panel detected: {door_info}\n\nConfirming REPLACES the currently configured actuators and, when detected, updates sga_target/picg_target/camera_target/door_target. To cancel, close this window without confirming."
+        "description": "Phonebook source: {source}.\n\nFound {count} actuators for GID {gid}: {names}.\n\nDetected SGA (MAGIC_APT_INTERCOM): {sga_info}\n\nPICG detected: {picg_info}\n\nVideo entrance panel (camera) detected: {camera_info}\n\nDoor panel detected: {door_info}\n\nConfirming REPLACES the currently configured actuators and, when detected, updates sga_target/picg_target/camera_target/door_target. To cancel, close this window without confirming."
       },
       "fetch_rubrica": {
         "title": "Download from the intercom",

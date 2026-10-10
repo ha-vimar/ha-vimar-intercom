@@ -429,6 +429,103 @@ def test_a_late_answered_message_after_our_call_ended_changes_nothing(rung, monk
     assert outcomes == ["answered"]
 
 
+# ─── the door opened during a ring (#168) ────────────────────────────────────
+
+@pytest.fixture
+def door(rung, monkeypatch):
+    """`rung`, ringing, with a door command that the panel accepts."""
+    h, outcomes = rung
+    monkeypatch.setitem(sip.pending_incoming, "active", True)
+
+    async def _message(uri, body):
+        return True, "OK", 200, False
+
+    async def _sip_ok():
+        return True, "ok"
+
+    monkeypatch.setattr(h, "_door_message", _message)
+    monkeypatch.setattr(sip, "do_answer_incoming", _sip_ok)
+    monkeypatch.setattr(sip, "do_decline_incoming", _sip_ok)
+    return h, outcomes
+
+
+def test_a_ring_opened_then_declined_stays_opened(door):
+    """Apri, then the red button: the 603 still goes out, the log says Aperto."""
+    h, outcomes = door
+    assert asyncio.run(h._door(None, None))[0]
+    assert asyncio.run(h.async_decline())[0]
+    assert outcomes == ["opened"]
+
+
+def test_answering_after_opening_ends_as_answered(door):
+    h, outcomes = door
+    asyncio.run(h._door(None, None))
+    asyncio.run(h.async_answer())
+    assert outcomes == ["opened", "answered"]
+
+
+def test_opening_after_answering_stays_answered(door):
+    h, outcomes = door
+    asyncio.run(h.async_answer())
+    h._update_stats("call_started", "")
+    asyncio.run(h._door(None, None))
+    assert outcomes == ["answered"]
+
+
+def test_a_ring_opened_then_cancelled_is_not_missed(door):
+    """Nor relabelled by a late `C;<id>;ANSWERED`."""
+    h, outcomes = door
+    asyncio.run(h._door(None, None))
+    sip.pending_incoming["active"] = False
+    h._update_stats("ring_ended", "Chiamata cancellata")
+    h._handle_incoming_message("C;ring-1;ANSWERED")
+    assert outcomes == ["opened"]
+    assert h.stats["missed_count"] == 0
+
+
+def test_a_ring_that_ends_while_the_door_command_is_in_flight_is_opened(door, monkeypatch):
+    """The panel can take seconds to answer: the ring was up when Apri was sent."""
+    h, outcomes = door
+
+    async def _slow(uri, body):
+        sip.pending_incoming["active"] = False
+        h._update_stats("ring_ended", "Chiamata cancellata")
+        return True, "OK", 200, False
+
+    monkeypatch.setattr(h, "_door_message", _slow)
+    assert asyncio.run(h._door(None, None))[0]
+    assert outcomes == ["opened"]
+
+
+def test_a_door_opened_on_the_retry_is_opened(door, monkeypatch):
+    """First send fails and may be retried, re-register, second send OK. The ring
+    ends before the retry: it was up when Apri was sent."""
+    h, outcomes = door
+    replies = iter([(False, "Timeout", None, True), (True, "OK", 200, False)])
+
+    async def _message(uri, body):
+        if sip.pending_incoming["active"]:
+            sip.pending_incoming["active"] = False
+            h._update_stats("ring_ended", "Chiamata cancellata")
+        return next(replies)
+
+    async def _register():
+        return True
+
+    monkeypatch.setattr(h, "_door_message", _message)
+    monkeypatch.setattr(sip, "do_register", _register)
+    assert asyncio.run(h._door(None, None))[0]
+    assert outcomes == ["opened"]
+    assert h.stats["door_count"] == 1
+
+
+def test_a_door_opened_with_no_ring_up_logs_nothing(door):
+    h, outcomes = door
+    sip.pending_incoming["active"] = False
+    assert asyncio.run(h._door(None, None))[0]
+    assert outcomes == []
+
+
 @pytest.mark.parametrize("ok, msg, outcome", [
     (True, "200 OK", "exists"),
     (False, "404 Not Found", "absent"),

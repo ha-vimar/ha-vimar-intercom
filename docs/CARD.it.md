@@ -85,6 +85,7 @@ squillo.
 **Ultimi squilli.** Con la cartella foto (`snapshot_dir`) impostata, la foto dell'ultimo squillo
 sulla riga è il tasto della cronologia (in chiamata il tasto sta sul video): gli ultimi squilli
 (opzione `history`, predefinito 8) con foto, ora ed esito: *Risposto* (risposto da HA), *Rifiutato* (rifiutato da HA),
+*Aperto* (porta aperta da HA durante lo squillo),
 *Messaggio di assenza*, *Risposto altrove* (risposto da un altro dispositivo: il monitor interno o
 l'app Vimar, quando l'impianto lo comunica), *Nessuna risposta* (nessuna risposta, per quanto ne sa HA;
 su un 40507, per esempio, uno squillo risposto sul Tab stesso finisce come uno senza risposta e compare qui, mentre

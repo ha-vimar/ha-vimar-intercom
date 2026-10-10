@@ -124,7 +124,8 @@ const STYLE = `
   .out { display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1.2; color: var(--dim);
          white-space: nowrap; overflow: hidden; }
   .out::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--oc, var(--dim)); }
-  [data-outcome="answered"], [data-outcome="answered_elsewhere"] { --oc: var(--vi-ok); }
+  [data-outcome="answered"], [data-outcome="answered_elsewhere"],
+  [data-outcome="opened"] { --oc: var(--vi-ok); }
   [data-outcome="declined"] { --oc: var(--vi-bad); }
   [data-outcome="away"] { --oc: var(--vi-info); }
   [data-outcome="missed"] { --oc: var(--vi-warn); }

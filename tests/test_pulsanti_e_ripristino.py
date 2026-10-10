@@ -302,6 +302,7 @@ def test_hub_decline_risponde_603_solo_se_squilla(monkeypatch):
         "cid": "c1", "cseq": "1 INVITE", "my_tag": "t"})
     h = object.__new__(hub_mod.VimarIntercomHub)
     h._touch = lambda: None
+    h._ring_opened = False
     ok, _ = asyncio.run(h.async_decline())
     assert ok and inviati[0].startswith("SIP/2.0 603 Decline\r\n") and "Content-Length: 0" in inviati[0]
     ok, _ = asyncio.run(h.async_decline())   # ormai non squilla più

@@ -84,6 +84,7 @@ into view, e.g. `/lovelace/camera#citofono` as the tap action of a ring notifica
 **Last rings.** With a snapshot folder (`snapshot_dir`) set, the photo of the last ring on the
 row is the history button (during a call the button is on the video): the latest rings
 (option `history`, default 8) with photo, time and outcome: *Risposto* (answered from HA), *Rifiutato* (declined from HA),
+*Aperto* (the door opened from HA during the ring),
 *Messaggio di assenza* (away message), *Risposto altrove* (answered on another device: the indoor
 monitor or the Vimar app, when the plant says so), *Nessuna risposta* (not answered, as far as HA knows;
 on a 40507, for example, a ring answered on the Tab itself ends like an unanswered one and shows here, while one

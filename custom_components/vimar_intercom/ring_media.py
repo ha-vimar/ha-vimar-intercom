@@ -27,8 +27,9 @@ class RingMedia:
             _LOGGER.warning("Registro squilli non aggiornato in %s: %s", R.SNAPSHOT_DIR, e)
 
     def _log_outcome(self, outcome: str) -> None:
-        """Esito dell'ultimo squillo nel registro: answered (Rispondi), declined (Rifiuta)
-        o away (messaggio)."""
+        """Esito dell'ultimo squillo nel registro: answered (Rispondi), declined (Rifiuta),
+        away (messaggio), answered_elsewhere (altro dispositivo) o opened (porta aperta
+        da HA durante lo squillo)."""
         key = getattr(self, "_ring_time", None)
         if not (R.SNAPSHOT_DIR and key):
             return

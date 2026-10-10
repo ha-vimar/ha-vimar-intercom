@@ -75,7 +75,8 @@ const PENDING_MS = 10000;   // "Collegamento…" subito al tocco, senza aspettar
 const SAY_MS = 4000;         // un avviso resta 4 s al posto della riga di stato
 const LIVE = ["ringing", "calling", "in_call"];
 const OUTCOME = { answered: "Risposto", declined: "Rifiutato", away: "Messaggio di assenza",
-                  missed: "Nessuna risposta", answered_elsewhere: "Risposto altrove" };
+                  missed: "Nessuna risposta", answered_elsewhere: "Risposto altrove",
+                  opened: "Aperto" };
 const LABEL = {
   idle: "Pronto", ringing: "Suonano alla porta", calling: "Collegamento…",
   in_call: "In chiamata", offline: "Non raggiungibile",

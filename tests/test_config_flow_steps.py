@@ -539,6 +539,7 @@ CLOUD_DATA = {**ENTRY_DATA, "cloud_proxy": "relay.example.test",
 class _Hub:
     def __init__(self, stats, registered=True, token_later=None):
         self.stats, self.registered, self.token_later = stats, registered, token_later
+        self._init_seq = 0
 
     async def async_request_status(self):
         if self.token_later:
@@ -559,9 +560,9 @@ def fast_sleep(of, monkeypatch):
     monkeypatch.setattr(of.asyncio, "sleep", sleep)
 
 
-def test_without_the_integration_loaded_there_is_no_cloud_token(of):
+def test_without_the_integration_loaded_there_is_no_cloud_status(of):
     result = asyncio.run(_cloud_flow(of, None).async_step_fetch_rubrica_cloud())
-    assert result["errors"] == {"base": "no_cloud_token"}
+    assert result["errors"] == {"base": "no_cloud_status"}
 
 
 def test_a_token_arriving_after_the_status_request_is_used(of, fast_sleep):

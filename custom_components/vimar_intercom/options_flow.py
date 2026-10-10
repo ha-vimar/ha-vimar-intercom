@@ -737,15 +737,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             },
         )
 
-    async def _cloud_token(self) -> tuple[str | None, str | None, str | None]:
-        """(token, rubrica_ver, GID) dall'ultima risposta a GET_INIT_STATUS dell'hub.
+    async def _cloud_token(self) -> tuple[str | None, str | None, str | None, bool]:
+        """Read the token, phonebook version, GID and whether a fresh reply arrived.
 
         Se il token manca si richiede lo stato una volta e si aspetta qualche secondo:
         la risposta arriva come MESSAGE separato. Il token non si salva da nessuna parte.
         """
         hub = (self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}).get("hub")
         if hub is None:
-            return None, None, None
+            return None, None, None, False
 
         def _read():
             st = hub.stats
@@ -753,14 +753,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     st.get("apt_gid"))
 
         token, ver, gid = _read()
+        received = False
         if not token and hub.registered:
+            # A SIP 200 accepts the request; only a new MESSAGE is a status reply.
+            seq = hub._init_seq
             await hub.async_request_status()
             for _ in range(10):
                 await asyncio.sleep(0.5)
                 token, ver, gid = _read()
-                if token:
+                received = hub._init_seq != seq
+                if token or received:
                     break
-        return token, ver, (str(gid) if gid not in (None, "") else None)
+        return token, ver, (str(gid) if gid not in (None, "") else None), received
 
     async def async_step_fetch_rubrica_cloud(
         self, user_input: dict | None = None
@@ -778,11 +782,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         cdomain = (current.get(KEY_CLOUD_DOMAIN) or "").strip()
         if not cdomain and cproxy and str(current.get(KEY_SIP_DOMAIN, "")).endswith("." + cproxy):
             cdomain = current[KEY_SIP_DOMAIN]   # entry manuale: il dominio SIP è quello cloud
-        token, ver, plant_gid = await self._cloud_token()
+        token, ver, plant_gid, received = await self._cloud_token()
         default_gid = plant_gid or str(current.get(KEY_GID) or "101")
 
         if not token:
-            errors["base"] = "no_cloud_token"
+            errors["base"] = "no_cloud_token" if received else "no_cloud_status"
         elif cloud_phonebook.check_inputs(cdomain, cproxy, token, ver):
             errors["base"] = "cloud_failed"
             self._rubrica_error = (

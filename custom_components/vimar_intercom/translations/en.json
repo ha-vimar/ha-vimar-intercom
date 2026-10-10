@@ -220,7 +220,8 @@
       "upload_failed": "File not saved in the messages folder: see the Home Assistant log.",
       "path_not_allowed": "Home Assistant cannot write to this folder: add it to allowlist_external_dirs or use a media folder.",
       "path_public": "Public folder: /config/www is served on /local without login. Use e.g. /config/media/citofono.",
-      "no_cloud_token": "This system did not send the phonebook token (short GET_INIT_STATUS reply, as on the 40507): use “Download the phonebook from the intercom” or “Import actuators from rubrica.db”.",
+      "no_cloud_token": "The status reply did not include a phonebook token. Use the intercom download or import rubrica.db instead.",
+      "no_cloud_status": "No status reply was received. Check that the integration is connected and that the PICG address is correct, then retry. This does not establish whether the system supports cloud phonebook downloads.",
       "cloud_auth_failed": "The Vimar cloud rejected the token.",
       "cloud_failed": "Phonebook download from the cloud failed."
     }

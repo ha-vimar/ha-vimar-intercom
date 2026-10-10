@@ -220,7 +220,8 @@
       "upload_failed": "File non salvato nella cartella messaggi: guarda il log di Home Assistant.",
       "path_not_allowed": "Home Assistant non può scrivere in questa cartella: aggiungila ad allowlist_external_dirs o usa una cartella media.",
       "path_public": "Cartella pubblica: /config/www è servita su /local senza login. Usa ad esempio /config/media/citofono.",
-      "no_cloud_token": "Questo impianto non ha mandato il token della rubrica (risposta corta a GET_INIT_STATUS, come sul 40507): usa «Scarica la rubrica dal citofono» o «Importa attuatori da rubrica.db».",
+      "no_cloud_token": "La risposta di stato non contiene il token della rubrica. Usa lo scaricamento dal citofono oppure importa rubrica.db.",
+      "no_cloud_status": "Non è arrivata una risposta di stato. Verifica che l’integrazione sia connessa e che l’indirizzo PICG sia corretto, poi riprova. Questo non indica se l’impianto supporta lo scaricamento della rubrica dal cloud.",
       "cloud_auth_failed": "Il cloud Vimar ha rifiutato il token.",
       "cloud_failed": "Download della rubrica dal cloud non riuscito."
     }

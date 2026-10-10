@@ -116,6 +116,7 @@ class _Hub:
     def __init__(self, stats):
         self.stats = stats
         self.richieste = 0
+        self._init_seq = 0
 
     async def async_request_status(self):
         self.richieste += 1
@@ -145,7 +146,7 @@ def test_senza_token_lo_chiede_e_spiega(of, monkeypatch):
     monkeypatch.setattr(of.asyncio, "sleep", niente)
     hub = _Hub({"init_status": {"dnd": "0"}, "rubrica_ver": VER})
     r = asyncio.run(_flow(of, hub).async_step_fetch_rubrica_cloud())
-    assert r["errors"] == {"base": "no_cloud_token"} and hub.richieste == 1
+    assert r["errors"] == {"base": "no_cloud_status"} and hub.richieste == 1
 
 
 def test_con_token_scarica_e_passa_all_import(of, monkeypatch):
@@ -195,3 +196,29 @@ def test_download_with_a_missing_token_never_calls_the_cloud():
     with pytest.raises(cp.CloudPhonebookError, match="token"):
         cp.download(CDOMAIN, CPROXY, "  ", VER, session=s)
     assert s.calls == []
+
+
+@pytest.mark.parametrize("reply, expected", [
+    (None, "no_cloud_status"),
+    ({"dnd": "0", "rubrica_ver": "fixture-version"}, "no_cloud_token"),
+])
+def test_missing_reply_is_distinguished_from_a_reply_without_token(of, monkeypatch, reply, expected):
+    real_sleep = asyncio.sleep
+
+    async def no_wait(_seconds):
+        await real_sleep(0)
+
+    monkeypatch.setattr(of.asyncio, "sleep", no_wait)
+    hub = _Hub({"init_status": {"dnd": "1"}, "rubrica_ver": VER})
+    hub._init_seq = 1
+
+    async def request():
+        hub.richieste += 1
+        if reply is not None:
+            hub.stats["init_status"] = reply
+            hub._init_seq += 1
+
+    hub.async_request_status = request
+    result = asyncio.run(_flow(of, hub).async_step_fetch_rubrica_cloud())
+    assert result["errors"] == {"base": expected}
+    assert hub.richieste == 1

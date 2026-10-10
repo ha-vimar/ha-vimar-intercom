@@ -79,12 +79,20 @@
       "init": {
         "title": "Vimar Intercom settings",
         "menu_options": {
+          "internal_panel": "Find indoor monitor",
           "settings": "Network and actuator settings",
           "homekit": "HomeKit",
           "av_key": "/av stream key",
           "import_rubrica": "Import actuators from rubrica.db",
           "fetch_rubrica": "Download the phonebook from the intercom",
           "fetch_rubrica_cloud": "Download the phonebook from the Vimar cloud"
+        }
+      },
+      "internal_panel": {
+        "title": "Find indoor monitor",
+        "description": "The system declares {detected} as its main indoor monitor (PICG). The current Call Home destination is {current}. Confirm to use the proposed destination, or enter a known indoor monitor address. This saves the destination without placing a call. Whether the monitor accepts calls depends on the plant.",
+        "data": {
+          "internal_panel_target": "Indoor monitor SIP address"
         }
       },
       "settings": {
@@ -207,6 +215,7 @@
       "invalid_actuator_target": "Invalid actuator target ({actuators_error}): digits only (e.g. 55001) or AUTO.",
       "rubrica_import_failed": "Import failed. See description above for details.",
       "rubrica_no_actuators": "No actuators found for the specified GID. See description above.",
+      "internal_panel_not_found": "No unique main indoor monitor was declared. Check connectivity and the PICG address, or enter a known indoor monitor address manually.",
       "invalid_target": "Invalid value: digits only (e.g. 55001).",
       "invalid_url": "Invalid URL: it must start with http:// or https:// and have a host.",
       "no_local_proxy": "The intercom address is missing: set it under \"Network and actuator settings\".",

@@ -82,6 +82,10 @@ Settings → Vimar Intercom → **Configure**:
 
 The camera image between calls (the last ring photo) is visible to every Home Assistant user who can see the camera entity; `allowed_users` limits the ring history and live media, not the camera entity.
 
+### Finding the indoor monitor
+
+Configure → **Find indoor monitor** proposes the main indoor monitor declared in a `GET_NICKS` reply (role `PICG`). It uses previously received nicknames or requests them from the configured PICG, without scanning other addresses. It shows the current **Call Home** destination and saves the proposal only when confirmed. SGA, PICG, camera and actuator settings are preserved, and no call is placed. Without a unique declared PICG it does not guess a destination; a known address can still be entered manually. The mapping was verified on a Tab 7S Up 40517, SW 2.1.0203, over the cloud; whether the main monitor accepts calls needs checking on other plants.
+
 ### Voicemail
 
 There is one *Voicemail* switch (Configuration, device page). Turned on, it uses Home

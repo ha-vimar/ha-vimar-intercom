@@ -9,7 +9,7 @@ import sys
 import types
 
 import pytest
-from harness.web import Request, load_views
+from harness.web import Request, fake_ws, load_views
 
 from custom_components.vimar_intercom import av_stream as av_stream_mod
 from custom_components.vimar_intercom import media_handler as media
@@ -102,8 +102,7 @@ def _msg(kind, data):
 
 def _talk(views, monkeypatch, hub, messages, admin=True, query=None, clients=None, wants=None):
     """Opens /audio_ws, sends `messages`, closes; returns the socket and the JSON it got."""
-    ws = views.new_ws()
-    monkeypatch.setattr(views.web, "WebSocketResponse", lambda: ws)
+    ws = fake_ws(monkeypatch, views, views.new_ws())
     for m in messages:
         ws.inbox.put_nowait(m if isinstance(m, types.SimpleNamespace) else _msg("text", json.dumps(m)))
     ws.inbox.put_nowait(None)
@@ -117,6 +116,35 @@ def _talk(views, monkeypatch, hub, messages, admin=True, query=None, clients=Non
 def test_audio_ws_without_the_integration_closes_with_1011(views, monkeypatch):
     ws, got = _talk(views, monkeypatch, None, [])
     assert ws.closed and ws.close_args["code"] == 1011 and got == []
+
+
+def test_audio_ws_pings_so_a_vanished_phone_is_closed(views, monkeypatch):
+    """Without a heartbeat a suspended iPhone or a dropped 5G link kept its socket,
+    and its sender queue and task, until TCP gave up minutes later."""
+    made = []
+    ws = views.new_ws()
+    monkeypatch.setattr(views.web, "WebSocketResponse", lambda **kw: made.append(kw) or ws)
+    ws.inbox.put_nowait(None)
+    asyncio.run(views.VimarAudioWSView(_hass(ViewHub())).get(Request()))
+    assert made == [{"heartbeat": 30}]
+
+
+def test_audio_ws_registers_for_video_timestamps_only_when_asked(views, monkeypatch):
+    seen = []
+    ts: set = set()
+
+    class _Hub(ViewHub):
+        def state_message(self):
+            seen.append(set(ts))
+            return {"type": "state"}
+
+    for query in ({"only": "video", "ts": "1"}, {"only": "video"}):
+        hass = _hass(_Hub())
+        hass.data["vimar_intercom"]["e1"]["ws_ts"] = ts
+        ws = fake_ws(monkeypatch, views, views.new_ws())
+        ws.inbox.put_nowait(None)
+        asyncio.run(views.VimarAudioWSView(hass).get(Request(query=query)))
+    assert len(seen[0]) == 1 and seen[1] == set() and ts == set()
 
 
 def test_audio_ws_sends_the_state_and_replays_the_current_video(views, monkeypatch):

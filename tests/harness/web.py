@@ -124,6 +124,13 @@ def load_views(monkeypatch, web=WEB):
     return mod
 
 
+def fake_ws(monkeypatch, views, ws=None):
+    """The socket the view's next /audio_ws request gets (a new fake one by default)."""
+    ws = views.web.WebSocketResponse() if ws is None else ws
+    monkeypatch.setattr(views.web, "WebSocketResponse", lambda **_: ws)
+    return ws
+
+
 def make_hass(rig) -> types.SimpleNamespace:
     """hass.data come lo prepara async_setup_entry, con i WS audio collegati al media."""
     clients: set = set()

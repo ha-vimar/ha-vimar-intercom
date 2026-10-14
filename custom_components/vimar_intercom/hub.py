@@ -1356,9 +1356,6 @@ class VimarIntercomHub(PlantMessages, RingMedia):
             if not self._was_ringing:
                 self.fire_ring_callbacks()
             self._was_ringing = True
-            # IDR subito (INFO nel dialogo early del 183), non al giro della targa (~3 s):
-            # foto, clip e card partono prima.
-            self._request_keyframe()
 
             if R.SNAPSHOT_DIR:
                 now = datetime.now().astimezone()

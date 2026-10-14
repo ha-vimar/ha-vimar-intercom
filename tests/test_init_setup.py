@@ -3,6 +3,7 @@ on stub HA objects: a fake hub, fake registries, a fake hass that records calls.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import types
@@ -439,6 +440,36 @@ def test_a_socket_that_asked_for_one_media_gets_only_that(init, tmp_path):
     nal = b"\x03\x00\x00\x00\x01\x67s"
     _send_all(b"\x01pcm", nal)
     assert video.sent == [nal] and audio.sent == [b"\x01pcm"] and both.sent == [b"\x01pcm", nal]
+
+
+def test_a_client_that_asked_for_it_gets_a_timestamp_before_each_idr(init, tmp_path, monkeypatch):
+    """Behind a buffering proxy send_bytes returns at once and the backlog grows in the
+    tunnel: a {"type": "video_ts"} text before each IDR lets the card tell it is late.
+    Only for ?ts=1, only on live IDRs (a replayed one is old), on a monotonic clock."""
+    hass = _hass(tmp_path)
+    _setup(init, hass, _entry())
+    data = hass.data[init.DOMAIN]["e1"]
+    card, app = _Client(), _Client()
+    data["audio_ws_clients"].update({card, app})
+    data["ws_ts"].add(card)
+    nal = b"\x03\x00\x00\x00\x01"
+    sps, idr, pf = nal + b"\x67s", nal + b"\x65i", nal + b"\x41p"
+
+    async def run():
+        for p in (sps, idr):                        # the GOP replayed to a new client
+            await media.ws_send_bytes(p, only=card)
+        for p in (b"\x01pcm", sps, idr, pf):        # live
+            await media.ws_send_bytes(p)
+        await asyncio.sleep(0.01)
+
+    before = init.time.monotonic() * 1000
+    asyncio.run(run())
+    after = init.time.monotonic() * 1000
+    assert card.sent[:2] == [sps, idr], "the replayed IDR gets no timestamp"
+    assert card.sent[2:] == [b"\x01pcm", sps, card.sent[4], idr, pf]
+    ts = json.loads(card.sent[4])
+    assert ts["type"] == "video_ts" and before - 1 <= ts["t"] <= after
+    assert app.sent == [b"\x01pcm", sps, idr, pf]
 
 
 def test_a_full_client_queue_drops_its_backlog_and_waits_for_a_keyframe(init, tmp_path, monkeypatch):

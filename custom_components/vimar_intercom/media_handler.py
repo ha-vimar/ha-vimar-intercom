@@ -383,9 +383,11 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
     # A keyframe arrives as a burst of ~40 packets (30-58 KB at 1.5 Mbit/s) that the
     # cloud relay reorders by up to 15 places and 34 ms (40515, measured): counting 5
     # packets gave up on packets that were still coming, and a cap of 64 filled in
-    # 34 ms. A gap waits REORDER_WAIT, or until the buffer holds REORDER_BUF_SIZE packets.
+    # 34 ms. No packet waits behind a gap more than REORDER_WAIT (0.3 s, /av's ffmpeg
+    # -max_delay: at 80 ms most packets given up on came later), or past REORDER_BUF_SIZE.
     REORDER_BUF_SIZE = 512
-    REORDER_WAIT = 0.08
+    REORDER_WAIT = 0.3
+    KEYFRAME_RETRY = 1.0  # while waiting for an IDR, ask again at most this often
     # The cloud relay also sends isolated packets hundreds ahead on the same SSRC.
     # Forwarded, ffmpeg (/av) takes one as the new head and drops the live stream
     # as "too late" until it catches up, and the phone's libsrtp (HomeKit) refuses
@@ -448,8 +450,7 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
         self._drop_until_idr = False      # buco (coda WS piena, pacchetto perso): via i P fino all'IDR
         self._keyframe_at = 0.0           # ultimo keyframe chiesto per un pacchetto perso
         # RTP reorder buffer — fixes out-of-order UDP packets
-        self._reorder_buf = {}  # seq -> payload
-        self._gap_at = None     # when the gap the buffer waits for appeared
+        self._reorder_buf = {}  # seq -> (payload, arrival time), in arrival order
         self._next_seq = None   # next expected sequence number
         self._top = None        # newest sequence number accepted
         self._far_pkts = []     # packets far ahead in a row (_reorder args), held
@@ -631,7 +632,7 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
             # HA falliva: video bianco.
             if behind and not back_again:
                 # Duplicato o arrivato dopo che l'abbiamo dato per perso. ffmpeg (/av)
-                # aspetta fino a -max_delay (300 ms), più del nostro REORDER_WAIT:
+                # aspetta fino a -max_delay (300 ms) dal suo primo pacchetto in coda:
                 # a lui serve ancora (un duplicato quasi sempre lo scarta). Più
                 # indietro di FAR_AHEAD lo scarterebbe comunque.
                 if self.forward_av and rtp and back <= self.FAR_AHEAD:
@@ -659,6 +660,8 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
                 if len(held) < need:
                     return  # isolated, see FAR_AHEAD
                 self._lost(f"seq saltata da {self._next_seq} a {seq}")
+            elif not same:  # new stream: its P frames do not refer to our last IDR
+                self._lost(f"ssrc nuovo {ssrc:08x}")
             if not same or far:
                 _LOGGER.info("Video RTP ripartito (%s: ssrc %08x→%08x, seq %d→%d): "
                              "risincronizzo", "seq saltata" if far else "ssrc nuovo",
@@ -701,22 +704,20 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
                     sink(rtp)
                 except Exception:  # noqa: BLE001
                     _LOGGER.exception("Video RTP sink failed")
-        self._reorder_buf[seq] = payload
+        now = time.monotonic()
+        self._reorder_buf.setdefault(seq, (payload, now))
 
         while True:
-            if self._next_seq in self._reorder_buf:
-                self._gap_at = None
             while self._next_seq in self._reorder_buf:
-                self._depacketize(self._reorder_buf.pop(self._next_seq), self._next_seq)
+                self._depacketize(self._reorder_buf.pop(self._next_seq)[0], self._next_seq)
                 self._next_seq = (self._next_seq + 1) & 0xFFFF
             if not self._reorder_buf:
                 return
-            now = time.monotonic()
-            if self._gap_at is None:
-                self._gap_at = now
-            if len(self._reorder_buf) <= self.REORDER_BUF_SIZE and now - self._gap_at < self.REORDER_WAIT:
+            # The clock is the oldest packet waiting, as in ffmpeg, not the gap: losses in
+            # a row cost REORDER_WAIT once, not once each.
+            oldest = next(iter(self._reorder_buf.values()))[1]
+            if len(self._reorder_buf) <= self.REORDER_BUF_SIZE and now - oldest < self.REORDER_WAIT:
                 return
-            self._gap_at = None
             # Buco che non si riempie più: salta al primo pacchetto disponibile.
             lost = self._next_seq
             self._next_seq = min(self._reorder_buf,
@@ -727,11 +728,17 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
         """Un pacchetto video perso (via cloud capita). Dal campo: un solo pacchetto
         perso dentro un FU-A («seq gap ... gap=1, continuing») dava un NAL col buco e
         il video smerigliato fino all'IDR dopo (~3 s). Via i P fino al prossimo IDR
-        (WS, foto, GOP) e keyframe chiesto subito, al più uno al secondo."""
+        (WS, foto, GOP) e keyframe chiesto subito (_ask_keyframe)."""
         _LOGGER.debug("Video RTP: %s: via i P fino al prossimo IDR", why)
         self._drop_until_idr = True
-        if request_keyframe and time.monotonic() - self._keyframe_at >= 1:
-            self._keyframe_at = time.monotonic()
+        self._ask_keyframe()
+
+    def _ask_keyframe(self):
+        """Keyframe request, at most one per KEYFRAME_RETRY; also for every P dropped
+        while waiting, so a request skipped or unanswered is repeated until the IDR."""
+        now = time.monotonic()
+        if request_keyframe and now - self._keyframe_at >= self.KEYFRAME_RETRY:
+            self._keyframe_at = now
             request_keyframe()
 
     def _depacketize(self, payload, seq):
@@ -817,6 +824,7 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
         if t == 5:
             self._drop_until_idr = False
         elif t == 1 and self._drop_until_idr:
+            self._ask_keyframe()
             return  # riferisce un fotogramma perso: né WS, né foto, né GOP
         # SPS/PPS servono anche a /av (sprop nell'SDP di ffmpeg): memorizzali
         # anche quando non c'è nessun client WebSocket.
@@ -1113,9 +1121,12 @@ async def setup_media(remote_sdp, local_crypto_key=None, local_video_crypto_key=
         video_proto._sps_pps_sent = False
         video_proto._pending_idr = None
         video_proto._gop_msgs, video_proto._gop_hdr = [], []
-        video_proto._drop_until_idr = False
+        # A new stream (or the same call re-negotiated): no P frame until an IDR of
+        # this one, even when a PPS with the cached SPS lets _sps_pps_sent through
+        # before it. The SIP side asks for the first keyframe; retries a second later.
+        video_proto._drop_until_idr = True
+        video_proto._keyframe_at = time.monotonic()
         video_proto._reorder_buf = {}
-        video_proto._gap_at = None
         video_proto._next_seq = None
         video_proto._back_to, video_proto._undone = None, False
         video_proto._gop = video_proto._gop_ts = None

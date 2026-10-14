@@ -251,15 +251,26 @@ def _challenge_params(challenge: str) -> dict[str, str]:
     }
 
 
+# nc per nonce (RFC 2617 3.2.2): fixed at 1, a reused challenge looks like a replay.
+_nonce_count: dict[str, int] = {}
+
+
+def _next_nc(nonce: str) -> str:
+    if nonce not in _nonce_count and len(_nonce_count) >= 16:
+        del _nonce_count[next(iter(_nonce_count))]  # the oldest nonce
+    _nonce_count[nonce] = _nonce_count.get(nonce, 0) + 1
+    return f"{_nonce_count[nonce]:08x}"
+
+
 def _make_auth(method, uri, challenge):
     p = _challenge_params(challenge)
     nonce = p.get("nonce", "")
     realm = p.get("realm", R.SIP_DOMAIN)
     opaque = p.get("opaque", "")
     qop = p.get("qop", "")
-    nc = "00000001"
     cnonce = secrets.token_hex(8)
     if "auth" in [item.strip().lower() for item in qop.split(",")]:
+        nc = _next_nc(nonce)
         resp = _digest_resp(method, uri, nonce, realm, "auth", nc, cnonce)
         hdr = (f'Digest username="{R.SIP_USER}", realm="{realm}", '
                f'nonce="{nonce}", uri="{uri}", response="{resp}", '

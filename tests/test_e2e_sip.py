@@ -19,7 +19,7 @@ import types
 import pytest
 from harness.peer import DOMAIN, PASSWORD, USER, Msg, answer_200, check_digest, is_, response
 from harness.rig import Rig, run, wait_until
-from harness.web import Request, load_views, make_hass, open_av
+from harness.web import Request, fake_ws, load_views, make_hass, open_av
 
 from custom_components.vimar_intercom import av_stream
 from custom_components.vimar_intercom import const as C
@@ -1301,8 +1301,7 @@ def test_microfono_durante_chiamata(monkeypatch):
             av = open_av(views, hass)                   # video live
             await asyncio.sleep(0.3)
             view = views.VimarAudioWSView(hass)
-            ws = views.web.WebSocketResponse()
-            monkeypatch.setattr(views.web, "WebSocketResponse", lambda: ws)
+            ws = fake_ws(monkeypatch, views)
             wst = asyncio.create_task(view.get(Request(admin=False)))
             await asyncio.sleep(0.1)
             # 2048 campioni @48 kHz → 341 @8 kHz ogni ~43 ms, come la card

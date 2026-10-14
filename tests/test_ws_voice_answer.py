@@ -2,7 +2,7 @@
 import asyncio
 import types
 
-from harness.web import Request, load_views, make_hass
+from harness.web import Request, fake_ws, load_views, make_hass
 
 from custom_components.vimar_intercom import media_handler as media
 from custom_components.vimar_intercom import runtime
@@ -26,8 +26,7 @@ def _run(monkeypatch, hub, frames, ringing, declared=True, mode="declared"):
     monkeypatch.setattr(hub, "async_answer", answer)
     monkeypatch.setattr(media, "send_audio", sent.append)
     hass = make_hass(types.SimpleNamespace(hub=hub))
-    ws = views.web.WebSocketResponse()
-    monkeypatch.setattr(views.web, "WebSocketResponse", lambda: ws)
+    ws = fake_ws(monkeypatch, views)
     for f in frames:
         ws.inbox.put_nowait(types.SimpleNamespace(type="binary", data=f))
     ws.inbox.put_nowait(None)

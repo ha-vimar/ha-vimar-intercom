@@ -1490,6 +1490,9 @@ def _spawn(coro) -> asyncio.Task:
     return t
 
 
+_keyframe_lock = asyncio.Lock()  # an INFO picture_fast_update waits for its answer
+
+
 async def send_keyframe_request():
     """Send SIP INFO picture_fast_update to get a video keyframe (SPS/PPS).
 
@@ -1498,104 +1501,103 @@ async def send_keyframe_request():
     con Proxy-Authorization (come MESSAGE/INVITE) invece di lasciare il proxy
     a rifiutare a ripetizione ("Stale response 407").
 
-    Anche nell'anteprima dello squillo (dialogo early del nostro 183, RFC 3261 §12.1.1):
-    foto, clip e card non aspettano l'IDR della targa (~3 s), e un pacchetto perso
-    durante l'anteprima si recupera subito (media_handler._lost)."""
-    if in_call and call_state["call_id"]:
+    Only in a confirmed call: in the ring preview (early dialog of our 183) the 40515
+    over the cloud answers every INFO 491 or 501, with the auth already right.
+
+    One at a time: concurrent ones read the same dialog queue and took each other's
+    407. A request made while one is in flight is dropped; media_handler asks again
+    a second later if the IDR does not come."""
+    if _keyframe_lock.locked() or not (in_call and call_state["call_id"]):
+        return
+    async with _keyframe_lock:
         cid, to_uri = call_state["call_id"], call_state.get("original_target") or R.INTERCOM
         to_tag, from_tag = call_state["to_tag"], call_state["from_tag"]
         contact, route_set = call_state.get("remote_contact"), call_state.get("route_set")
-    elif early_media():
-        p = pending_incoming
-        cid, to_uri, to_tag, from_tag = p["cid"], p["caller_uri"], p["caller_tag"], p["my_tag"]
-        contact, route_set = p["contact"], p["route_set"]
-    else:
-        return
-    info_target, route = _dialog_target(contact, to_uri, route_set)
-    body = ('<?xml version="1.0" encoding="utf-8" ?>'
-            '<media_control><vc_primitive><to_encoder>'
-            '<picture_fast_update></picture_fast_update>'
-            '</to_encoder></vc_primitive></media_control>')
-    seq = 0
+        info_target, route = _dialog_target(contact, to_uri, route_set)
+        body = ('<?xml version="1.0" encoding="utf-8" ?>'
+                '<media_control><vc_primitive><to_encoder>'
+                '<picture_fast_update></picture_fast_update>'
+                '</to_encoder></vc_primitive></media_control>')
+        seq = 0
 
-    def _info(auth=None):
-        nonlocal seq
-        seq = _next_cseq()
-        m = (
-            f"INFO {info_target} SIP/2.0\r\n"
-            f"{_via_line(_gen())}"
-            f"{route}"
-            f"Max-Forwards: 70\r\n"
-            f"To: <{to_uri}>;tag={to_tag}\r\n"
-            f"From: <sip:{R.SIP_USER}@{R.SIP_DOMAIN}>;tag={from_tag}\r\n"
-            f"Call-ID: {cid}\r\n"
-            f"CSeq: {seq} INFO\r\n")
-        if auth:
-            m += f"Proxy-Authorization: {auth}\r\n"
-        m += (f"Content-Type: application/media_control+xml\r\n"
-              f"Content-Length: {_clen(body)}\r\n\r\n{body}")
-        return m
+        def _info(auth=None):
+            nonlocal seq
+            seq = _next_cseq()
+            m = (
+                f"INFO {info_target} SIP/2.0\r\n"
+                f"{_via_line(_gen())}"
+                f"{route}"
+                f"Max-Forwards: 70\r\n"
+                f"To: <{to_uri}>;tag={to_tag}\r\n"
+                f"From: <sip:{R.SIP_USER}@{R.SIP_DOMAIN}>;tag={from_tag}\r\n"
+                f"Call-ID: {cid}\r\n"
+                f"CSeq: {seq} INFO\r\n")
+            if auth:
+                m += f"Proxy-Authorization: {auth}\r\n"
+            m += (f"Content-Type: application/media_control+xml\r\n"
+                  f"Content-Length: {_clen(body)}\r\n\r\n{body}")
+            return m
 
-    # Registra la coda PRIMA di inviare: la risposta arriva sul Call-ID del
-    # dialog attivo, che _wait_final consuma; senza questo il reader la scarta
-    # come "Stale response".
-    pending_responses.setdefault(cid, asyncio.Queue())
-    # Già autenticato con l'ultima sfida del proxy: il burst iniziale (8 INFO a
-    # 150 ms) faceva 8 volte 407 + INFO ripetuto. Se la sfida è vecchia arriva un
-    # 407 stale=true e si rimanda con quella nuova, aspettandone la risposta.
-    auth_tries, last_ch = 0, None
-    await send(_info(_make_auth("INFO", info_target, _proxy_challenge) if _proxy_challenge else None))
-    _LOGGER.debug("Sent INFO picture_fast_update → %s", info_target)
+        # Registra la coda PRIMA di inviare: la risposta arriva sul Call-ID del
+        # dialog attivo, che _wait_final consuma; senza questo il reader la scarta
+        # come "Stale response".
+        pending_responses.setdefault(cid, asyncio.Queue())
+        # Già autenticato con l'ultima sfida del proxy: il burst iniziale (8 INFO a
+        # 150 ms) faceva 8 volte 407 + INFO ripetuto. Se la sfida è vecchia arriva un
+        # 407 stale=true e si rimanda con quella nuova, aspettandone la risposta.
+        auth_tries, last_ch = 0, None
+        await send(_info(_make_auth("INFO", info_target, _proxy_challenge) if _proxy_challenge else None))
+        _LOGGER.debug("Sent INFO picture_fast_update → %s", info_target)
 
-    # Attendi risposta breve; su 407/401 rimanda con auth (al più AUTH_RETRIES).
-    #
-    # Le risposte che non sono per il nostro INFO (es. il 200 di un BYE, se un
-    # hangup concorrente condivide la coda del dialog) vanno restituite alla coda,
-    # ma solo **dopo** il ciclo. Fino alla 1.0.6 venivano rimesse in coda subito e
-    # rilette al giro successivo: da Python 3.12 `asyncio.wait_for` su una coda già
-    # piena non sospende, quindi il ciclo girava senza mai cedere l'event loop fino
-    # alla scadenza — Home Assistant fermo 3 secondi, ogni 5 secondi, per tutta la
-    # chiamata (misurato: 0,01 s su 3.11, 3,01 s su 3.12 e 3.13).
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + 3
-    foreign: list[str] = []
-    try:
-        while loop.time() < deadline:
-            try:
-                raw = await asyncio.wait_for(
-                    pending_responses[cid].get(), timeout=min(1.0, deadline - loop.time())
-                )
-            except (TimeoutError, KeyError):
+        # Attendi risposta breve; su 407/401 rimanda con auth (al più AUTH_RETRIES).
+        #
+        # Le risposte che non sono per il nostro INFO (es. il 200 di un BYE, se un
+        # hangup concorrente condivide la coda del dialog) vanno restituite alla coda,
+        # ma solo **dopo** il ciclo. Fino alla 1.0.6 venivano rimesse in coda subito e
+        # rilette al giro successivo: da Python 3.12 `asyncio.wait_for` su una coda già
+        # piena non sospende, quindi il ciclo girava senza mai cedere l'event loop fino
+        # alla scadenza — Home Assistant fermo 3 secondi, ogni 5 secondi, per tutta la
+        # chiamata (misurato: 0,01 s su 3.11, 3,01 s su 3.12 e 3.13).
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 3
+        foreign: list[str] = []
+        try:
+            while loop.time() < deadline:
+                try:
+                    raw = await asyncio.wait_for(
+                        pending_responses[cid].get(), timeout=min(1.0, deadline - loop.time())
+                    )
+                except (TimeoutError, KeyError):
+                    break
+                if raw is _CANCEL:  # reset_state, or do_hangup for do_call: not ours
+                    foreign.append(raw)
+                    break
+                code, hdrs, *_ = _parse(raw)
+                cseq = hdrs.get("cseq", "").split()
+                if "INFO" not in hdrs.get("cseq", "INFO"):
+                    foreign.append(raw)
+                    continue
+                if cseq != [str(seq), "INFO"]:
+                    continue  # risposta a un INFO precedente (es. il 200 dopo un 407): non è la nostra
+                if not isinstance(code, int) or code < 200:
+                    continue
+                if code in (401, 407):
+                    ch = hdrs.get("proxy-authenticate", "") or hdrs.get("www-authenticate", "")
+                    if _retry_auth(ch, auth_tries, last_ch):
+                        auth_tries, last_ch = auth_tries + 1, ch
+                        await send(_info(auth=_make_auth("INFO", info_target, ch)))
+                        _LOGGER.debug("Re-sent INFO with Proxy-Authorization after %d", code)
+                        continue  # e si aspetta la risposta di QUESTO INFO (seq nuovo)
                 break
-            if raw is _CANCEL:  # reset_state, or do_hangup for do_call: not ours
-                foreign.append(raw)
-                break
-            code, hdrs, *_ = _parse(raw)
-            cseq = hdrs.get("cseq", "").split()
-            if "INFO" not in hdrs.get("cseq", "INFO"):
-                foreign.append(raw)
-                continue
-            if cseq != [str(seq), "INFO"]:
-                continue  # risposta a un INFO precedente (es. il 200 dopo un 407): non è la nostra
-            if not isinstance(code, int) or code < 200:
-                continue
-            if code in (401, 407):
-                ch = hdrs.get("proxy-authenticate", "") or hdrs.get("www-authenticate", "")
-                if _retry_auth(ch, auth_tries, last_ch):
-                    auth_tries, last_ch = auth_tries + 1, ch
-                    await send(_info(auth=_make_auth("INFO", info_target, ch)))
-                    _LOGGER.debug("Re-sent INFO with Proxy-Authorization after %d", code)
-                    continue  # e si aspetta la risposta di QUESTO INFO (seq nuovo)
-            break
-    finally:
-        queue = pending_responses.get(cid)
-        for raw in foreign:
-            if queue is None:
-                break
-            try:
-                queue.put_nowait(raw)
-            except asyncio.QueueFull:
-                break
+        finally:
+            queue = pending_responses.get(cid)
+            for raw in foreign:
+                if queue is None:
+                    break
+                try:
+                    queue.put_nowait(raw)
+                except asyncio.QueueFull:
+                    break
     # Nota: NON facciamo pop() qui — un do_call/_wait_final concorrente potrebbe
     # possedere la stessa coda. La coda del dialog viene ripulita a hangup.
 

@@ -120,7 +120,13 @@ So a periodic request every 5 s brings nothing on either panel (their own
 cadence is shorter), while a request when the call starts and after a lost video
 packet cuts recovery to about 0.25 s on the 40515 instead of up to 3 s. That is
 what the integration does: a short burst at call start and one request per lost
-packet (at most one per second), never periodically.
+packet, repeated at most once a second while the IDR has not come, never otherwise.
+One INFO at a time, so concurrent requests do not read each other's answers.
+
+Only in a confirmed call. In the ring preview (the early dialog of our `183`) the
+40515 over the cloud answered every INFO `491 Request pending` or `501 Not
+implemented`, with the authentication already accepted (two rings measured), so
+the preview waits for the panel's own keyframes.
 
 The three-second cycle does not mean three seconds of wait before the first
 image. As soon as the panel answers the call it sends SPS, PPS and a full

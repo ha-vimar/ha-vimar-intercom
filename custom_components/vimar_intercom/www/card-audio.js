@@ -15,6 +15,11 @@ const micError = (e) => {
 };
 
 const CardAudio = (Base) => class extends Base {
+  // Card fuori dalla pagina o app in background (_hidden, card-page.js): niente audio nuovo.
+  get _gone() {
+    return !this.isConnected || this._hidden;
+  }
+
   // Crea un AudioContext e prova a sbloccarlo (resume): se iOS lo tiene sospeso per
   // mancanza di un gesto vero, lo chiude, segnala _audioBlocked ("Microfono"/"Ascolta"
   // → "Audio") e torna null. Usato da _startTalk (solo per `auto`, senza un tocco
@@ -77,7 +82,8 @@ const CardAudio = (Base) => class extends Base {
       this._audioBlocked = false;
       await this._openAudio(mic, ctx);
     } catch (e) {
-      if (!auto && this._err.textContent === this._hint) this._err.textContent = micError(e);
+      // Uscita dalla card o dall'app nel frattempo: nessun "card chiusa" da mostrare al ritorno.
+      if (!auto && !this._gone && this._err.textContent === this._hint) this._err.textContent = micError(e);
       mic?.getTracks().forEach((t) => t.stop());  // il microfono non resta acceso
       if (!this._audio) ctx.close();
       this._stopAudio();
@@ -157,15 +163,16 @@ const CardAudio = (Base) => class extends Base {
   // "Audio" stesso, tocco vero — parte comunque, anche a `listen_on_ring` spento: è
   // l'utente a chiederlo, non l'anteprima automatica.
   async _startListen(auto = false) {
-    if (!window.isSecureContext) return;
+    if (!window.isSecureContext || this._gone) return;
     this._listenStarting = true;
+    let ctx;
     try {
-      const ctx = await this._unlockedContext();
+      ctx = await this._unlockedContext();
       if (!ctx) return;
       const { path } = await this._hass.callWS({ type: "auth/sign_path", path: "/api/vimar_intercom/audio_ws?only=audio" });
-      // Stato cambiato nell'attesa: uscito dalla card, o (solo per l'automatico) l'anteprima
+      // Stato cambiato nell'attesa: uscito dalla card o dall'app, o (solo per l'automatico) l'anteprima
       // non serve più (config spenta dall'editor, oppure il parlato vero l'ha scavalcata).
-      if (!this.isConnected || this._ws || (auto && !this._cfg.listen_on_ring)) return ctx.close();
+      if (this._gone || this._ws || (auto && !this._cfg.listen_on_ring)) return ctx.close();
       const ws = new WebSocket(location.origin.replace(/^http/, "ws") + path);
       ws.binaryType = "arraybuffer";
       ws.onmessage = this._pcmSink(ctx, this._gain(ctx, "_listenGain"));
@@ -174,6 +181,9 @@ const CardAudio = (Base) => class extends Base {
       this._listenWs = ws;
       this._audioBlocked = false;
       this._render();
+    } catch (e) {
+      if (ctx && this._listenCtx !== ctx) ctx.close();  // firma o WebSocket falliti: l'AudioContext non resta aperto
+      throw e;
     } finally {
       this._listenStarting = false;
     }
@@ -191,9 +201,12 @@ const CardAudio = (Base) => class extends Base {
   async _openAudio(mic, ctx) {
     // Card tolta dalla pagina mentre iOS chiedeva il permesso del microfono: niente
     // WebSocket orfano (chi la chiama spegne il microfono).
-    if (!this.isConnected) throw new Error("card chiusa");
+    if (this._gone) throw new Error("card chiusa");
     // WebSocket con percorso firmato: il browser non può mandare il token negli header.
     const { path } = await this._hass.callWS({ type: "auth/sign_path", path: "/api/vimar_intercom/audio_ws?only=audio" });
+    // La card può uscire (cambio vista, app in background) durante la firma: senza questo
+    // controllo nascerebbero WebSocket e microfono orfani, che nessuno più spegne.
+    if (this._gone) throw new Error("card chiusa");
     const ws = new WebSocket(location.origin.replace(/^http/, "ws") + path);
     this._ws = ws;  // da qui _stopAudio lo chiude anche se qualcosa sotto fallisce
     ws.binaryType = "arraybuffer";

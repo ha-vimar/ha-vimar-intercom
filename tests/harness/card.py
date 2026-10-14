@@ -9,7 +9,11 @@ NAL del WebSocket su un canvas (`info().video === "canvas"`). `?nowc` toglie
 VideoDecoder (browser senza WebCodecs), `?badwc` ne mette uno che fallisce la
 configurazione (codec non supportato): in entrambi i casi la card deve tornare a /av.
 `?flakywc` ne mette uno che si rompe al 10° chunk (dati corrotti): la card resta sul
-canvas e riparte dal prossimo IDR.
+canvas e riparte dal prossimo IDR. `&slowwc` (via `query`) ne mette uno che per il primo secondo tiene i
+chunk in coda (decoder software a freddo, #130). `&dropP=N` butta l'N-esimo P del WebSocket video (perso a
+monte senza che il server lo sappia: `T.kinds` segna "x" fra i chunk dati al decoder, "k"/"d").
+`muteVideo()` rende muti i WebSocket aperti (5G morto: niente dati, niente close). `T.signDelay`/`T.signFail`
+rallentano/fanno fallire la firma del WebSocket audio. `T.ctxOpen`/`T.ctxNew` contano gli AudioContext non chiusi/creati.
 `?ios` dà alla pagina lo user agent di un iPhone. `?layout=sotto` (o popup) passa `layout` in setConfig. `ha-form` è un finto minimo (label +
 input/select nativi, `value-changed` come quello vero) per provare l'editor visuale.
 """
@@ -26,7 +30,8 @@ PAGE = """<!doctype html><html><head><meta name="viewport" content="width=390"><
 <body><home-assistant></home-assistant><script>
 window.T = { av: [], avBytes: 0, live: 0, created: [], rx: 0, ws: 0, sent: 0, frames: [],
              wsClosed: 0, calls: [], errors: [], gumDelay: 0, wcBroken: 0, gum: 0,
-             wsOpenAt: 0, firstNalAt: 0, firstFrameAt: 0 };  // epoca in ms, del player corrente: latenza
+             wsOpenAt: 0, firstNalAt: 0, firstFrameAt: 0,  // epoca in ms, del player corrente: latenza
+             kinds: "", ctxOpen: 0, ctxNew: 0, signDelay: 0, signFail: false };
 window.onerror = (m) => T.errors.push(String(m));
 window.addEventListener("unhandledrejection", (e) => T.errors.push("REJ " + e.reason));
 if (location.search.includes("insecure")) Object.defineProperty(window, "isSecureContext", { value: false });
@@ -36,7 +41,16 @@ if (window.VideoDecoder) {  // sonda di latenza (il primo fotogramma dipinto), c
   window.VideoDecoder = class extends VD {
     constructor(init) { super({ ...init, output: (f) => { T.firstFrameAt ||= Date.now(); init.output(f); } }); }
     configure(c) { (T.vdCfg ||= []).push({ codec: c.codec, desc: [...new Uint8Array(c.description || [])], latency: c.optimizeForLatency, cs: c.colorSpace }); super.configure(c); }
-    decode(c) { if (!T.chunk) { const b = new Uint8Array(c.byteLength); c.copyTo(b); T.chunk = [c.type, ...b.slice(0, 5)]; } super.decode(c); }
+    decode(c) { if (!T.chunk) { const b = new Uint8Array(c.byteLength); c.copyTo(b); T.chunk = [c.type, ...b.slice(0, 5)]; }
+      if (T.kinds.length < 2000) T.kinds += c.type[0];
+      super.decode(c); }
+  };
+}
+if (window.AudioContext) {
+  const AC = (window.AC0 = window.AudioContext);  // AC0: the fake mic's own, not counted
+  window.AudioContext = class extends AC {
+    constructor(...a) { super(...a); T.ctxOpen++; T.ctxNew++; }
+    close() { if (this.state !== "closed" && !this._uncounted) { this._uncounted = true; T.ctxOpen--; } return super.close(); }
   };
 }
 if (location.search.includes("nowc")) window.VideoDecoder = undefined;
@@ -57,11 +71,23 @@ if (location.search.includes("flakywc") && window.VideoDecoder) {  // si rompe a
     }
   };
 }
+if (location.search.includes("slowwc") && window.VideoDecoder) {  // parte lento: 1 s di chunk in coda
+  const VD = window.VideoDecoder;
+  window.VideoDecoder = class extends VD {
+    configure(c) {
+      super.configure(c);
+      this._held = [];
+      setTimeout(() => { const h = this._held; this._held = null; if (h && this.state === "configured") h.forEach((k) => super.decode(k)); }, 1000);
+    }
+    decode(c) { this._held ? this._held.push(c) : super.decode(c); }
+    get decodeQueueSize() { return (this._held?.length || 0) + super.decodeQueueSize; }
+  };
+}
 if (window.AudioContext && navigator.mediaDevices) {  // microfono finto, con il tempo del permesso
   navigator.mediaDevices.getUserMedia = async () => {
     T.gum++;  // conta le richieste vere di microfono (l'ascolto allo squillo non ne fa)
     await new Promise((r) => setTimeout(r, T.gumDelay));
-    const ac = new AudioContext(), osc = ac.createOscillator(), dst = ac.createMediaStreamDestination();
+    const ac = new AC0(), osc = ac.createOscillator(), dst = ac.createMediaStreamDestination();
     osc.connect(dst); osc.start();
     return dst.stream;
   };
@@ -102,13 +128,24 @@ customElements.define("ha-form", class extends HTMLElement {
     }
   }
 });
-const WS = window.WebSocket;
+const WS = window.WebSocket, SOCKS = [], DROP_P = +new URLSearchParams(location.search).get("dropP") || 0;
+let pSeen = 0;
+window.muteVideo = () => SOCKS.forEach((w) => (w.muted = true));
 window.WebSocket = class extends WS {
-  constructor(u) { super(u); T.ws++;
+  constructor(u) { super(u); T.ws++; SOCKS.push(this);
     T.wsOpenAt = T.firstNalAt = T.firstFrameAt = 0;  // WebSocket nuovo = player nuovo
     this.addEventListener("open", () => (T.wsOpenAt = Date.now()));
-    this.addEventListener("message", (e) => { if (typeof e.data !== "string") T.rx++;
-      if (typeof e.data !== "string" && new Uint8Array(e.data, 0, 1)[0] === 3) T.firstNalAt ||= Date.now(); }); }
+    // Prima dell'onmessage della card (registrato dopo): può fermare il messaggio.
+    this.addEventListener("message", (e) => {
+      if (this.muted) return e.stopImmediatePropagation();
+      if (typeof e.data !== "string") T.rx++;
+      if (typeof e.data !== "string" && new Uint8Array(e.data, 0, 1)[0] === 3) {
+        T.firstNalAt ||= Date.now();
+        if (e.data.byteLength > 5 && (new Uint8Array(e.data, 5, 1)[0] & 0x1f) === 1 && ++pSeen === DROP_P) {
+          T.kinds += "x";
+          e.stopImmediatePropagation();
+        }
+      } }); }
   send(b) { T.sent++; if (T.frames.length < 5 && b.byteLength) T.frames.push([new Uint8Array(b)[0], b.byteLength]); super.send(b); }
   close() { T.wsClosed++; super.close(); }
 };
@@ -149,7 +186,12 @@ const mkHass = (status, lastRing = {}, ringTime = null) => ({
     return (k, p = {}) => k.split(".").slice(2).reduce((o, x) => o?.[x], t)?.replace(/{([a-z_]+)}/g, (_, n) => p[n]);
   },
   // come HA: firma anche la query; `?signs` numera le firme (x1, x2…) per distinguerle
-  callWS: async (m) => ({ path: m.path + (m.path.includes("?") ? "&" : "?") + "authSig=x" + (QS.has("signs") ? (T.signs = (T.signs || 0) + 1) : "") }),
+  callWS: async (m) => {
+    if (m.path?.includes("only=audio")) {
+      await new Promise((r) => setTimeout(r, T.signDelay));
+      if (T.signFail) throw new Error("firma fallita");
+    }
+    return { path: m.path + (m.path.includes("?") ? "&" : "?") + "authSig=x" + (QS.has("signs") ? (T.signs = (T.signs || 0) + 1) : "") }; },
   callApi: async (method, path) => (await fetch("/api/" + path)).json(),
 });
 let last = "";
@@ -197,8 +239,8 @@ class Card:
     """La pagina della card aperta in `engine` sul server di `rig` (Rig(http=True))."""
 
     def __init__(self, rig, engine: str, insecure=False, webcodecs=True, badwc=False, flakywc=False, layout=None,
-                 listen_on_ring=False, shortcuts=None, compact=None, query=""):
-        self.rig, self.engine = rig, engine
+                 listen_on_ring=False, shortcuts=None, compact=None, query="", touch=False):
+        self.rig, self.engine, self.touch = rig, engine, touch  # touch: un telefono (pointer: coarse)
         self.query = "?" + "&".join(f for f, on in (("insecure", insecure), ("nowc", not webcodecs),
                                                     ("badwc", badwc), ("flakywc", flakywc),
                                                     (f"layout={layout}", layout),
@@ -216,7 +258,7 @@ class Card:
         except Exception as e:  # noqa: BLE001 — motore non installato
             await self.pw.stop()
             pytest.skip(f"{self.engine} non disponibile: {e}")
-        self.page = await self.browser.new_page(viewport={"width": 390, "height": 844})  # un iPhone
+        self.page = await self.browser.new_page(viewport={"width": 390, "height": 844}, has_touch=self.touch)  # un iPhone
         await self.open()
         return self
 

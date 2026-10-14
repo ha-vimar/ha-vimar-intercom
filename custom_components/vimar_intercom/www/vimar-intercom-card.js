@@ -60,6 +60,7 @@
 // funzionano solo in HTTPS (o su localhost).
 
 import { CardAudio } from "./card-audio.js";
+import { CardPage } from "./card-page.js";
 import { DEFAULTS, EDITOR_TAG, VimarIntercomCardEditor } from "./card-editor.js";
 import { STYLE } from "./card-style.js";
 import { NalPlayer, same } from "./nal-player.js";
@@ -148,7 +149,7 @@ const lockPageScroll = (on) => {
   for (const el of [document.documentElement, document.body]) el.style.overflow = on ? "hidden" : "";
 };
 
-class VimarIntercomCard extends CardAudio(HTMLElement) {
+class VimarIntercomCard extends CardPage(CardAudio(HTMLElement)) {
   static getConfigElement() {
     return document.createElement(EDITOR_TAG);
   }
@@ -235,7 +236,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       this._card.classList.remove("hold");
       this._live = undefined;
     }
-    const show = (live || !!this._holdT) && (!this._popup || this._pop.open);  // compatta: niente video
+    const show = !this._hidden && (live || !!this._holdT) && (!this._popup || this._pop.open);  // compatta: niente video
     this._setVideo(show);
     this._card.dataset.state = state;
     this._card.classList.toggle("live", show);
@@ -296,7 +297,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     // diventa "Audio" (sopra): resta un tocco solo, ben visibile. Mai per
     // "ringing"/"calling": aprire la pagina non risponde né chiama da sola.
     if (state === "in_call") {
-      if (!this._autoAudioTried && !this._ws && !this._starting && window.isSecureContext
+      if (!this._autoAudioTried && !this._ws && !this._starting && !this._hidden && window.isSecureContext
           && this._cfg.anchor && location.hash === `#${this._cfg.anchor}`) {
         this._autoAudioTried = true;
         this._startTalk(true).catch(() => {});
@@ -318,8 +319,8 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     // solo, già pronto, anche se l'ascolto automatico non parte (iOS senza gesto).
     // Chiusura solo per fine diretta o audio vero: un ascolto avviato a mano dal tasto
     // Audio (anche a `listen_on_ring` spento) resta finché dura la diretta.
-    if (!live || this._ws || this._starting) this._stopListen();
-    else if (this._cfg.listen_on_ring && (!this._popup || this._pop.open) && !this._listenWs && !this._listenStarting) this._startListen(true);
+    if (!live || this._ws || this._starting || this._hidden) this._stopListen();
+    else if (this._cfg.listen_on_ring && (!this._popup || this._pop.open) && !this._listenWs && !this._listenStarting) this._startListen(true).catch(() => {});
 
     // Popup: opens by itself when a live period begins that did not start from us: at the ring, or
     // with an already answered call (notification "Answer", app reopened after missing the ring: the
@@ -472,7 +473,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     // che non c'è ancora. Se il parlato vero è già in corso, non lo tocca: solo il muto.
     this._mute.onclick = () => {
       if (this._ws || this._listenWs) this._toggleMute();
-      else if (!this._listenStarting) this._startListen();
+      else if (!this._listenStarting) this._startListen().catch(() => {});
     };
     // Adatta (contain, predefinito) / Riempi (cover): la scelta resta sul dispositivo.
     try { this._cover = localStorage.getItem(FIT_KEY) === "cover"; } catch { this._cover = false; }
@@ -675,6 +676,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   });
 
   connectedCallback() {
+    super.connectedCallback();  // card-page.js
     for (const e of ["hashchange", "location-changed"]) window.addEventListener(e, this._toAnchor);
     this._toAnchor();
     // Rimessa in pagina (cambio di vista e ritorno, a chiamata in corso): il riquadro
@@ -935,7 +937,9 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     }
   }
 
-  disconnectedCallback() {
+  // Card out of the page for good (card-page.js, disconnectedCallback): nothing stays open.
+  _teardown() {
+    super._teardown();
     for (const e of ["hashchange", "location-changed"]) window.removeEventListener(e, this._toAnchor);
     if (this._pop.open) this._pop.close();
     if (this._set.open) this._set.close();

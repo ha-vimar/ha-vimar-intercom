@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import re
 import struct
 import time
@@ -1683,8 +1684,7 @@ def test_cambio_vista_e_ritorno_a_chiamata_in_corso(monkeypatch, engine):  # noq
                 for i, rehass in enumerate((False, True)):
                     await asyncio.sleep(1.2)
                     await c.page.evaluate("card.remove()")
-                    await asyncio.sleep(1)
-                    assert not (await c.info())["player"]
+                    await c.until("!info().player", 3)  # fuori oltre il differimento di card-page.js: teardown
                     t0 = time.time()
                     await c.page.evaluate("document.body.appendChild(card)")
                     if rehass:
@@ -1885,4 +1885,302 @@ def test_fill_fit_is_hidden_while_video_and_box_have_the_same_shape(monkeypatch,
                 await c.until("!card._card.hasAttribute('data-fit-same')", 3)
                 assert await c.page.evaluate(shown)
                 assert not (await c.T())["errors"]
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_decoder_lento_a_partire_non_perde_il_primo_gop(monkeypatch, engine):  # noqa: F811
+    """#130: in CI il decoder software parte lento e la coda passa 8 chunk prima del primo
+    fotogramma; il player buttava i P fino al prossimo IDR e il video partiva un GOP dopo
+    (3 s). Con la soglia a 30 il video va avanti dal primo IDR."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+    aus = hm.access_units(45)  # IDR ogni 3 s, come la targa
+    monkeypatch.setattr(hm, "access_units", lambda gop=15: aus)
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine, query="&slowwc") as c:
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().player?.frames > 0", 8)
+                await c.until("info().player?.frames >= 20", 2)  # ben prima dell'IDR dopo (3 s)
+                t, p = await c.T(), (await c.info())["player"]
+                assert p["resets"] == 0 and t["av"] == [] and not t["errors"], (p, t)
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_p_perso_a_monte_niente_sbavature_fino_all_idr(monkeypatch, engine):  # noqa: F811
+    """Un P che non arriva alla card senza che il server lo sappia (SSRC nuovo, coda svuotata):
+    i P dopo riferiscono un fotogramma che il decoder non ha e su iPhone sbavano fino all'IDR
+    (P-frame "colati"). Il frame_num nello slice header lo dice: la card non dà al decoder
+    nessun P fino al prossimo IDR (resta l'ultimo fotogramma buono), poi riparte."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine, query="&dropP=20") as c:  # IDR ogni 1 s (15 fotogrammi)
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("T.kinds.includes('x')", 8)
+                n = (await c.info())["player"]["frames"]
+                await c.until(f"info().player?.frames > {n} + 10", 4)  # riparte dall'IDR
+                t, p = await c.T(), (await c.info())["player"]
+                assert t["kinds"].split("x")[1].startswith("k"), t["kinds"]  # niente P col riferimento perso
+                assert p["resets"] == 0 and t["av"] == [] and not t["errors"], (p, t)
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_websocket_video_muto_watchdog_lo_riapre(monkeypatch, engine):  # noqa: F811
+    """5G morto: il WebSocket video non porta più niente ma non si chiude (WebKit: nessun close
+    per oltre 90 s). Dopo 8 s senza fotogrammi la card lo riapre da sola con un decoder nuovo,
+    il server rimanda il GOP e il video riprende sul canvas, senza stream di HA."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine) as c:
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().player?.frames > 0", 8)
+                await c.page.evaluate("muteVideo()")
+                t0 = time.monotonic()
+                await c.until("T.ws === 2", 12)
+                assert time.monotonic() - t0 > 7, "riaperto prima degli 8 s"
+                n = (await c.info())["player"]["frames"]
+                await c.until(f"info().player?.frames > {n} + 10", 5)
+                t, info = await c.T(), await c.info()
+                assert info["video"] == "canvas" and info["player"]["resets"] == 1, (info, t)
+                assert len(t["vdCfg"]) == 2, "decoder non rifatto"  # uno bloccato non ripartirebbe
+                assert t["av"] == [] and not t["errors"] and rig.hub.status == "in_call", t
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_chiamata_senza_video_il_watchdog_non_riapre_in_loop(monkeypatch, engine):  # noqa: F811
+    """"Vedi esterno" con la targa che non manda video (cloud lento, fino a 15 s in "calling"):
+    nessun fotogramma ancora, quindi niente stallo da curare. Il watchdog parte col primo
+    fotogramma: nessuna riapertura del WebSocket video in 10 s."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=False)
+            async with Card(rig, engine) as c:
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().pill === 'In chiamata' && T.ws === 1")
+                await asyncio.sleep(10)  # oltre gli 8 s del watchdog: deve non succedere niente
+                t, p = await c.T(), (await c.info())["player"]
+                assert t["ws"] == 1 and p["resets"] == 0, (p, t)
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+VIS = "Object.defineProperty(document, 'visibilityState', { get: () => T.vis || 'visible', configurable: true }); 0"
+VIS_EVENT = "T.vis = '%s'; document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))"
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+@pytest.mark.parametrize("how", ["pagehide", "touch_hidden"])
+def test_app_in_background_chiude_video_e_microfono_e_al_ritorno_riapre(monkeypatch, engine, how):  # noqa: F811
+    """iPhone, chiamata dalla card col microfono acceso, app in background: niente deve restare
+    aperto (microfono, WebSocket video e audio: le "attività in background"). La chiamata resta
+    (la chiude la targa o l'utente); al ritorno il video riparte da solo, il microfono no."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+    hide, show = {
+        "pagehide": ("window.dispatchEvent(new Event('pagehide'))", "window.dispatchEvent(new Event('pageshow'))"),
+        "touch_hidden": (VIS_EVENT % "hidden", VIS_EVENT % "visible"),
+    }[how]
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine, touch=how == "touch_hidden") as c:
+                await c.page.evaluate(VIS)
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().player?.frames > 0 && info().pill === 'In chiamata' && !card._talk.disabled", 8)
+                await c.tap("talk")
+                await c.until("info().audio === 'on' && T.ws === 2", 5)
+                await c.page.evaluate(hide)
+                await c.until("!info().player && info().audio === 'off' && !info().listen"
+                              " && T.wsClosed === 2 && T.ctxOpen === 0", 3)
+                assert rig.hub.status == "in_call"
+                await c.page.evaluate(show)
+                await c.until("info().player?.frames > 0 && T.ws === 3", 5)
+                t = await c.T()
+                assert (await c.info())["audio"] == "off" and t["av"] == [] and not t["errors"], t
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_scheda_nascosta_su_pc_non_chiude_la_diretta(monkeypatch, engine):  # noqa: F811
+    """Su un PC cambiare scheda (pagina nascosta) non è lasciare la chiamata: il video resta."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine) as c:
+                await c.page.evaluate(VIS)
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().player?.frames > 0", 8)
+                await c.page.evaluate(VIS_EVENT % "hidden")
+                n = (await c.info())["player"]["frames"]
+                await c.until(f"info().player?.frames > {n} + 5", 3)  # il video continua sullo stesso player
+                t = await c.T()
+                assert t["ws"] == 1 and t["wsClosed"] == 0, t
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+@pytest.mark.parametrize("layout", [None, "popup"])
+def test_card_staccata_e_rimessa_subito_la_diretta_continua(monkeypatch, engine, layout):  # noqa: F811
+    """HA stacca e riattacca le card a rotazione e rimpaginazione: sotto 1 s fuori dalla pagina
+    niente teardown, il WebSocket video resta lo stesso e la chiamata non si chiude. In popup il
+    dialog torna modale (fuori dal documento perde il top layer ma resta `open`)."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine, layout=layout) as c:
+                await c.until(IDLE)
+                if layout:
+                    await c.page.evaluate("card.shadowRoot.querySelector('.name').click()")  # apre il popup e chiama
+                else:
+                    await c.tap("view")
+                await c.until("info().player?.frames > 0", 8)
+                detach_ms = await c.page.evaluate("import('/vimar_intercom/card-page.js').then((m) => m.DETACH_MS)")
+                await c.page.evaluate("card.remove(); setTimeout(() => document.body.appendChild(card), 300); 0")
+                await asyncio.sleep(detach_ms / 1000 + 0.3)  # oltre il teardown differito: non deve arrivare
+                n = (await c.info())["player"]["frames"]
+                await c.until(f"info().player?.frames > {n} + 5", 3)
+                t = await c.T()
+                assert t["ws"] == 1 and t["wsClosed"] == 0 and not t["errors"], t
+                assert rig.hub.status == "in_call" and not rig.peer.got(is_("BYE"))
+                if layout:
+                    assert await c.page.evaluate("card._pop.open && card._pop.matches(':modal')"), "popup non più modale"
+                await c.tap("hangup")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("how", ["remove", "pagehide"])
+def test_card_lasciata_durante_la_firma_niente_microfono_orfano(monkeypatch, engine, how):  # noqa: F811
+    """"Rispondi" e subito un cambio vista (o l'app in background) mentre HA firma il WebSocket
+    audio (5G lento): finita la firma la card non deve aprire il WebSocket né lasciare microfono e
+    AudioContext accesi (il teardown, 1 s dopo, non li vedrebbe). Al ritorno dal background niente
+    "card chiusa" al posto del suggerimento: si tocca di nuovo il microfono e basta."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, webcodecs=False) as c:
+                if not await c.page.evaluate("!!window.AudioContext"):
+                    pytest.skip("questo motore headless non ha Web Audio")
+                rig.ring()
+                await c.until("info().talk === 'Rispondi'")
+                await c.page.evaluate("T.signDelay = 2000")
+                await c.tap("talk")
+                await c.until("T.gum === 1")  # microfono concesso: ora si firma il WebSocket
+                await c.page.evaluate("card.remove()" if how == "remove" else "window.dispatchEvent(new Event('pagehide'))")
+                await c.until("!card._starting", 4)  # firma finita, _startTalk uscito
+                if how == "pagehide":
+                    await c.page.evaluate("window.dispatchEvent(new Event('pageshow'))")
+                    assert "card chiusa" not in (await c.info())["err"]
+                t = await c.T()
+                assert t["ws"] == 0 and t["ctxOpen"] == 0, t
+                assert await c.page.evaluate("!card._ws && !card._audio")
+    run(s())
+
+
+def test_ascolto_con_firma_fallita_chiude_l_audiocontext(monkeypatch, engine):  # noqa: F811
+    """`listen_on_ring`: se la firma del WebSocket audio fallisce (HA che si riconnette)
+    l'AudioContext appena creato si chiude, e il rifiuto non resta senza gestione."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, webcodecs=False, listen_on_ring=True) as c:
+                if not await c.page.evaluate("!!window.AudioContext"):
+                    pytest.skip("questo motore headless non ha Web Audio")
+                await c.page.evaluate("T.signFail = true")
+                rig.ring()
+                await c.until("info().pill === 'Suonano alla porta' && T.ctxNew > 0 && !card._listenStarting")
+                t = await c.T()
+                assert not (await c.info())["listen"] and t["ctxOpen"] == 0 and not t["errors"], t
+                rig.peer.request("CANCEL", "ring-1", 1, "pnl")
+                await c.until(IDLE)
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)  # WebKit di Playwright: niente WebCodecs
+def test_video_indietro_dietro_il_tunnel_riapre_il_websocket(monkeypatch, engine):  # noqa: F811
+    """Dietro NGINX/Cloudflared l'arretrato resta nel proxy e il video scivola indietro di secondi.
+    Il server manda `video_ts` (testo) prima di ogni IDR, col suo orologio: la card misura il
+    ritardo rispetto al minimo visto (gli orologi non sono allineati) e oltre 1,5 s riapre il
+    WebSocket. Un ritardo sotto soglia, testi sconosciuti o non JSON non fanno niente."""
+    if not hm.FFMPEG:
+        pytest.skip("serve ffmpeg per il video della targa finta")
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine) as c:
+                await c.until(IDLE)
+                await c.tap("view")
+                await c.until("info().player?.frames > 0", 8)
+                (ws,) = list(rig.audio_ws_clients)
+                t0 = 5_000_000  # orologio del server: tutt'altro da quello del telefono
+                start = time.monotonic()
+
+                def ts(late=0.0):  # il tempo monotono del server che avanza col tempo vero; `late`: s di ritardo
+                    return json.dumps({"type": "video_ts", "t": t0 + (time.monotonic() - start - late) * 1000})
+                await ws.send_str(ts(late=3))  # un campione vecchio per primo non fissa il minimo
+                await ws.send_str(ts())
+                for msg in ("ciao", '{"type":"altro","t":1}', json.dumps({"type": "video_ts"})):
+                    await ws.send_str(msg)
+                await asyncio.sleep(0.3)
+                start += 1.0  # questo IDR esce 1 s in ritardo: sotto soglia
+                await ws.send_str(ts())
+                n = (await c.info())["player"]["frames"]
+                await c.until(f"info().player?.frames > {n} + 5", 3)
+                assert (await c.T())["ws"] == 1
+                start += 1.0  # 2 s in ritardo sul minimo: si riapre
+                await ws.send_str(ts())
+                await c.until("T.ws === 2 && info().player?.resets === 1", 3)
+                n = (await c.info())["player"]["frames"]
+                await c.until(f"info().player?.frames > {n} + 10", 5)
+                t = await c.T()
+                assert not t["errors"] and t["av"] == [] and rig.hub.status == "in_call", t
+                await c.tap("hangup")
+                await c.until(IDLE)
     run(s())

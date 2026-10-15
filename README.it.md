@@ -76,6 +76,9 @@ la rubrica: [Configurazione](https://github.com/ha-vimar/ha-vimar-intercom/blob/
 
 ## Supporto e contributi
 
+Per avviare Home Assistant locale per lo sviluppo, con onboarding automatico,
+esegui `./docker/dev.sh`. Vedi [sviluppo con Docker Compose](docs/DEVELOPMENT.it.md).
+
 Domande e problemi: [issue](https://github.com/ha-vimar/ha-vimar-intercom/issues). Problemi di sicurezza: in privato, vedi [SECURITY.md](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/SECURITY.md).
 I contributi sono benvenuti, vedi [CONTRIBUTING.md](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/CONTRIBUTING.md): mai indovinare comandi SIP (uno
 sbagliato può aprire una porta), niente credenziali nel repo, e scrivi su che hardware hai provato.

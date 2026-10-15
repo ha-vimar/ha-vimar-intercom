@@ -77,6 +77,9 @@ the phonebook: [Configuration](https://github.com/ha-vimar/ha-vimar-intercom/blo
 
 ## Support and contributing
 
+For a local Home Assistant development instance with automatic onboarding, run
+`./docker/dev.sh`. See [Docker Compose development](docs/DEVELOPMENT.md).
+
 Questions and bugs: [issues](https://github.com/ha-vimar/ha-vimar-intercom/issues). Security problems: privately, see [SECURITY.md](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/SECURITY.md).
 Contributions are welcome, see [CONTRIBUTING.md](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/CONTRIBUTING.md): never guess SIP commands (a wrong
 one can open a door), keep credentials out of the repo, and say which hardware you tested on.

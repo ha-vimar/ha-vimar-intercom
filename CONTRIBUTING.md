@@ -27,6 +27,10 @@ in its description.
 
 ## Development setup
 
+For an onboarded, isolated Home Assistant instance using the current checkout,
+run `./docker/dev.sh`. See [Docker Compose development](docs/DEVELOPMENT.md).
+The unit tests below still run independently of Home Assistant.
+
 ```bash
 git clone https://github.com/ha-vimar/ha-vimar-intercom
 cd ha-vimar-intercom

@@ -1,0 +1,24 @@
+homeassistant:
+  name: Vimar Development
+  latitude: 0
+  longitude: 0
+  elevation: 0
+  unit_system: metric
+  time_zone: UTC
+  country: US
+
+frontend:
+config:
+stream:
+http:
+  server_port: 8123
+lovelace:
+  dashboards:
+    vimar-dev:
+      mode: yaml
+      title: Vimar Development
+      icon: mdi:flask-outline
+      show_in_sidebar: true
+      filename: ui-lovelace.yaml
+logger:
+  default: warning

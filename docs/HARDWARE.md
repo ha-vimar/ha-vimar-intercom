@@ -61,6 +61,38 @@ same LAN shows it: the message goes up to the relay, enters the PBX, and comes
 back down from the relay. The integration therefore registers over the cloud on
 this plant; the local path is not used.
 
+### Additional 40517 measurements (October 2026)
+
+On another owner's Tab 7S Up 40517, SW `2.1.0203 [prod]`, build
+`rev67313-2123` (2025-06-10), FW `1.06`, HW `00-02`, experimental local TCP
+registration succeeded, including after a development HA restart. Indoor and
+outdoor INVITEs to confirmed destinations returned
+`503 You're not allowed to make this operation` in approximately **5–8 ms**,
+without a new 401/407 challenge. Those integration tests used Docker Desktop
+and routed subnets; the rejecting PBX predicate remains unknown.
+
+The **development pairing QR** has **`CLOUD=1`** (home first, then cloud), decoded
+offline without publishing the QR. This rules out `CLOUD=2` for that QR only;
+it does not establish the active iPhone pairing's policy or local call permission.
+
+Two further USB captures of official iPhone VIEW **2.18.0**, with the phone
+reported on the intercom's VLAN and internet access allowed for both, still
+showed fresh **TLS 1.3 cloud SIP on TCP 7042** and call-shaped UDP flows to the
+same public server. No direct intercom TCP/UDP traffic or SIP on ports
+5060/5061 was captured. UDP counts were 246 outgoing / 377 incoming in the first
+call and 437 outgoing / 678 incoming in the repeat. Audio/video classifications
+are inferred from endpoints, timing and lengths; UDP media payloads were not
+saved, and TLS hides SIP headers, SDP and presence messages.
+
+An earlier owner-applied intercom WAN block left VIEW attempting cloud TLS;
+outdoor calling failed and indoor ringing alone persisted. Firewall enforcement,
+IPv6 coverage and retained sessions were not conclusively verified, so this is
+not a proven fully offline test.
+
+The same-VLAN captures do not replace an integration/plain-client test without
+Docker NAT, and they do not prove local support impossible under all settings.
+Sources and remaining questions: [tracking issue #179](https://github.com/ha-vimar/ha-vimar-intercom/issues/179).
+
 ## Consequences for the code
 
 1. **Verify the transport, do not infer it.** `planttype` gives the starting

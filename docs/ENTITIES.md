@@ -46,6 +46,9 @@ device's name, "Vimar Intercom": *Vimar Intercom Status* in English, *Vimar Inte
 Italian. The entity_ids do not depend on the language: a new install gets the ones listed in
 these pages and in the examples (for instance `sensor.vimar_intercom_intercom_stato`), and an
 existing install keeps its own. A name or entity_id you changed in Home Assistant stays as you set it.
+Attributes are shown by a translated name too (*Caller* for `chiamante`), and some fixed values as well
+(the door opening `esito`, the `nota`); templates and automations keep using the keys and raw values
+listed in these pages.
 
 
 ---
@@ -128,7 +131,7 @@ automation:
 
 ## Example automations
 
-[`packages/vimar_intercom.yaml`](../packages/vimar_intercom.yaml) (copy it into `config/packages/`) contains a
+[`packages/vimar_intercom_en.yaml`](../packages/vimar_intercom_en.yaml) (copy it into `config/packages/`; the same in Italian: [`vimar_intercom.yaml`](../packages/vimar_intercom.yaml), copy only one) contains a
 "ring → notification" automation driven by the state change of the `event` entity, plus a safety
 hang-up that closes a call left open for two minutes:
 

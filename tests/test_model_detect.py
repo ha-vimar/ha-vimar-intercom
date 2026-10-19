@@ -40,6 +40,18 @@ def test_proxies_apps_and_unknown_devices_give_no_model(ua):
     assert md.match(ua) == (None, None, -1)
 
 
+@pytest.mark.parametrize("ua", [
+    # Video Door 2.4.7: "Video.Door_<brand><model>_Android<sdk>/<linphone>|AppVer:…|ProtVer:…|"
+    "Video.Door_GooglePixel7_Android34/5.2.0|AppVer:2.4.7|ProtVer:1.0|",
+    # VIEW 2.18: same shape with the TOGA_ prefix
+    "TOGA_GooglePixel7_Android34/5.2.0|AppVer:2.4.0|ProtVer:2.18.0|",
+])
+def test_a_phone_running_a_vimar_app_is_not_a_device_model(ua):
+    """A Pixel phone running an app must not become an "Elvox Pixel" panel."""
+    assert md.is_ignored(ua)
+    assert md.match(ua) == (None, None, -1)
+
+
 def test_is_ignored_is_case_insensitive():
     assert md.is_ignored("FLEXISIP")
     assert not md.is_ignored("Elvox Tab 7S")

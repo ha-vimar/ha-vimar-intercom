@@ -36,7 +36,7 @@
 | Durata ultima chiamata | `sensor` (s) | `last_call_duration` | durata ultima chiamata |
 | Ultima apertura | `sensor` (timestamp) | `last_door` | ultima apertura porta (attr: targa, esito come il `result` di `open_door`, codice SIP, contatore) |
 | Ultimo comando | `sensor` | `last_command` | esito ultimo `send_command` |
-| Ultimo messaggio ricevuto | `sensor` | `last_message_in` | ultimo SIP MESSAGE dal citofono |
+| Ultimo messaggio ricevuto | `sensor` | `last_message_in` | ultimo SIP MESSAGE di sistema (`Panda: blue`) dal citofono; gli altri vengono ignorati |
 | Spazio segreteria | `sensor` | `vm_level` | spazio dei videomessaggi usato/totale, da `GET_INIT_STATUS` |
 | Versione rubrica | `sensor` | `rubrica_ver` | versione della rubrica del Tab (attr `vm_ver`): quando cambia, reimportare gli attuatori |
 | Ultima chiamata persa | `sensor` | `last_missed_call` | nome (o id SIP) dell'ultima chiamata persa annunciata dal Tab, resta dopo un riavvio (attr: `sip_id`, `ts`, totale) |

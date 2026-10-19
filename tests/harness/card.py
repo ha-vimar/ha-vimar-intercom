@@ -140,7 +140,13 @@ const mkHass = (status, lastRing = {}, ringTime = null) => ({
   },
   callService: async (d, sv, data) => {
     T.calls.push(d + "." + sv);
-    if (["switch", "select", "text", "homeassistant"].includes(d)) { (T.settings ||= []).push([d, sv, data]); return { context: {} }; }
+    if (["switch", "select", "text", "homeassistant"].includes(d)) {
+      (T.settings ||= []).push([d, sv, data]);
+      // `?setfail`: the switch fails as HA sends a translated error (English message, key, placeholders)
+      if (d === "switch" && QS.has("setfail")) throw { message: `${data.entity_id}: command failed (Timeout)`, translation_domain: "vimar_intercom",
+                                                      translation_key: "switch_failed", translation_placeholders: { entity: data.entity_id, error: "Timeout" } };
+      return { context: {} };
+    }
     const j = await (await fetch(`/svc/${d}/${sv}`, { method: "POST" })).json();
     if (d === "lock" && !j.ok) throw j.error;  // as HA: {message (English), translation_key, ...}
     return { context: {}, response: j };

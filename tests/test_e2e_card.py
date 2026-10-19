@@ -1194,6 +1194,25 @@ def test_impostazioni_citofono_righe_e_servizi(monkeypatch, engine):  # noqa: F8
 
 
 @pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_settings_error_is_shown_in_the_user_language(monkeypatch, engine):  # noqa: F811
+    """A setting that fails with a translated error (#178): HA's message is English, the
+    dialog shows the integration's own text in the user's language, and nothing else."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, layout="popup", query="&setfail") as c:
+                await c.until(IDLE)
+                await c.until("!card.shadowRoot.querySelector('#cfgc').hidden")
+                await c.page.evaluate("card.shadowRoot.querySelector('#cfgc').click()")
+                await c.page.evaluate("card.shadowRoot.querySelector('[data-k=dnd] button').click()")
+                await c.until("card.shadowRoot.querySelector('dialog.set .set-e').textContent !== ''")
+                got = await c.page.evaluate("card.shadowRoot.querySelector('dialog.set .set-e').textContent")
+                assert got == "switch.vimar_intercom_non_disturbare: comando non riuscito (Timeout)", got
+                assert not (await c.T())["errors"]
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
 def test_impostazioni_citofono_non_admin_e_righe_mancanti(monkeypatch, engine):  # noqa: F811
     rows = "[...card.shadowRoot.querySelectorAll('dialog.set .set-r')].map((r) => r.dataset.k)"
     async def s():

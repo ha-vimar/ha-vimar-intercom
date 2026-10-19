@@ -26,7 +26,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import runtime as R
 from .away_config import NONE_OPTION, ensure_dir, list_files, messages_dir, require_admin, set_away
 from .const import DOMAIN
-from .device import device_info
+from .device import device_info, legacy_entity_id
 from .hub import QUEUED
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,8 +66,8 @@ async def async_setup_entry(
 class VimarVmTimeoutSelect(SelectEntity):
     """Dopo quanto risponde la segreteria: uno dei valori che il Tab dichiara."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Segreteria · ritardo"
+    _attr_has_entity_name = True
+    _attr_translation_key = "vm_timeout"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:timer-cog-outline"
     _attr_should_poll = False
@@ -75,6 +75,7 @@ class VimarVmTimeoutSelect(SelectEntity):
     def __init__(self, entry, hub) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry.entry_id}_vm_timeout"
+        self.entity_id = legacy_entity_id("select", "segreteria_ritardo")
         self._attr_device_info = device_info(entry.entry_id)
 
     @property
@@ -116,17 +117,17 @@ class VimarAwayFileSelect(SelectEntity):
     """File audio del messaggio di assenza: quelli in <media>/citofono/messaggi
     (si caricano da Media > Local media). L'elenco si rilegge ogni minuto."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Segreteria · file audio"
+    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:file-music-outline"
     _attr_should_poll = True
-    _attr_translation_key = "away_file"  # traduce lo stato NONE_OPTION
+    _attr_translation_key = "away_file"  # name and the NONE_OPTION state
 
     def __init__(self, entry) -> None:
         self._entry = entry
         self._files: list[str] = []
         self._attr_unique_id = f"{entry.entry_id}_away_file"
+        self.entity_id = legacy_entity_id("select", "segreteria_file_audio")
         self._attr_device_info = device_info(entry.entry_id)
 
     async def async_update(self) -> None:

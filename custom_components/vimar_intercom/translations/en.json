@@ -240,67 +240,125 @@
     }
   },
   "entity": {
-    "camera": {
-      "videocitofono": {
-        "name": "Video Intercom"
-      }
-    },
-    "lock": {
-      "serratura": {
-        "name": "Door Lock"
+    "binary_sensor": {
+      "sip_registered": {
+        "name": "SIP registration"
+      },
+      "in_call": {
+        "name": "In call"
+      },
+      "ringing": {
+        "name": "Ringing"
+      },
+      "calling": {
+        "name": "Outgoing call"
+      },
+      "new_videomessage": {
+        "name": "New video message"
       }
     },
     "button": {
-      "chiama": {
+      "call": {
         "name": "Call"
       },
-      "riaggancia": {
-        "name": "Hang Up"
+      "call_ext": {
+        "name": "Call the entrance panel (video)"
+      },
+      "call_int": {
+        "name": "Call the indoor monitor"
+      },
+      "answer": {
+        "name": "Answer"
+      },
+      "decline": {
+        "name": "Decline"
+      },
+      "hangup": {
+        "name": "Hang up"
+      },
+      "door_street": {
+        "name": "Open door"
+      },
+      "test_ring": {
+        "name": "Test ring"
       }
     },
     "event": {
-      "campanello": {
+      "doorbell": {
         "name": "Doorbell"
       },
       "fuoriporta": {
-        "name": "Outdoor call"
+        "name": "Apartment door bell"
       }
     },
-    "binary_sensor": {
-      "registrazione_sip": {
-        "name": "SIP Registration"
-      },
-      "in_chiamata": {
-        "name": "In Call"
-      },
-      "nuovo_videomessaggio": {
-        "name": "New Video Message"
-      }
-    },
-    "sensor": {
-      "spazio_segreteria": {
-        "name": "Answering Machine Storage"
-      },
-      "versione_rubrica": {
-        "name": "Phonebook Version"
-      },
-      "ultima_chiamata_persa": {
-        "name": "Last Missed Call"
+    "lock": {
+      "lock": {
+        "name": "Door lock"
       }
     },
     "select": {
+      "vm_timeout": {
+        "name": "Voicemail delay"
+      },
       "away_file": {
+        "name": "Voicemail audio file",
         "state": {
           "none": "None (use the text)"
         }
       }
     },
+    "sensor": {
+      "devices": {
+        "name": "Devices"
+      },
+      "status": {
+        "name": "Status"
+      },
+      "last_caller": {
+        "name": "Last caller"
+      },
+      "last_ring": {
+        "name": "Last ring"
+      },
+      "ring_count": {
+        "name": "Rings"
+      },
+      "call_count": {
+        "name": "Calls"
+      },
+      "last_call_duration": {
+        "name": "Last call duration"
+      },
+      "last_door": {
+        "name": "Last door opening"
+      },
+      "last_command": {
+        "name": "Last command"
+      },
+      "last_message_in": {
+        "name": "Last message received"
+      },
+      "vm_level": {
+        "name": "Voicemail storage"
+      },
+      "rubrica_ver": {
+        "name": "Phonebook version"
+      },
+      "last_missed_call": {
+        "name": "Last missed call"
+      }
+    },
     "switch": {
       "segreteria": {
-        "name": "Answering machine"
+        "name": "Voicemail"
       },
       "dnd": {
         "name": "Do not disturb"
+      }
+    },
+    "text": {
+      "away_text": {
+        "name": "Voicemail message text"
       }
     }
   },

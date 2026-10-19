@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .device import device_info
+from .device import device_info, legacy_entity_id
 from .plant_messages import sip_id_name
 
 
@@ -33,14 +33,15 @@ async def async_setup_entry(
 class VimarSIPRegistrationSensor(BinarySensorEntity):
     """Shows whether SIP registration is active."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Intercom SIP"
+    _attr_has_entity_name = True
+    _attr_translation_key = "sip_registered"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_icon = "mdi:lan-connect"
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_sip_registered"
+        self.entity_id = legacy_entity_id("binary_sensor", "intercom_sip")
         self._attr_device_info = device_info(entry_id)
 
     @property
@@ -61,13 +62,14 @@ class VimarSIPRegistrationSensor(BinarySensorEntity):
 class VimarInCallSensor(BinarySensorEntity):
     """Shows whether there is an active SIP call."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Intercom In Call"
+    _attr_has_entity_name = True
+    _attr_translation_key = "in_call"
     _attr_icon = "mdi:phone-in-talk"
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_in_call"
+        self.entity_id = legacy_entity_id("binary_sensor", "intercom_in_call")
         self._attr_device_info = device_info(entry_id)
 
     @property
@@ -88,13 +90,14 @@ class VimarInCallSensor(BinarySensorEntity):
 class _VimarHubBinarySensor(BinarySensorEntity):
     """Base: binary sensor agganciato ai callback di stato dell'hub."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
-    def __init__(self, hub, entry_id: str, key: str, name: str, icon: str) -> None:
+    def __init__(self, hub, entry_id: str, key: str, object_id: str, icon: str) -> None:
         self._hub = hub
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_icon = icon
         self._attr_unique_id = f"{entry_id}_{key}"
+        self.entity_id = legacy_entity_id("binary_sensor", object_id)
         self._attr_device_info = device_info(entry_id)
 
     async def async_added_to_hass(self) -> None:
@@ -112,7 +115,7 @@ class VimarRingingSensor(_VimarHubBinarySensor):
     """ON mentre il citofono sta squillando (INVITE in arrivo non ancora gestito)."""
 
     def __init__(self, hub, entry_id: str) -> None:
-        super().__init__(hub, entry_id, "ringing", "Intercom Squillo", "mdi:bell-ring")
+        super().__init__(hub, entry_id, "ringing", "intercom_squillo", "mdi:bell-ring")
 
     @property
     def is_on(self) -> bool:
@@ -131,7 +134,7 @@ class VimarCallingSensor(_VimarHubBinarySensor):
     """ON mentre HA sta chiamando (INVITE in uscita non ancora connesso)."""
 
     def __init__(self, hub, entry_id: str) -> None:
-        super().__init__(hub, entry_id, "calling", "Intercom Chiamata In Uscita", "mdi:phone-outgoing")
+        super().__init__(hub, entry_id, "calling", "intercom_chiamata_in_uscita", "mdi:phone-outgoing")
 
     @property
     def is_on(self) -> bool:
@@ -143,7 +146,7 @@ class VimarNewVideomessageSensor(_VimarHubBinarySensor):
 
     def __init__(self, hub, entry_id: str) -> None:
         super().__init__(hub, entry_id, "new_videomessage",
-                         "Intercom Nuovo Videomessaggio", "mdi:message-video")
+                         "intercom_nuovo_videomessaggio", "mdi:message-video")
 
     @property
     def is_on(self) -> bool:

@@ -240,59 +240,112 @@
     }
   },
   "entity": {
-    "camera": {
-      "videocitofono": {
-        "name": "Videocitofono"
-      }
-    },
-    "lock": {
-      "serratura": {
-        "name": "Serratura"
+    "binary_sensor": {
+      "sip_registered": {
+        "name": "Registrazione SIP"
+      },
+      "in_call": {
+        "name": "In chiamata"
+      },
+      "ringing": {
+        "name": "Squillo"
+      },
+      "calling": {
+        "name": "Chiamata in uscita"
+      },
+      "new_videomessage": {
+        "name": "Nuovo videomessaggio"
       }
     },
     "button": {
-      "chiama": {
+      "call": {
         "name": "Chiama"
       },
-      "riaggancia": {
+      "call_ext": {
+        "name": "Chiama video (esterno)"
+      },
+      "call_int": {
+        "name": "Chiama casa (interno)"
+      },
+      "answer": {
+        "name": "Rispondi"
+      },
+      "decline": {
+        "name": "Rifiuta"
+      },
+      "hangup": {
         "name": "Riaggancia"
+      },
+      "door_street": {
+        "name": "Apri porta"
+      },
+      "test_ring": {
+        "name": "Squillo di prova"
       }
     },
     "event": {
-      "campanello": {
+      "doorbell": {
         "name": "Campanello"
       },
       "fuoriporta": {
         "name": "Fuoriporta"
       }
     },
-    "binary_sensor": {
-      "registrazione_sip": {
-        "name": "Registrazione SIP"
-      },
-      "in_chiamata": {
-        "name": "In Chiamata"
-      },
-      "nuovo_videomessaggio": {
-        "name": "Nuovo Videomessaggio"
-      }
-    },
-    "sensor": {
-      "spazio_segreteria": {
-        "name": "Spazio Segreteria"
-      },
-      "versione_rubrica": {
-        "name": "Versione Rubrica"
-      },
-      "ultima_chiamata_persa": {
-        "name": "Ultima Chiamata Persa"
+    "lock": {
+      "lock": {
+        "name": "Serratura"
       }
     },
     "select": {
+      "vm_timeout": {
+        "name": "Segreteria · ritardo"
+      },
       "away_file": {
+        "name": "Segreteria · file audio",
         "state": {
           "none": "Nessuno (usa il testo)"
         }
+      }
+    },
+    "sensor": {
+      "devices": {
+        "name": "Dispositivi"
+      },
+      "status": {
+        "name": "Stato"
+      },
+      "last_caller": {
+        "name": "Ultimo chiamante"
+      },
+      "last_ring": {
+        "name": "Ultimo squillo"
+      },
+      "ring_count": {
+        "name": "Squilli"
+      },
+      "call_count": {
+        "name": "Chiamate"
+      },
+      "last_call_duration": {
+        "name": "Durata ultima chiamata"
+      },
+      "last_door": {
+        "name": "Ultima apertura"
+      },
+      "last_command": {
+        "name": "Ultimo comando"
+      },
+      "last_message_in": {
+        "name": "Ultimo messaggio ricevuto"
+      },
+      "vm_level": {
+        "name": "Spazio segreteria"
+      },
+      "rubrica_ver": {
+        "name": "Versione rubrica"
+      },
+      "last_missed_call": {
+        "name": "Ultima chiamata persa"
       }
     },
     "switch": {
@@ -301,6 +354,11 @@
       },
       "dnd": {
         "name": "Non disturbare"
+      }
+    },
+    "text": {
+      "away_text": {
+        "name": "Segreteria · testo del messaggio"
       }
     }
   },

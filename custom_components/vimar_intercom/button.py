@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import runtime as R
 from .away_config import require_admin
 from .const import DOMAIN
-from .device import device_info
+from .device import device_info, legacy_entity_id
 from .hub import QUEUED
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,15 +47,15 @@ async def async_setup_entry(
         VimarCallButton(hub, entry.entry_id),
         # Targa video = opzione camera_target (issue #3). Prima era l'SGA, che
         # riceve i comandi ma non accetta chiamate su tutti gli impianti.
-        VimarCallTargetButton(hub, entry.entry_id, R.CAMERA_TARGET, "Chiama Video (esterno)", "call_ext"),
+        VimarCallTargetButton(hub, entry.entry_id, R.CAMERA_TARGET, "chiama_video_esterno", "call_ext"),
         # Pannello interno = opzione internal_panel_target (default in const).
         VimarCallTargetButton(hub, entry.entry_id, R.INTERNAL_PANEL_TARGET,
-                              "Chiama Casa (interno)", "call_int"),
+                              "chiama_casa_interno", "call_int"),
         VimarAnswerButton(hub, entry.entry_id),
         VimarDeclineButton(hub, entry.entry_id),
         VimarHangupButton(hub, entry.entry_id),
         # target=None → stesso default dell'apri-porta di hub.async_door.
-        VimarDoorButton(hub, entry.entry_id, None, "Apri Porta", "door_street", "mdi:door-open"),
+        VimarDoorButton(hub, entry.entry_id, None, "apri_porta", "door_street", "mdi:door-open"),
         VimarTestRingButton(hub, entry.entry_id),
     ]
 
@@ -75,13 +75,14 @@ async def async_setup_entry(
 class VimarCallButton(ButtonEntity):
     """Button to call the intercom (initiate SIP INVITE)."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Chiama"
+    _attr_has_entity_name = True
+    _attr_translation_key = "call"
     _attr_icon = "mdi:phone-outgoing"
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_call"
+        self.entity_id = legacy_entity_id("button", "chiama")
         self._attr_device_info = device_info(entry_id)
 
     async def async_press(self) -> None:
@@ -93,14 +94,15 @@ class VimarCallButton(ButtonEntity):
 class VimarCallTargetButton(ButtonEntity):
     """Button to call a specific SIP target (targa interna/esterna)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:phone-outgoing"
 
-    def __init__(self, hub, entry_id: str, target: str, name: str, key: str) -> None:
+    def __init__(self, hub, entry_id: str, target: str, object_id: str, key: str) -> None:
         self._hub = hub
         self._target = target
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_unique_id = f"{entry_id}_{key}"
+        self.entity_id = legacy_entity_id("button", object_id)
         self._attr_device_info = device_info(entry_id)
 
     async def async_press(self) -> None:
@@ -117,14 +119,15 @@ class VimarAnswerButton(ButtonEntity):
     guardare la targa si apre la camera, non si risponde.
     """
 
-    _attr_has_entity_name = False
-    _attr_name = "Rispondi"
+    _attr_has_entity_name = True
+    _attr_translation_key = "answer"
     _attr_icon = "mdi:phone-incoming"
     _attr_should_poll = False
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_answer"
+        self.entity_id = legacy_entity_id("button", "rispondi")
         self._attr_device_info = device_info(entry_id)
         self._was_available: bool | None = None
 
@@ -159,12 +162,13 @@ class VimarDeclineButton(VimarAnswerButton):
     Stessa disponibilità di «Rispondi»: solo mentre suona.
     """
 
-    _attr_name = "Rifiuta"
+    _attr_translation_key = "decline"
     _attr_icon = "mdi:phone-hangup"
 
     def __init__(self, hub, entry_id: str) -> None:
         super().__init__(hub, entry_id)
         self._attr_unique_id = f"{entry_id}_decline"
+        self.entity_id = legacy_entity_id("button", "rifiuta")
 
     async def async_press(self) -> None:
         ok, msg = await self._hub.async_decline()
@@ -175,13 +179,14 @@ class VimarDeclineButton(VimarAnswerButton):
 class VimarHangupButton(ButtonEntity):
     """Button to hang up the current call (SIP BYE)."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Riaggancia"
+    _attr_has_entity_name = True
+    _attr_translation_key = "hangup"
     _attr_icon = "mdi:phone-hangup"
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_hangup"
+        self.entity_id = legacy_entity_id("button", "riaggancia")
         self._attr_device_info = device_info(entry_id)
 
     async def async_press(self) -> None:
@@ -191,14 +196,15 @@ class VimarHangupButton(ButtonEntity):
 class VimarDoorButton(ButtonEntity):
     """Button to open a door (SIP MESSAGE)."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
-    def __init__(self, hub, entry_id: str, target: str | None, name: str, key: str, icon: str) -> None:
+    def __init__(self, hub, entry_id: str, target: str | None, object_id: str, key: str, icon: str) -> None:
         self._hub = hub
         self._target = target
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_icon = icon
         self._attr_unique_id = f"{entry_id}_{key}"
+        self.entity_id = legacy_entity_id("button", object_id)
         self._attr_device_info = device_info(entry_id)
 
     async def async_press(self) -> None:
@@ -215,14 +221,15 @@ class VimarTestRingButton(ButtonEntity):
     """Test ring: the `simulate_ring` service with its default duration, so ring
     automations and notifications can be tried without writing YAML."""
 
-    _attr_has_entity_name = False
-    _attr_name = "Squillo di prova"
+    _attr_has_entity_name = True
+    _attr_translation_key = "test_ring"
     _attr_icon = "mdi:bell-ring-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_test_ring"
+        self.entity_id = legacy_entity_id("button", "squillo_di_prova")
         self._attr_device_info = device_info(entry_id)
 
     async def async_press(self) -> None:

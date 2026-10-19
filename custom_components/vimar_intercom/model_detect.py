@@ -21,6 +21,7 @@ IGNORE_PATTERNS: tuple[str, ...] = (
     r"belle-sip",
     r"linphone",
     r"toga_",          # user-agent dell'app Vimar (e di questa integrazione)
+    r"video\.door_",   # user-agent dell'app Video Door (Elvox)
     r"home\s*assistant",
 )
 

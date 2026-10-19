@@ -36,7 +36,7 @@
 | Intercom Durata Ultima Chiamata | `sensor` (s) | `last_call_duration` | durata ultima chiamata |
 | Intercom Ultima Apertura | `sensor` (timestamp) | `last_door` | ultima apertura porta (attr: targa, esito come il `result` di `open_door`, codice SIP, contatore) |
 | Intercom Ultimo Comando | `sensor` | `last_command` | esito ultimo `send_command` |
-| Intercom Ultimo Messaggio Ricevuto | `sensor` | `last_message_in` | ultimo SIP MESSAGE dal citofono |
+| Intercom Ultimo Messaggio Ricevuto | `sensor` | `last_message_in` | ultimo SIP MESSAGE di sistema (`Panda: blue`) dal citofono; gli altri vengono ignorati |
 | Intercom Spazio Segreteria | `sensor` | `vm_level` | spazio dei videomessaggi usato/totale, da `GET_INIT_STATUS` |
 | Intercom Versione Rubrica | `sensor` | `rubrica_ver` | versione della rubrica del Tab (attr `vm_ver`): quando cambia, reimportare gli attuatori |
 | Intercom Ultima Chiamata Persa | `sensor` | `last_missed_call` | nome (o id SIP) dell'ultima chiamata persa annunciata dal Tab, resta dopo un riavvio (attr: `sip_id`, `ts`, totale) |

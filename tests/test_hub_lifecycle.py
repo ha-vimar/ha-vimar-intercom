@@ -259,10 +259,22 @@ def _requests(monkeypatch):
     return sent, broadcasts, deliver
 
 
-def _message(cseq=7, cid="m1", body="DOOR;OPEN;1"):
+def _message(cseq=7, cid="m1", body="DOOR;OPEN;1", panda="Panda: blue\r\n"):
     return ("MESSAGE sip:60999@d SIP/2.0\r\nVia: SIP/2.0/TLS 1.2.3.4;branch=z9hG4bK1\r\n"
             f"From: <sip:55001@d>;tag=a\r\nTo: <sip:60999@d>\r\nCall-ID: {cid}\r\n"
-            f"CSeq: {cseq} MESSAGE\r\nContent-Length: {len(body)}\r\n\r\n{body}")
+            f"CSeq: {cseq} MESSAGE\r\n{panda}Content-Length: {len(body)}\r\n\r\n{body}")
+
+
+@pytest.mark.parametrize("panda", ["Panda: white\r\n", "Panda: black\r\n", "Panda: grey\r\n", ""])
+def test_only_a_panda_blue_message_reaches_the_plant_parser(monkeypatch, panda):
+    """The apps drop every MESSAGE whose Panda is not blue (PROTOCOL §4): a text
+    message that contains DND;ON must not switch DND."""
+    sent, broadcasts, deliver = _requests(monkeypatch)
+    deliver(_message(body="DND;ON", panda=panda))
+    assert broadcasts == []
+    assert len(sent) == 1, "it is still answered"
+    deliver(_message(cseq=8, body="DND;ON", panda="Panda: Blue\r\n"))
+    assert broadcasts == ["DND;ON"]
 
 
 def test_a_duplicate_message_is_broadcast_once(monkeypatch):

@@ -36,7 +36,7 @@
 | Intercom Last Call Duration | `sensor` (s) | `last_call_duration` | Duration of the last call |
 | Intercom Last Door Open | `sensor` (timestamp) | `last_door` | Last door opening (attributes: unit, outcome as in `open_door`'s `result`, SIP code, counter) |
 | Intercom Last Command | `sensor` | `last_command` | Outcome of the last `send_command` |
-| Intercom Last Received Message | `sensor` | `last_message_in` | Last SIP MESSAGE from the intercom |
+| Intercom Last Received Message | `sensor` | `last_message_in` | Last system SIP MESSAGE (`Panda: blue`) from the intercom; other messages are ignored |
 | Intercom Voicemail Space | `sensor` | `vm_level` | Video message storage used/total, from `GET_INIT_STATUS` |
 | Intercom Phonebook Version | `sensor` | `rubrica_ver` | Version of the Tab's phonebook (attribute `vm_ver`): when it changes, import the actuators again |
 | Intercom Last Missed Call | `sensor` | `last_missed_call` | Name (or SIP id) of the last missed call the Tab announced, kept across restarts (attributes: `sip_id`, `ts`, total) |

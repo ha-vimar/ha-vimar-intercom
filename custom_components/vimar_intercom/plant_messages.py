@@ -34,6 +34,16 @@ class PlantMessages:
     # Qui si LEGGE soltanto: nessun comando in uscita. Parsing difensivo: alcuni
     # body sono JSON, altri delimitati da ';'. Se non combacia → debug, no crash.
     def _handle_incoming_message(self, body: str) -> None:
+        # One MESSAGE can carry several commands, one per line: the apps read each
+        # non-empty line on its own (PROTOCOL §4). A NOTIFY, shown in the same
+        # sensor, has no Panda header and is never a plant message.
+        if (body or "").startswith("NOTIFY "):
+            return
+        for line in (body or "").splitlines():
+            if line.strip():
+                self._handle_message_line(line)
+
+    def _handle_message_line(self, body: str) -> None:
         st = self.stats
         raw = (body or "").strip()
         upper = raw.upper()

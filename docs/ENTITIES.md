@@ -6,40 +6,46 @@
 
 | Entity | Platform | Key | Description |
 |---|---|---|---|
-| Intercom | `camera` | `camera` | **On-demand** video (stream): opening it places the SIP call (not on a reconnection within 5 s of the last viewer leaving, for 60 s after the end of a call: `/av` answers 503; `/av` also answers 503 at once when the call it was waiting for is refused or ends, unless the iOS app's WebSocket is connected: then it waits up to 25 s for the app's call); during a ring it shows the preview without answering. Snapshots are instant during a call or ring (clean keyframes), none otherwise, so thumbnails never ring the panel |
+| Vimar Intercom (the device's name) | `camera` | `camera` | **On-demand** video (stream): opening it places the SIP call (not on a reconnection within 5 s of the last viewer leaving, for 60 s after the end of a call: `/av` answers 503; `/av` also answers 503 at once when the call it was waiting for is refused or ends, unless the iOS app's WebSocket is connected: then it waits up to 25 s for the app's call); during a ring it shows the preview without answering. Snapshots are instant during a call or ring (clean keyframes), none otherwise, so thumbnails never ring the panel |
 | Doorbell | `event` | `doorbell` | `event` entity (device class DOORBELL), event type `ring`, fired on ring (incoming INVITE) |
-| Fuoriporta | `event` | `fuoriporta` | Event type `fuoriporta`, fired on the Tab's `FP` MESSAGE (the doorbell at the apartment's own door, *fuoriporta*), with the caller's `sip_id` and `msg`. Known from the app's code, not yet seen on a real plant |
-| Lock | `lock` | `lock` | Opens the door: the command of the phonebook's door actuator (`OPEN_2F` if there is none) → `door_target`; auto-relocks after 5 s (there is no physical feedback) |
+| Apartment door bell | `event` | `fuoriporta` | Event type `fuoriporta`, fired on the Tab's `FP` MESSAGE (the doorbell at the apartment's own door, *fuoriporta*), with the caller's `sip_id` and `msg`. Known from the app's code, not yet seen on a real plant |
+| Door lock | `lock` | `lock` | Opens the door: the command of the phonebook's door actuator (`OPEN_2F` if there is none) → `door_target`; auto-relocks after 5 s (there is no physical feedback) |
 | Call | `button` | `call` | SIP call to the default outdoor unit |
-| Call Video (outdoor) / Call Home (indoor) | `button` | `call_ext` / `call_int` | Call to `camera_target` / `internal_panel_target` |
+| Call the entrance panel (video) / Call the indoor monitor | `button` | `call_ext` / `call_int` | Call to `camera_target` / `internal_panel_target` |
 | Answer / Hang up | `button` | `answer` / `hangup` | Answer (200 OK) / end the call (BYE) |
 | Decline | `button` | `decline` | Only while it rings: refuses the call with `603 Decline`, so the whole house stops ringing, as in the app. Also the `vimar_intercom.decline` service |
-| Open Door | `button` | `door_street` | Same as the lock: the phonebook's door command (else `OPEN_2F`) to `door_target` |
+| Open door | `button` | `door_street` | Same as the lock: the phonebook's door command (else `OPEN_2F`) to `door_target` |
 | Test ring | `button` (diagnostic) | `test_ring` | A whole ring without the panel, as `vimar_intercom.simulate_ring` with its default 20 s: try your ring automations and notifications. Fails while a real call or ring is in progress |
 | *Dynamic actuators* | `button` | `act_<name>_<command>` | One per entry in `options["actuators"]` (F1/F2, stair lights, relays…); sends `MSG` with `Panda: command` |
 | Voicemail | `switch` | `segreteria` | `VOICEMAIL;ON/OFF` (Panda: blue) to the SGA; state read from the Tab's announcements and from `GET_INIT_STATUS`, asked after every command. The commanded value is shown for 10 s at most: with no confirmation the state becomes *unknown* ([#9](https://github.com/ha-vimar/ha-vimar-intercom/issues/9)) |
-| Do Not Disturb | `switch` | `dnd` | `DND;ON/OFF` (Panda: blue) to the SGA; same rules as Voicemail |
-| Voicemail · delay | `select` | `vm_timeout` | Only on plants that send the long `GET_INIT_STATUS` reply: `vm_timeout`, one of the plant's own `vm_timeout_values`, written with `SET_APT_PARAMS` ([#4](https://github.com/ha-vimar/ha-vimar-intercom/issues/4)). It does not appear on plants with the short reply |
-| Voicemail · audio file | `select` (config) | `away_file` | Audio file of the away message, picked among those in `<media>/citofono/messaggi` (upload them from Media → Local media; the list is read again every minute), or *None (use the text)*. Admins only |
-| Voicemail · message text | `text` (config) | `away_text` | Text of the away message, read by text-to-speech when no audio file is set (max 255 characters). Admins only |
-| Intercom SIP | `binary_sensor` | `sip_registered` | SIP registration active (connectivity) |
-| Intercom In Call | `binary_sensor` | `in_call` | A call is up |
-| Intercom Ringing | `binary_sensor` | `ringing` | ON while an outdoor unit is calling (attribute: caller) |
-| Intercom Outgoing Call | `binary_sensor` | `calling` | ON while Home Assistant is calling |
-| Intercom New Videomessage | `binary_sensor` | `new_videomessage` | ON when the Tab announces a new video message (`VM;VIDEO_MESSAGE_CHANGE;NEW`), OFF on the next change that isn't new (attributes: the last announcement, the video message space) |
-| Intercom Dispositivi | `sensor` | `devices` | Number of devices seen on the plant (phones sharing the SIP account, panels); attribute `dispositivi` lists them with the identifier masked and no address, kept across restarts. Every Home Assistant user can read the attribute, device names included (a phone's name is often its owner's) |
-| Intercom State | `sensor` (enum) | `status` | offline / idle / ringing / in_call / calling (plus network attributes, and on plants with the long reply the apartment `GID`, `apt_names` and the declared `media_enc`) |
-| Intercom Last Caller | `sensor` | `last_caller` | Outdoor unit or monitor of the last ring |
-| Intercom Last Ring | `sensor` (timestamp) | `last_ring` | Time of the last ring (attributes: caller, `foto`/`foto_url` and `clip`/`clip_url` with `snapshot_dir`) |
-| Intercom Rings | `sensor` (counter) | `ring_count` | Rings since startup |
-| Intercom Calls | `sensor` (counter) | `call_count` | Connected calls |
-| Intercom Last Call Duration | `sensor` (s) | `last_call_duration` | Duration of the last call |
-| Intercom Last Door Open | `sensor` (timestamp) | `last_door` | Last door opening (attributes: unit, outcome as in `open_door`'s `result`, SIP code, counter) |
-| Intercom Last Command | `sensor` | `last_command` | Outcome of the last `send_command` |
-| Intercom Last Received Message | `sensor` | `last_message_in` | Last SIP MESSAGE from the intercom |
-| Intercom Voicemail Space | `sensor` | `vm_level` | Video message storage used/total, from `GET_INIT_STATUS` |
-| Intercom Phonebook Version | `sensor` | `rubrica_ver` | Version of the Tab's phonebook (attribute `vm_ver`): when it changes, import the actuators again |
-| Intercom Last Missed Call | `sensor` | `last_missed_call` | Name (or SIP id) of the last missed call the Tab announced, kept across restarts (attributes: `sip_id`, `ts`, total) |
+| Do not disturb | `switch` | `dnd` | `DND;ON/OFF` (Panda: blue) to the SGA; same rules as Voicemail |
+| Voicemail delay | `select` | `vm_timeout` | Only on plants that send the long `GET_INIT_STATUS` reply: `vm_timeout`, one of the plant's own `vm_timeout_values`, written with `SET_APT_PARAMS` ([#4](https://github.com/ha-vimar/ha-vimar-intercom/issues/4)). It does not appear on plants with the short reply |
+| Voicemail audio file | `select` (config) | `away_file` | Audio file of the away message, picked among those in `<media>/citofono/messaggi` (upload them from Media → Local media; the list is read again every minute), or *None (use the text)*. Admins only |
+| Voicemail message text | `text` (config) | `away_text` | Text of the away message, read by text-to-speech when no audio file is set (max 255 characters). Admins only |
+| SIP registration | `binary_sensor` | `sip_registered` | SIP registration active (connectivity) |
+| In call | `binary_sensor` | `in_call` | A call is up |
+| Ringing | `binary_sensor` | `ringing` | ON while an outdoor unit is calling (attribute: caller) |
+| Outgoing call | `binary_sensor` | `calling` | ON while Home Assistant is calling |
+| New video message | `binary_sensor` | `new_videomessage` | ON when the Tab announces a new video message (`VM;VIDEO_MESSAGE_CHANGE;NEW`), OFF on the next change that isn't new (attributes: the last announcement, the video message space) |
+| Devices | `sensor` | `devices` | Number of devices seen on the plant (phones sharing the SIP account, panels); attribute `dispositivi` lists them with the identifier masked and no address, kept across restarts. Every Home Assistant user can read the attribute, device names included (a phone's name is often its owner's) |
+| Status | `sensor` (enum) | `status` | offline / idle / ringing / in_call / calling (plus network attributes, and on plants with the long reply the apartment `GID`, `apt_names` and the declared `media_enc`) |
+| Last caller | `sensor` | `last_caller` | Outdoor unit or monitor of the last ring |
+| Last ring | `sensor` (timestamp) | `last_ring` | Time of the last ring (attributes: caller, `foto`/`foto_url` and `clip`/`clip_url` with `snapshot_dir`) |
+| Rings | `sensor` (counter) | `ring_count` | Rings since startup |
+| Calls | `sensor` (counter) | `call_count` | Connected calls |
+| Last call duration | `sensor` (s) | `last_call_duration` | Duration of the last call |
+| Last door opening | `sensor` (timestamp) | `last_door` | Last door opening (attributes: unit, outcome as in `open_door`'s `result`, SIP code, counter) |
+| Last command | `sensor` | `last_command` | Outcome of the last `send_command` |
+| Last message received | `sensor` | `last_message_in` | Last SIP MESSAGE from the intercom |
+| Voicemail storage | `sensor` | `vm_level` | Video message storage used/total, from `GET_INIT_STATUS` |
+| Phonebook version | `sensor` | `rubrica_ver` | Version of the Tab's phonebook (attribute `vm_ver`): when it changes, import the actuators again |
+| Last missed call | `sensor` | `last_missed_call` | Name (or SIP id) of the last missed call the Tab announced, kept across restarts (attributes: `sip_id`, `ts`, total) |
+
+Names follow the language of Home Assistant (Settings → System → General) and start with the
+device's name, "Vimar Intercom": *Vimar Intercom Status* in English, *Vimar Intercom Stato* in
+Italian. The entity_ids do not depend on the language: a new install gets the ones listed in
+these pages and in the examples (for instance `sensor.vimar_intercom_intercom_stato`), and an
+existing install keeps its own. A name or entity_id you changed in Home Assistant stays as you set it.
 
 
 ---

@@ -580,3 +580,14 @@ def test_actuator_buttons_keep_the_name_from_the_options():
     entry = _entry(options={"actuators": [{"name": "Cancello", "msg": "OPEN_1", "target": "AUTO", "icon": "door"}]})
     act = _setup(button, _Hub(), entry)[-1]
     assert act._attr_has_entity_name is True and act._attr_name == "Cancello"
+
+
+def test_enum_sensor_states_are_translated():
+    """An enum sensor shows its raw state ("in_call") unless every option has a translation."""
+    tables = {name: json.loads((BASE / name).read_text(encoding="utf-8"))["entity"]["sensor"]
+              for name in ("strings.json", "translations/en.json", "translations/it.json")}
+    enums = [d for d in sensor.SENSORS if d.options]
+    assert enums
+    for d in enums:
+        for name, table in tables.items():
+            assert set(table[d.key]["state"]) == set(d.options), (name, d.key)

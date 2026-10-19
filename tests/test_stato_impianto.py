@@ -151,7 +151,9 @@ def test_set_apt_params_fallito(hub, monkeypatch, risposta, motivo):
 # --- entità: stub minimi di HA ------------------------------------------------------------
 
 class _HAError(Exception):
-    pass
+    def __init__(self, *args, **translation):  # translation_key, placeholders: as in HA
+        super().__init__(*args)
+        self.translation_key = translation.get("translation_key")
 
 
 def _carica(nome):

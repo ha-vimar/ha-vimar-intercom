@@ -83,17 +83,24 @@ def test_a_failed_opening_raises_and_stays_locked(relock):
 
 
 def test_every_door_failure_has_a_message_in_every_language():
-    """Each key async_door can fail with, with the same placeholders everywhere (as hassfest wants)."""
+    """Each key async_door can fail with, with the same placeholders everywhere (as hassfest wants);
+    every other exception has the same placeholders in every language."""
     base = Path(lock_mod.__file__).parent
     keys = {f"door_{k}" for k in (hub_mod.DOOR_BUSY, hub_mod.DOOR_QUEUED, hub_mod.DOOR_UNCONFIRMED,
                                   hub_mod.DOOR_NOT_REGISTERED, hub_mod.DOOR_TIMEOUT, hub_mod.DOOR_ERROR,
                                   hub_mod.DOOR_SEND_FAILED)} | {"command_queued"}
     for name in ("strings.json", "translations/en.json", "translations/it.json"):
         exc = json.loads((base / name).read_text(encoding="utf-8"))["exceptions"]
-        assert set(exc) == keys, name
-        for key, v in exc.items():
-            placeholders = set(re.findall(r"{(\w+)}", v["message"]))
+        assert keys <= set(exc), name
+        for key in keys:
+            placeholders = set(re.findall(r"{(\w+)}", exc[key]["message"]))
             assert placeholders == ({"code"} if key == "door_error" else set()), (name, key)
+    tables = [json.loads((base / n).read_text(encoding="utf-8"))["exceptions"]
+              for n in ("strings.json", "translations/en.json", "translations/it.json")]
+    assert set(tables[0]) == set(tables[1]) == set(tables[2])
+    for key in tables[0]:
+        found = [set(re.findall(r"{(\w+)}", t[key]["message"])) for t in tables]
+        assert found[0] == found[1] == found[2], key
 
 
 def test_a_second_unlock_restarts_the_relock_timer(relock):

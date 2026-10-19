@@ -94,16 +94,22 @@ KEY_AWAY_UPLOAD = "away_message_upload"  # solo nel form: non si salva nelle opz
 ALLOWED_ACTUATOR_ICONS = ("door", "light", "switch")
 
 
-class InvalidActuatorTarget(ValueError):
-    """Target di un attuatore non numerico (né AUTO): errore «invalid_actuator_target»."""
+class ActuatorsError(ValueError):
+    """An invalid actuator list: `key` is the options-flow error (translated), `detail`
+    its {actuators_error} placeholder (the item, a key, an icon: no words to translate)."""
+
+    def __init__(self, key: str, detail: str = "") -> None:
+        super().__init__(f"{key}: {detail}" if detail else key)
+        self.key = key
+        self.detail = detail
 
 
 def _parse_actuators(raw: str) -> list[dict]:
     """Valida la lista attuatori incollata come JSON nell'options flow.
 
-    Solleva ValueError con un messaggio parlante se il JSON non è una lista di
-    dict con le chiavi ``name``, ``msg``, ``target``, ``icon`` (icon nel set
-    ammesso, target numerico o AUTO). Stringa vuota → lista vuota (nessun bottone).
+    Raises ActuatorsError (its error key and the item at fault) if the JSON is not a
+    list of dicts with the keys ``name``, ``msg``, ``target``, ``icon`` (icon in the
+    allowed set, target numeric or AUTO). Empty string → empty list (no buttons).
     """
     raw = (raw or "").strip()
     if not raw:
@@ -111,27 +117,24 @@ def _parse_actuators(raw: str) -> list[dict]:
     try:
         data = json.loads(raw)
     except (ValueError, TypeError) as exc:
-        raise ValueError(f"JSON non valido: {exc}") from exc
+        raise ActuatorsError("actuators_bad_json", str(exc)) from exc
     if not isinstance(data, list):
-        raise ValueError("La radice deve essere una lista JSON")
+        raise ActuatorsError("actuators_not_list")
     result: list[dict] = []
     for i, item in enumerate(data):
         if not isinstance(item, dict):
-            raise ValueError(f"Elemento #{i} non è un oggetto JSON")
+            raise ActuatorsError("actuators_not_object", f"#{i}")
         missing = [k for k in ("name", "msg", "target", "icon") if k not in item]
         if missing:
-            raise ValueError(f"Elemento #{i}: chiavi mancanti {missing}")
+            raise ActuatorsError("actuators_missing_keys", f"#{i}: {', '.join(missing)}")
         icon = item["icon"]
         if icon not in ALLOWED_ACTUATOR_ICONS:
-            raise ValueError(
-                f"Elemento #{i}: icon '{icon}' non valida "
-                f"(ammesse: {', '.join(ALLOWED_ACTUATOR_ICONS)})"
-            )
+            raise ActuatorsError("actuators_bad_icon", f"#{i}: '{icon}'")
         # Stessa regola di hub.sip_uri: il target finisce nella request line del
         # MESSAGE. "AUTO" = la targa dell'apri-porta (button.py).
         target = str(item["target"]).strip()
         if target.upper() != "AUTO" and not validate.sip_target(target):
-            raise InvalidActuatorTarget(f"elemento #{i}, target '{target}'")
+            raise ActuatorsError("invalid_actuator_target", f"#{i}: '{target}'")
         result.append({
             "name":   str(item["name"]),
             "msg":    str(item["msg"]),
@@ -584,10 +587,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         actuators: list[dict] = []
         try:
             actuators = _parse_actuators(actuators_raw)
-        except ValueError as exc:
-            errors[KEY_ACTUATORS] = ("invalid_actuator_target" if isinstance(exc, InvalidActuatorTarget)
-                                     else "invalid_actuators")
-            self._actuators_error = str(exc)
+        except ActuatorsError as exc:
+            errors[KEY_ACTUATORS] = exc.key
+            self._actuators_error = exc.detail
         return actuators
 
     async def _settings_sip_test(
@@ -773,9 +775,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 if not result["actuators"]:
                     errors["base"] = "rubrica_no_actuators"
-                    self._rubrica_error = (
-                        f"Rubrica scaricata, ma nessun attuatore per il GID {gid}."
-                    )
+                    self._rubrica_error = f"GID {gid}"
                 else:
                     self._imported = result
                     self._imported_gid = gid
@@ -849,10 +849,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if not token:
             errors["base"] = "no_cloud_token" if received else "no_cloud_status"
         elif cloud_phonebook.check_inputs(cdomain, cproxy, token, ver):
-            errors["base"] = "cloud_failed"
-            self._rubrica_error = (
-                f"manca {cloud_phonebook.check_inputs(cdomain, cproxy, token, ver)} "
-                "(dominio e proxy cloud vengono dal QR)")
+            errors["base"] = "cloud_missing_data"
+            self._rubrica_error = cloud_phonebook.check_inputs(cdomain, cproxy, token, ver)
         elif user_input is not None:
             gid = (user_input.get("rubrica_gid") or default_gid).strip() or default_gid
 
@@ -882,8 +880,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 if not result["actuators"]:
                     errors["base"] = "rubrica_no_actuators"
-                    self._rubrica_error = (
-                        f"Rubrica scaricata, ma nessun attuatore per il GID {gid}.")
+                    self._rubrica_error = f"GID {gid}"
                 else:
                     self._imported = result
                     self._imported_gid = gid
@@ -933,9 +930,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 if not result["actuators"]:
                     errors["rubrica_file"] = "rubrica_no_actuators"
-                    self._rubrica_error = (
-                        f"Nessun attuatore trovato per il GID appartamento {gid}."
-                    )
+                    self._rubrica_error = f"GID {gid}"
                 else:
                     self._imported = result
                     self._imported_gid = gid

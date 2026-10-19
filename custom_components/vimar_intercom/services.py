@@ -29,7 +29,7 @@ SERVICE_FIND_SGA = "find_sga"
 def _sip_id(value) -> str:
     """Id SIP numerico, o errore leggibile nel servizio (non un 500)."""
     if (target := validate.sip_target(value)) is None:
-        raise vol.Invalid(f"id SIP non valido: {value!r} (serve un numero, es. 55001)")
+        raise vol.Invalid(f"invalid SIP id: {value!r} (it must be a number, e.g. 55001)")
     return target
 
 

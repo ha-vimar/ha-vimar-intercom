@@ -184,7 +184,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # fino al reload a mano, e le porte RTP occupate dal tentativo fallito.
         await hub.async_stop()
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        raise ConfigEntryNotReady(f"Proxy SIP non raggiungibile: {e}") from e
+        raise ConfigEntryNotReady(translation_domain=DOMAIN, translation_key="proxy_unreachable", translation_placeholders={"error": str(e)}) from e
 
     # Closures locali: catturano audio_ws_clients (nessun global di modulo).
     # One small queue and one sender task per client: the audio and video loops only

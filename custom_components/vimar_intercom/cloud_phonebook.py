@@ -57,7 +57,7 @@ def check_inputs(cdomain: str | None, cproxy: str | None, token: str | None,
     # Niente caratteri che cambiano il senso dell'URL: vengono dal QR e dall'impianto.
     for value in (cdomain, cproxy, rubrica_ver):
         if any(c in str(value) for c in "/?#@ \r\n"):
-            return "formato"
+            return "format"
     return None
 
 
@@ -66,22 +66,22 @@ def download(cdomain: str, cproxy: str, token: str, rubrica_ver: str, *,
     """Scarica la rubrica. Bloccante: dal config flow va in executor."""
     missing = check_inputs(cdomain, cproxy, token, rubrica_ver)
     if missing:
-        raise CloudPhonebookError(f"dato mancante o non valido: {missing}")
+        raise CloudPhonebookError(f"missing or invalid value: {missing}")
     url = phonebook_url(cdomain, cproxy, rubrica_ver)
     http = session or requests
     try:
         resp = http.get(url, auth=HTTPDigestAuth(cdomain.strip(), token.strip()),
                         headers={"User-Agent": USER_AGENT}, timeout=timeout)
     except requests.RequestException as exc:
-        raise CloudPhonebookError(f"{cproxy} non raggiungibile: {type(exc).__name__}") from None
+        raise CloudPhonebookError(f"{cproxy} unreachable: {type(exc).__name__}") from None
     if resp.status_code in (401, 403):
-        raise CloudAuthError(f"{cproxy} ha rifiutato il token (HTTP {resp.status_code})")
+        raise CloudAuthError(f"{cproxy} rejected the token (HTTP {resp.status_code})")
     if resp.status_code == 404:
-        raise CloudPhonebookError(f"{cproxy}: rubrica non trovata per questa versione (HTTP 404)")
+        raise CloudPhonebookError(f"{cproxy}: no phonebook for this version (HTTP 404)")
     if resp.status_code != 200:
-        raise CloudPhonebookError(f"{cproxy} ha risposto HTTP {resp.status_code}")
+        raise CloudPhonebookError(f"{cproxy} answered HTTP {resp.status_code}")
     data = resp.content or b""
     if not data.startswith(b"SQLite format 3"):
         raise CloudPhonebookError(
-            f"{cproxy} ha risposto 200 ma il contenuto non è un database SQLite ({len(data)} byte)")
+            f"{cproxy} answered 200 but the content is not an SQLite database ({len(data)} bytes)")
     return data

@@ -213,7 +213,6 @@
     "error": {
       "invalid_ip": "Indirizzo IP non valido.",
       "sip_registration_failed": "Registrazione SIP fallita.",
-      "invalid_actuators": "Lista attuatori non valida: {actuators_error}",
       "invalid_actuator_target": "Target attuatore non valido ({actuators_error}): usa solo cifre (es. 55001) oppure AUTO.",
       "rubrica_import_failed": "Importazione fallita. Vedi il dettaglio nella descrizione.",
       "rubrica_no_actuators": "Nessun attuatore trovato per il GID specificato. Vedi la descrizione.",
@@ -236,7 +235,13 @@
       "no_cloud_token": "La risposta di stato non contiene il token della rubrica. Usa lo scaricamento dal citofono oppure importa rubrica.db.",
       "no_cloud_status": "Non è arrivata una risposta di stato. Verifica che l’integrazione sia connessa e che l’indirizzo PICG sia corretto, poi riprova. Questo non indica se l’impianto supporta lo scaricamento della rubrica dal cloud.",
       "cloud_auth_failed": "Il cloud Vimar ha rifiutato il token.",
-      "cloud_failed": "Download della rubrica dal cloud non riuscito."
+      "cloud_failed": "Download della rubrica dal cloud non riuscito.",
+      "actuators_bad_json": "Lista attuatori non valida: il JSON non è valido ({actuators_error})",
+      "actuators_not_list": "Lista attuatori non valida: deve essere una lista JSON, [ ... ]",
+      "actuators_not_object": "Lista attuatori non valida: l'elemento {actuators_error} non è un oggetto JSON",
+      "actuators_missing_keys": "Lista attuatori non valida: chiavi mancanti nell'elemento {actuators_error} (servono name, msg, target, icon)",
+      "actuators_bad_icon": "Lista attuatori non valida: icona non ammessa nell'elemento {actuators_error} (ammesse: door, light, switch)",
+      "cloud_missing_data": "Download della rubrica dal cloud non possibile: manca {rubrica_error} (dominio e proxy cloud vengono dal QR)."
     }
   },
   "entity": {
@@ -556,6 +561,36 @@
     },
     "command_queued": {
       "message": "Comando non confermato: il relay l'ha messo in coda (202) e nessun dispositivo l'ha confermato"
+    },
+    "proxy_unreachable": {
+      "message": "Proxy SIP non raggiungibile: {error}"
+    },
+    "call_failed": {
+      "message": "Chiamata non riuscita: {error}"
+    },
+    "call_target_failed": {
+      "message": "Chiamata a {target} non riuscita: {error}"
+    },
+    "answer_failed": {
+      "message": "Risposta non riuscita: {error}"
+    },
+    "decline_failed": {
+      "message": "Rifiuto non riuscito: {error}"
+    },
+    "test_ring_busy": {
+      "message": "Squillo di prova non avviato: una chiamata è già in corso"
+    },
+    "actuator_failed": {
+      "message": "{name} non riuscito: {error}"
+    },
+    "vm_timeout_not_allowed": {
+      "message": "Valore non ammesso dal citofono: {option}"
+    },
+    "vm_timeout_failed": {
+      "message": "Ritardo segreteria non cambiato: {error}"
+    },
+    "switch_failed": {
+      "message": "{entity}: comando non riuscito ({error})"
     }
   }
 }

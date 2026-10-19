@@ -102,7 +102,9 @@ def test_the_test_ring_button_cannot_fire_during_a_real_call_or_ring(hub, log, m
     """The button goes through the same guard as the service: while a call or a ring is
     on it raises, and nothing rings, fires a webhook or touches SIP."""
     class _Err(Exception):
-        pass
+        def __init__(self, *a, **kw):
+            super().__init__(*a)
+            self.translation_key = kw.get("translation_key")
     monkeypatch.setattr(button, "HomeAssistantError", _Err)
     b = button.VimarTestRingButton(hub, "e1")
     b._context = None  # no user, as from an automation
@@ -118,8 +120,9 @@ def test_the_test_ring_button_cannot_fire_during_a_real_call_or_ring(hub, log, m
         else:
             monkeypatch.setattr(sip, busy, True)
         before = hub._sim_ring
-        with pytest.raises(_Err):
+        with pytest.raises(_Err) as err:
             await b.async_press()
+        assert err.value.translation_key == "test_ring_busy"
         assert hub._sim_ring is before      # no second simulation
         if busy == "test_ring":
             hub._stop_simulated_ring()

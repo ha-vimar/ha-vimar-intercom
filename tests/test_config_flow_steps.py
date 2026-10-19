@@ -32,16 +32,19 @@ async def _job(fn, *args):
 
 # ─── _parse_actuators ────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("raw, message", [
-    ("{not json", "JSON non valido"),
-    ('{"name": "x"}', "lista"),
-    ('["x"]', "non è un oggetto"),
-    ('[{"name": "x", "msg": "OPEN"}]', "chiavi mancanti"),
-    ('[{"name": "x", "msg": "OPEN", "target": "55001", "icon": "rocket"}]', "non valida"),
+@pytest.mark.parametrize("raw, key, detail", [
+    ("{not json", "actuators_bad_json", "Expecting property name"),
+    ('{"name": "x"}', "actuators_not_list", ""),
+    ('["x"]', "actuators_not_object", "#0"),
+    ('[{"name": "x", "msg": "OPEN"}]', "actuators_missing_keys", "#0: target, icon"),
+    ('[{"name": "x", "msg": "OPEN", "target": "55001", "icon": "rocket"}]', "actuators_bad_icon", "#0: 'rocket'"),
+    ('[{"name": "x", "msg": "OPEN", "target": "55 001", "icon": "door"}]', "invalid_actuator_target", "#0: '55 001'"),
 ])
-def test_a_malformed_actuator_list_is_refused_with_a_reason(of, raw, message):
-    with pytest.raises(ValueError, match=message):
+def test_a_malformed_actuator_list_is_refused_with_a_reason(of, raw, key, detail):
+    """The error key is translated in the form; the detail has no words to translate."""
+    with pytest.raises(of.ActuatorsError) as err:
         of._parse_actuators(raw)
+    assert err.value.key == key and err.value.detail.startswith(detail)
 
 
 def test_an_empty_actuator_field_means_no_buttons(of):
@@ -86,7 +89,7 @@ def test_an_invalid_qr_stays_on_the_form_with_the_reason(cf):
     flow = _setup_flow(cf)
     result = asyncio.run(flow.async_step_qr({"qr_text": "  "}))
     assert result["step_id"] == "qr" and result["errors"] == {"qr_text": "qr_invalid"}
-    assert result["description_placeholders"]["error_detail"] == "Testo QR vuoto"
+    assert result["description_placeholders"]["error_detail"] == "Empty QR text"
 
 
 def test_a_valid_qr_fills_the_credentials_and_asks_for_the_network(cf, monkeypatch):
@@ -594,8 +597,8 @@ def test_missing_cloud_data_is_named(of):
     data = {**ENTRY_DATA, "cloud_proxy": "", "cloud_domain": "plant.relay.example.test"}
     hub = _Hub({"init_status": {"token": "tok"}, "rubrica_ver": "abc"})
     result = asyncio.run(_cloud_flow(of, hub, data).async_step_fetch_rubrica_cloud())
-    assert result["errors"] == {"base": "cloud_failed"}
-    assert result["description_placeholders"]["rubrica_error"].startswith("manca cproxy")
+    assert result["errors"] == {"base": "cloud_missing_data"}
+    assert result["description_placeholders"]["rubrica_error"] == "cproxy"
 
 
 def test_a_cloud_download_error_is_shown(of, monkeypatch):
@@ -666,7 +669,7 @@ def test_an_upload_without_actuators_for_the_flat_is_refused(of, monkeypatch):
     _upload(of, monkeypatch, lambda path, gid: {"actuators": []})
     result = asyncio.run(_options_flow(of).async_step_import_rubrica({"rubrica_file": "up1", "rubrica_gid": "3"}))
     assert result["errors"] == {"rubrica_file": "rubrica_no_actuators"}
-    assert "GID appartamento 3" in result["description_placeholders"]["rubrica_error"]
+    assert result["description_placeholders"]["rubrica_error"] == "GID 3"
 
 
 # ─── Options: import confirmation ────────────────────────────────────────────

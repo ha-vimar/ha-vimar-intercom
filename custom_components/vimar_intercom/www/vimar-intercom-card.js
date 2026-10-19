@@ -60,13 +60,12 @@
 // funzionano solo in HTTPS (o su localhost).
 
 import { CardAudio } from "./card-audio.js";
+import { setLang, t } from "./card-i18n.js";
 import { DEFAULTS, EDITOR_TAG, VimarIntercomCardEditor } from "./card-editor.js";
 import { STYLE } from "./card-style.js";
 import { NalPlayer, same } from "./nal-player.js";
 
 const FIT_KEY = "vimar_intercom_card_fit";
-const NO_ANSWER = "La targa non risponde, riprova.";
-const REFUSED = "La targa non ha accettato, riprova.";
 const SETUP_TIMEOUT_S = 20;  // oltre, "la targa non risponde" (il cloud a volte ci mette 15 s)
 const HOLD_MS = 1500;        // dopo il riaggancio: video fermo, tasti spenti, poi la card si richiude
 const OPEN_FLASH_MS = 2000;  // "Aperto" / "Errore" sul tasto
@@ -74,22 +73,18 @@ const CLOSE_GUARD_MS = 800;   // after the popup closes, taps on the compact car
 const PENDING_MS = 10000;   // "Collegamento…" subito al tocco, senza aspettare lo stato di HA; oltre, si lascia stare
 const SAY_MS = 4000;         // un avviso resta 4 s al posto della riga di stato
 const LIVE = ["ringing", "calling", "in_call"];
-const OUTCOME = { answered: "Risposto", declined: "Rifiutato", away: "Messaggio di assenza",
-                  missed: "Nessuna risposta", answered_elsewhere: "Risposto altrove",
-                  opened: "Aperto" };
-const LABEL = {
-  idle: "Pronto", ringing: "Suonano alla porta", calling: "Collegamento…",
-  in_call: "In chiamata", offline: "Non raggiungibile",
-};
-const hm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const dayLabel = (t) => {  // "" oggi, "Ieri", altrimenti "26 set"
-  const d = new Date(t), now = new Date(), y = new Date(now);
+const OUTCOMES = ["answered", "declined", "away", "missed", "answered_elsewhere", "opened"];
+const STATES = ["idle", "ringing", "calling", "in_call", "offline"];
+const label = (state) => t(`state_${state}`);
+const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const dayLabel = (ts) => {  // "" oggi, "Ieri", altrimenti "26 set"
+  const d = new Date(ts), now = new Date(), y = new Date(now);
   y.setDate(now.getDate() - 1);
-  return d.toDateString() === now.toDateString() ? "" : d.toDateString() === y.toDateString() ? "Ieri"
+  return d.toDateString() === now.toDateString() ? "" : d.toDateString() === y.toDateString() ? t("yesterday")
     : d.toLocaleDateString([], { day: "numeric", month: "short" });
 };
-const when = (t) => [dayLabel(t), hm(t)].filter(Boolean).join(" ");  // "18:42", "Ieri 21:30"
-const whenFull = (t) => new Date(t).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const when = (ts) => [dayLabel(ts), hm(ts)].filter(Boolean).join(" ");  // "18:42", "Ieri 21:30"
+const whenFull = (ts) => new Date(ts).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 // Entity names and icons come from the states of other entities (friendly_name, icon): escape them
 // before they reach innerHTML, and accept only a "prefix:name" icon.
@@ -100,43 +95,46 @@ const btn = (id, icon, label) => {
   return `<button${id ? ` id="${id}"` : ""} data-icon="${icon}" data-label="${label}"><span class="ic"><ha-icon icon="${icon}" aria-hidden="true"></ha-icon></span>` +
     `<span class="lbl">${label}</span></button>`;
 };
-const DRAWER = `<aside class="drawer" id="drawer" aria-label="Ultimi squilli"><div class="hist"></div>
-  <div class="empty"><ha-icon icon="mdi:bell-off-outline" aria-hidden="true"></ha-icon><span></span></div></aside>`;
-const SCENE = `<div id="video"></div><img class="still" alt="">
-  <span class="ph"><ha-icon icon="mdi:doorbell-video" aria-hidden="true"></ha-icon></span>`;
-const PHOTO = `<button id="photo" aria-label="Cronologia squilli" title="Cronologia squilli" aria-expanded="false" aria-controls="drawer" disabled>
-  <img alt=""><ha-icon icon="mdi:doorbell-video" aria-hidden="true"></ha-icon><ha-icon class="hb" icon="mdi:history" aria-hidden="true"></ha-icon></button>`;
-const X = `<button id="x" aria-label="Chiudi"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>`;
-const LOG = `<button id="log" aria-label="Cronologia squilli" title="Cronologia squilli" aria-expanded="false" aria-controls="drawer">
-  <ha-icon icon="mdi:history" aria-hidden="true"></ha-icon></button>`;
-// Sempre in vista per tutta la diretta: se l'audio non sta ancora suonando (bloccato su
-// iOS o mai partito) il tocco avvia l'ascolto — è il gesto vero che sblocca l'AudioContext;
-// se sta suonando (ascolto allo squillo o parlato) lo muta/smuta soltanto. Mai la chiamata,
-// mai il microfono, mai il WebSocket. Icona sola, senza etichetta.
-const MUTE = `<button id="mute" aria-label="Audio" aria-pressed="true">
-  <ha-icon icon="mdi:volume-off" aria-hidden="true"></ha-icon></button>`;
-// Adatta (video intero, bande scure: predefinito) / Riempi (cover, zoom). Si ricorda per dispositivo.
-const FIT = `<button id="fit" aria-label="Riempi schermo" title="Riempi schermo" aria-pressed="false">
-  <ha-icon icon="mdi:arrow-expand-all" aria-hidden="true"></ha-icon></button>`;
-const HIST = `<button id="hist" aria-label="Cronologia squilli" title="Cronologia squilli" disabled><span class="ic"><ha-icon icon="mdi:history" aria-hidden="true"></ha-icon></span><span class="lbl">Storico</span></button>`;
-const BELL = `<span class="bell" aria-hidden="true"><ha-icon icon="mdi:bell"></ha-icon></span>`;
-// Impostazioni del citofono (Non disturbare, Segreteria…): tondo con l'ingranaggio, uno sul video e uno nella card compatta.
-// Due copie dello stesso tasto (id diversi) perché vivono in contenitori diversi: .media (video) e .head (card compatta).
-const cfgBtn = (id) => `<button id="${id}" class="cfg" aria-label="Impostazioni citofono" title="Impostazioni citofono" hidden>
-  <ha-icon icon="mdi:cog" aria-hidden="true"></ha-icon></button>`;
-const CFG = cfgBtn("cfg"), CFGC = cfgBtn("cfgc");
-const SUB = `<span class="sub"><span class="pill" role="status" aria-live="polite"></span><span class="last"></span><span class="err" role="alert"></span></span>`;
-const ROW = `<div class="row">${btn("view", "mdi:cctv", "Vedi esterno")}${btn("talk", "mdi:microphone", "Parla")}` +
-  `${btn("hangup", "mdi:phone-hangup", "Riaggancia")}${btn("open", "mdi:door-open", "Apri")}</div>`;
-// Foto dello squillo in grande, o il suo clip (<video>) se c'è.
-const PHOTO_DLG = `<dialog class="photo" aria-label="Squillo"><img alt="Foto dello squillo">` +
-  `<video controls playsinline preload="metadata" hidden></video><p class="cap"></p></dialog>`;
+// The markup, built with the card: its labels are in the user's language.
+const template = () => {
+  const DRAWER = `<aside class="drawer" id="drawer" aria-label="${t("recent_rings")}"><div class="hist"></div>
+    <div class="empty"><ha-icon icon="mdi:bell-off-outline" aria-hidden="true"></ha-icon><span></span></div></aside>`;
+  const SCENE = `<div id="video"></div><img class="still" alt="">
+    <span class="ph" data-wait="${t("waiting_video")}"><ha-icon icon="mdi:doorbell-video" aria-hidden="true"></ha-icon></span>`;
+  const PHOTO = `<button id="photo" aria-label="${t("ring_history")}" title="${t("ring_history")}" aria-expanded="false" aria-controls="drawer" disabled>
+    <img alt=""><ha-icon icon="mdi:doorbell-video" aria-hidden="true"></ha-icon><ha-icon class="hb" icon="mdi:history" aria-hidden="true"></ha-icon></button>`;
+  const X = `<button id="x" aria-label="${t("close")}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>`;
+  const LOG = `<button id="log" aria-label="${t("ring_history")}" title="${t("ring_history")}" aria-expanded="false" aria-controls="drawer">
+    <ha-icon icon="mdi:history" aria-hidden="true"></ha-icon></button>`;
+  // Sempre in vista per tutta la diretta: se l'audio non sta ancora suonando (bloccato su
+  // iOS o mai partito) il tocco avvia l'ascolto — è il gesto vero che sblocca l'AudioContext;
+  // se sta suonando (ascolto allo squillo o parlato) lo muta/smuta soltanto. Mai la chiamata,
+  // mai il microfono, mai il WebSocket. Icona sola, senza etichetta.
+  const MUTE = `<button id="mute" aria-label="${t("audio")}" aria-pressed="true">
+    <ha-icon icon="mdi:volume-off" aria-hidden="true"></ha-icon></button>`;
+  // Adatta (video intero, bande scure: predefinito) / Riempi (cover, zoom). Si ricorda per dispositivo.
+  const FIT = `<button id="fit" aria-label="${t("fill_screen")}" title="${t("fill_screen")}" aria-pressed="false">
+    <ha-icon icon="mdi:arrow-expand-all" aria-hidden="true"></ha-icon></button>`;
+  const HIST = `<button id="hist" aria-label="${t("ring_history")}" title="${t("ring_history")}" disabled><span class="ic"><ha-icon icon="mdi:history" aria-hidden="true"></ha-icon></span><span class="lbl">${t("history_short")}</span></button>`;
+  const BELL = `<span class="bell" aria-hidden="true"><ha-icon icon="mdi:bell"></ha-icon></span>`;
+  // Impostazioni del citofono (Non disturbare, Segreteria…): tondo con l'ingranaggio, uno sul video e uno nella card compatta.
+  // Due copie dello stesso tasto (id diversi) perché vivono in contenitori diversi: .media (video) e .head (card compatta).
+  const cfgBtn = (id) => `<button id="${id}" class="cfg" aria-label="${t("settings")}" title="${t("settings")}" hidden>
+    <ha-icon icon="mdi:cog" aria-hidden="true"></ha-icon></button>`;
+  const CFG = cfgBtn("cfg"), CFGC = cfgBtn("cfgc");
+  const SUB = `<span class="sub"><span class="pill" role="status" aria-live="polite"></span><span class="last"></span><span class="err" role="alert"></span></span>`;
+  const ROW = `<div class="row">${btn("view", "mdi:cctv", t("view"))}${btn("talk", "mdi:microphone", t("talk"))}` +
+    `${btn("hangup", "mdi:phone-hangup", t("hangup"))}${btn("open", "mdi:door-open", t("open"))}</div>`;
+  // Foto dello squillo in grande, o il suo clip (<video>) se c'è.
+  const PHOTO_DLG = `<dialog class="photo" aria-label="${t("ring")}"><img alt="${t("ring_photo")}">` +
+    `<video controls playsinline preload="metadata" hidden></video><p class="cap"></p></dialog>`;
 
-const TEMPLATE = `<ha-card>
-  <div class="media">${SCENE}<span class="badge dyn" aria-hidden="true"></span>${MUTE}${FIT}${LOG}${CFG}${X}${DRAWER}</div>
-  <div class="head">${BELL}${PHOTO}<div class="ttl"><span class="name"></span>${SUB}</div>${ROW}<div class="sc"></div>${HIST}${CFGC}</div>
-  ${PHOTO_DLG}</ha-card><dialog class="pop" aria-label="Citofono"></dialog>
-  <dialog class="set" aria-label="Impostazioni citofono"></dialog>`;
+  return `<ha-card>
+    <div class="media">${SCENE}<span class="badge dyn" aria-hidden="true"></span>${MUTE}${FIT}${LOG}${CFG}${X}${DRAWER}</div>
+    <div class="head">${BELL}${PHOTO}<div class="ttl"><span class="name"></span>${SUB}</div>${ROW}<div class="sc"></div>${HIST}${CFGC}</div>
+    ${PHOTO_DLG}</ha-card><dialog class="pop" aria-label="${t("intercom")}"></dialog>
+    <dialog class="set" aria-label="${t("settings")}"></dialog>`;
+};
 
 const SC = { lock: ["unlock", "mdi:door-open"], button: ["press", "mdi:gesture-tap-button"] };  // dominio → servizio, icona
 // The ring (last_ring state) whose popup was closed by hand on this page: it does not open by
@@ -157,7 +155,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     const reg = _hass?.entities || {};
     const camera = Object.keys(reg).find((id) => id.startsWith("camera.") && reg[id].platform === "vimar_intercom")
       || entities.find((e) => e.startsWith("camera.vimar_intercom")) || DEFAULTS.camera;
-    return { camera, name: DEFAULTS.name, layout: DEFAULTS.layout, history: DEFAULTS.history };
+    return { camera, layout: DEFAULTS.layout, history: DEFAULTS.history };
   }
 
   setConfig(config) {
@@ -198,13 +196,19 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   }
 
   _applyCfg() {
-    this._root.querySelector(".name").textContent = this._cfg.name;
+    this._root.querySelector(".name").textContent = this._name;
     this._log.hidden = !(this._cfg.history > 0);
     this._armCard();
   }
 
+  // No `name` in the config: "Intercom" in the user's language.
+  get _name() {
+    return this._cfg.name ?? t("intercom");
+  }
+
   set hass(hass) {
     this._hass = hass;
+    setLang(hass);
     if (!this._root) {
       this._build();
       this._toAnchor();
@@ -216,7 +220,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   _render() {
     const hass = this._hass;
     const raw = hass.states[this._ent("status")]?.state;
-    const state = LABEL[raw] ? raw : "offline";  // unknown/unavailable: come non raggiungibile
+    const state = STATES.includes(raw) ? raw : "offline";  // unknown/unavailable: come non raggiungibile
     const on = !!this._ws;
     const was = this._state;
     this._state = state;
@@ -242,13 +246,13 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     if (state === "ringing" && was !== "ringing") this._setDrawer(false);  // lo squillo non va coperto
     this._tickSetup();
     if (was === "calling" && state === "idle" && !this._cancelled && this._err.textContent === this._hint) {
-      this._err.textContent = REFUSED;
-    } else if (state !== "idle" && state !== was && this._err.textContent === REFUSED) {
+      this._err.textContent = t("refused");
+    } else if (state !== "idle" && state !== was && this._err.textContent === t("refused")) {
       this._err.textContent = this._hint;
     }
     if (state !== "calling") this._cancelled = false;
     const lr = hass.states[this._ent("last_ring")], last = lr?.state, a = lr?.attributes || {};
-    this._last.textContent = isNaN(Date.parse(last)) ? "" : `ultimo ${when(last)}`;
+    this._last.textContent = isNaN(Date.parse(last)) ? "" : t("last_ring", { when: when(last) });
     // La lista si ricarica anche quando arrivano la foto (subito, poi quella migliore) e il clip.
     const key = `${last}|${this._live}|${a.foto_url}|${a.clip_url}`;
     if (this._cfg.history > 0 && key !== this._histKey) {
@@ -262,7 +266,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     this._view.disabled = state !== "idle" || this._view.classList.contains("busy");
     const ring = state === "ringing", inCall = state === "in_call" || state === "calling";
     this._hangup.hidden = !LIVE.includes(state) && !this._pop.open;  // squillo: "Rifiuta" in ogni layout
-    this._label(this._hangup, state === "calling" ? "Annulla" : ring ? "Rifiuta" : "Riaggancia");
+    this._label(this._hangup, t(state === "calling" ? "cancel" : ring ? "decline" : "hangup"));
     // L'audio automatico è riuscito (_autoAudioTried) ma il gesto vero mancava (iOS):
     // "Microfono" diventa "Audio", ben visibile, finché non si tocca — un microfono
     // spento si legge come "muto", non come invito a toccare.
@@ -271,7 +275,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     this._talk.setAttribute("aria-pressed", on);
     this._icon(this._talk, ring ? "mdi:phone" : audioHint ? "mdi:volume-off"
       : on || !inCall ? "mdi:microphone" : "mdi:microphone-off");
-    this._label(this._talk, ring ? "Rispondi" : audioHint ? "Audio" : inCall ? "Microfono" : "Parla");
+    this._label(this._talk, t(ring ? "answer" : audioHint ? "audio" : inCall ? "microphone" : "talk"));
     this._talk.disabled = state === "offline" || (state === "calling" && !on);
     this._shortcuts();
     this._syncSettings();
@@ -363,7 +367,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
 
   _build() {
     this._root = this.attachShadow({ mode: "open" });
-    this._root.innerHTML = `<style>${STYLE}</style>${TEMPLATE}`;
+    this._root.innerHTML = `<style>${STYLE}</style>${template()}`;
     const $ = (s) => this._root.querySelector(s);
     this._card = $("ha-card");
     this._pill = $(".pill");
@@ -391,9 +395,9 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       const el = e.target, m = el.src?.match(/\/api\/vimar_intercom\/rings\/(.+?)[?&]authSig=/);
       if (!m || el._resigned) return;
       el._resigned = true;
-      const t = el.currentTime;
+      const pos = el.currentTime;
       try { el.src = await this._sign(m[1]); } catch { return; }  // HA scollegato: resta com'è
-      if (t) el.currentTime = t;
+      if (pos) el.currentTime = pos;
     }, true);
     for (const ev of ["load", "loadeddata"]) this._root.addEventListener(ev, (e) => (e.target._resigned = false), true);
     // Popup chiuso (X, Esc, fuori): la card torna al suo posto, audio chiuso, riaggancio solo se la chiamata è della card.
@@ -418,7 +422,8 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     this._err = $(".err");
     this._hint = "";  // niente avviso permanente: in HTTP lo dice il tocco sul microfono
     this._view = $("#view");
-    this._view.setAttribute("aria-label", "Vedi esterno");
+    this._view.setAttribute("aria-label", t("view"));
+    this._view.querySelector(".lbl").dataset.short = t("view_short");  // the tile layout shows only this
     this._talk = $("#talk");
     this._hangup = $("#hangup");
     this._open = $("#open");
@@ -428,12 +433,12 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     if (window.ResizeObserver) new ResizeObserver(() => this._fitShape()).observe(this._videoBox);
     this._applyCfg();
     this._view.className = "fill";
-    this._open.setAttribute("aria-label", "Apri portone, tocca due volte");
+    this._open.setAttribute("aria-label", t("open_aria"));
     this._sc = $(".sc");
     for (const b of this._cfgs) b.onclick = (e) => { e.stopPropagation(); this._openSettings(); };
     this._set.onclick = (e) => e.target === this._set && this._set.close();
     this._histBtn = $("#hist");
-    if (!window.isSecureContext) this._talk.title = "Per parlare serve Home Assistant in HTTPS.";
+    if (!window.isSecureContext) this._talk.title = t("talk_needs_https");
     for (const b of [this._log, this._photo, this._histBtn]) b.onclick = (e) => {
       if (this._popup && !this._pop.open) { e.stopPropagation(); this._setDrawer(true); return this._openPop(); }  // cronologia: mai la targa
       this._setDrawer(this._card.dataset.drawer !== "true");
@@ -488,8 +493,8 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     // Un avviso vive SAY_MS al posto della riga di stato, poi sparisce (NO_ANSWER resta finché si collega).
     new MutationObserver(() => {
       clearTimeout(this._sayT);
-      const t = this._err.textContent;
-      if (t && t !== NO_ANSWER) this._sayT = setTimeout(() => { if (this._err.textContent === t) this._err.textContent = ""; }, SAY_MS);
+      const s = this._err.textContent;
+      if (s && s !== t("no_answer")) this._sayT = setTimeout(() => { if (this._err.textContent === s) this._err.textContent = ""; }, SAY_MS);
     }).observe(this._err, { childList: true, characterData: true, subtree: true });
   }
 
@@ -515,7 +520,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     const ids = this._setIds();
     if (!Object.keys(ids).length || this._set.open) return;
     const h = document.createElement("template");
-    h.innerHTML = `<div class="set-c"><div class="set-h"><h2>Impostazioni citofono</h2><button class="set-x" aria-label="Chiudi"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
+    h.innerHTML = `<div class="set-c"><div class="set-h"><h2>${t("settings")}</h2><button class="set-x" aria-label="${t("close")}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
       <div class="set-body"></div><p class="set-e" role="alert"></p></div>`;
     this._set.replaceChildren(h.content);
     this._set.querySelector(".set-x").onclick = () => this._set.close();
@@ -529,7 +534,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     const st = (id) => this._hass.states[id], body = this._set.querySelector(".set-body");
     const key = Object.values(ids).join();
     const call = (dom, sv, data) => this._hass.callService(dom, sv, data).then(() => { this._set.querySelector(".set-e").textContent = ""; },
-      (e) => { this._set.querySelector(".set-e").textContent = `Non riuscito: ${e.message || e}`; });
+      (e) => { this._set.querySelector(".set-e").textContent = t("failed", { error: e.message || e }); });
     const row = (k, label, control, col) => {
       const r = document.createElement("div");
       r.className = "set-r" + (col ? " col" : "");
@@ -558,19 +563,19 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
         el.onchange = () => call("select", "select_option", { entity_id: ids[k], option: el.value });
         rows.push(row(k, label, el, col));
       };
-      if (ids.dnd) toggle("dnd", "Non disturbare");
-      if (ids.vm) toggle("vm", "Segreteria");
-      if (ids.delay) select("delay", "Ritardo segreteria");
+      if (ids.dnd) toggle("dnd", t("dnd"));
+      if (ids.vm) toggle("vm", t("voicemail"));
+      if (ids.delay) select("delay", t("voicemail_delay"));
       if (ids.text) {
         const el = document.createElement("input");
         el.className = "set-in";
         el.type = "text";
-        el.setAttribute("aria-label", "Testo del messaggio");
+        el.setAttribute("aria-label", t("message_text"));
         el.onchange = () => call("text", "set_value", { entity_id: ids.text, value: el.value });
-        rows.push(row("text", "Testo del messaggio", el, true));
+        rows.push(row("text", t("message_text"), el, true));
       }
       if (ids.file) {  // il select, e sotto "Carica"/"Sostituisci" (solo admin: ids.file c'è solo per loro)
-        select("file", "File audio del messaggio", true);
+        select("file", t("message_file"), true);
         const sel = rows.at(-1).querySelector("select"), wrap = document.createElement("div");
         const up = document.createElement("button"), inp = document.createElement("input");
         wrap.className = "set-up";
@@ -599,13 +604,13 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
         if (this._root.activeElement !== ctl) ctl.value = s?.state;
         const up = r.querySelector(".set-ub");
         if (up) {
-          up.textContent = s?.state && s.state !== "none" ? "Sostituisci" : "Carica";
+          up.textContent = t(s?.state && s.state !== "none" ? "replace" : "upload");
           up.disabled = off || !!up._busy;  // _busy: upload in progress
         }
       } else if (this._root.activeElement !== ctl) ctl.value = s && s.state !== "unknown" ? s.state : "";
       if (k === "vm") {  // da dove viene il messaggio: dall'attributo `modo` dello switch, se c'è
         const modo = s?.attributes?.modo, small = r.querySelector("small") || r.querySelector(".set-l").appendChild(document.createElement("small"));
-        small.textContent = modo === "Home Assistant" ? "Messaggio di Home Assistant" : modo === "Tab" ? "Segreteria del Tab" : "";
+        small.textContent = modo === "Home Assistant" ? t("voicemail_ha") : modo === "Tab" ? t("voicemail_tab") : "";
       }
     }
   }
@@ -615,21 +620,18 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   async _uploadAway(f, id, b) {
     const e = this._set.querySelector(".set-e"), small = b.closest(".set-r").querySelector(".set-l small")
       || b.closest(".set-r").querySelector(".set-l").appendChild(document.createElement("small"));
-    const ERR = {
-      upload_bad_type: "serve un file .mp3, .wav o .m4a con un nome semplice",
-      upload_too_big: "file troppo grande, massimo 5 MB",
-    };
+    const ERR = { upload_bad_type: t("upload_bad_type"), upload_too_big: t("upload_too_big") };
     e.textContent = small.textContent = "";
     b.disabled = b._busy = true;
     try {
       if (f.size > 5 * 1024 * 1024) throw new Error(ERR.upload_too_big);
       const r = await this._hass.fetchWithAuth(`/api/vimar_intercom/away_upload?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(ERR[j.error] || "file non salvato, guarda il log di Home Assistant");
+      if (!r.ok) throw new Error(ERR[j.error] || t("upload_failed"));
       await this._hass.callService("homeassistant", "update_entity", { entity_id: id });
-      small.textContent = `Caricato: ${j.file}`;
+      small.textContent = t("uploaded", { file: j.file });
     } catch (err) {
-      e.textContent = `Non riuscito: ${err.message || err}`;
+      e.textContent = t("failed", { error: err.message || err });
     } finally {
       b._busy = false;
       b.disabled = false;
@@ -648,7 +650,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
 
   _applyFit() {
     this._card.dataset.fit = this._cover ? "cover" : "contain";
-    const label = this._cover ? "Adatta video" : "Riempi schermo";  // il tasto dice cosa farà
+    const label = t(this._cover ? "fit_video" : "fill_screen");  // il tasto dice cosa farà
     this._fit.setAttribute("aria-label", label);
     this._fit.title = label;
     this._fit.setAttribute("aria-pressed", this._cover);
@@ -703,14 +705,14 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
         nodes.push(this._ringItem(r, srcs[i]));
       });
       this._hist.replaceChildren(...nodes);
-      this._empty.textContent = "Nessuno squillo registrato";
+      this._empty.textContent = t("no_rings");
       const still = this._cfg.idle_picture !== "standby" && srcs.find(Boolean);
       for (const img of [this._still, this._pic]) if (still) img.src = still; else img.removeAttribute("src");
       this._photo.disabled = this._histBtn.disabled = !rings.length;
     } catch {
       if (n !== this._histN) return;
       this._hist.replaceChildren();
-      this._empty.textContent = "Cronologia non disponibile";
+      this._empty.textContent = t("history_unavailable");
     }
   }
 
@@ -727,9 +729,9 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     const [th, txt] = b.children;
     const [at, out] = txt.children;
     at.textContent = hm(r.time);
-    out.textContent = OUTCOME[r.outcome] || "";
+    out.textContent = OUTCOMES.includes(r.outcome) ? t(`outcome_${r.outcome}`) : "";
     const cap = `${whenFull(r.time)} · ${out.textContent}`;
-    b.setAttribute("aria-label", `Squillo ${cap}${r.clip ? " · video" : ""}`);
+    b.setAttribute("aria-label", t(r.clip ? "ring_item_video" : "ring_item", { caption: cap }));
     if (src) {
       const img = document.createElement("img");
       img.src = src;
@@ -750,7 +752,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
           this._dlg.showModal();
           if (r.clip) this._clipEl.play().catch(() => {});  // dove non parte da solo (iOS, dopo l'await) ci sono i controlli
         } catch (e) {  // HA scollegato, file sparito: detto sulla card, non in console
-          this._err.textContent = `Media non disponibile: ${e.message || e}`;
+          this._err.textContent = t("media_unavailable", { error: e.message || e });
         }
       };
     }
@@ -766,7 +768,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     } else if (!calling && this._setupAt) {
       clearInterval(this._setupTimer);
       this._setupAt = null;
-      if (this._err.textContent === NO_ANSWER) this._err.textContent = this._hint;
+      if (this._err.textContent === t("no_answer")) this._err.textContent = this._hint;
     }
     const s = this._setupAt ? Math.round((Date.now() - this._setupAt) / 1000) : 0;
     // Card compatta che suona: "Suonano alla porta" nel nome e "Tocca per vedere · mm:ss" nello stato.
@@ -782,12 +784,12 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       this._ringAt = null;
     }
     const r = Math.floor((Date.now() - (this._ringAt || Date.now())) / 1000), two = (n) => String(n).padStart(2, "0");
-    this._root.querySelector(".name").textContent = compactRing ? LABEL.ringing : this._cfg.name;
-    this._pill.textContent = calling ? `${LABEL.calling} ${s} s`
-      : pending ? LABEL.calling
-      : compactRing ? `Tocca per vedere · ${two(Math.floor(r / 60))}:${two(r % 60)}` : LABEL[this._state];
+    this._root.querySelector(".name").textContent = compactRing ? label("ringing") : this._name;
+    this._pill.textContent = calling ? `${label("calling")} ${s} s`
+      : pending ? label("calling")
+      : compactRing ? t("tap_to_view", { time: `${two(Math.floor(r / 60))}:${two(r % 60)}` }) : label(this._state);
     this._badge.textContent = this._pill.textContent;
-    if (s >= SETUP_TIMEOUT_S && this._err.textContent === this._hint) this._err.textContent = NO_ANSWER;
+    if (s >= SETUP_TIMEOUT_S && this._err.textContent === this._hint) this._err.textContent = t("no_answer");
   }
 
   // Il riquadro video. Dal vivo, con WebCodecs: i NAL del WebSocket su un canvas
@@ -844,16 +846,16 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   _shortcuts() {
     const list = this._list().map((s) => {
       const st = this._hass.states[s.entity], dom = s.entity.split(".")[0];
-      return { ...s, name: s.name || (dom === "lock" ? "Apri" : st?.attributes?.friendly_name || s.entity),
+      return { ...s, name: s.name || (dom === "lock" ? t("open") : st?.attributes?.friendly_name || s.entity),
         icon: s.icon || st?.attributes?.icon || SC[dom][1], off: st?.state === "unavailable" };
     });
     const key = JSON.stringify(list);
     if (key === this._scKey) return;
     this._scKey = key;
     this._sc.replaceChildren(...list.map((s) => {
-      const t = document.createElement("template");
-      t.innerHTML = btn("", s.icon, s.name);
-      const b = t.content.firstElementChild;
+      const tpl = document.createElement("template");
+      tpl.innerHTML = btn("", s.icon, s.name);
+      const b = tpl.content.firstElementChild;
       b.disabled = s.off;
       b.onclick = (e) => { e.stopPropagation(); this._openDoor(b, s.entity); };  // mai il popup né la targa
       return b;
@@ -867,7 +869,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       this._armed = this._flash = b;
       this._openTimer = setTimeout(() => this._resetOpen(), 3000);
       b.className = "warn";
-      this._label(b, "Tocca ancora");
+      this._label(b, t("tap_again"));
       return;
     }
     this._resetOpen();
@@ -878,9 +880,9 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       await this._hass.callService(entity.split(".")[0], SC[entity.split(".")[0]][0], { entity_id: entity });
       b.className = "ok";
       this._icon(b, "mdi:check");
-      this._label(b, "Aperto");
+      this._label(b, t("opened"));
     } catch (e) {
-      let m = e.translation_key ? e.message : `Apertura non riuscita: ${e.message || e}`;
+      let m = e.translation_key ? e.message : t("open_failed", { error: e.message || e });
       if (e.translation_key) {  // HA's message is in English: translate it as the frontend does (#128)
         const k = `component.${e.translation_domain}.exceptions.${e.translation_key}.message`;
         const late = new Promise((_, no) => setTimeout(no, 2000));  // a dropped WS must not keep the button spinning
@@ -892,7 +894,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       this._err.textContent = m;
       b.className = "bad";
       this._icon(b, "mdi:alert-circle-outline");
-      this._label(b, "Errore");
+      this._label(b, t("error"));
     }
     this._openTimer = setTimeout(() => this._resetOpen(), OPEN_FLASH_MS);
   }
@@ -925,7 +927,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       const r = await this._hass.callService("vimar_intercom", service, {}, undefined, true, true);
       if (r?.response?.ok === false) throw new Error(r.response.result);
     } catch (e) {
-      this._err.textContent = `Non riuscito: ${e.message || e}`;
+      this._err.textContent = t("failed", { error: e.message || e });
       this._pendingAt = 0;
       this._tickSetup();
       throw e;
@@ -968,16 +970,14 @@ const ready = () => document.querySelector("home-assistant")?.hass;
 const define = () => {
   customElements.get(TAG) || customElements.define(TAG, VimarIntercomCard);
   customElements.get(EDITOR_TAG) || customElements.define(EDITOR_TAG, VimarIntercomCardEditor);
+  // The card picker's entry, in the user's language: registered once HA (and its hass) is there.
+  setLang(ready());
+  window.customCards = window.customCards || [];
+  if (!window.customCards.some((c) => c.type === TAG)) {
+    window.customCards.push({ type: TAG, name: t("card_name"), description: t("card_description"), preview: true });
+  }
 };
 if (ready()) define();
 else {
   const wait = setInterval(() => ready() && (clearInterval(wait), define()), 200);
 }
-
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "vimar-intercom-card",
-  name: "Citofono Vimar",
-  description: "Video (anche allo squillo), parla/ascolta, apri il portone e cronologia degli squilli.",
-  preview: true,
-});

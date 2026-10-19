@@ -94,7 +94,7 @@ const STYLE = `
   ha-card:not(.live) .still:not([src]) + .ph { display: grid; place-items: center; color: rgba(255,255,255,.28); }
   .ph ha-icon { --mdc-icon-size: 48px; }
   ha-card.live.wait .ph { display: grid; place-content: center; justify-items: center; gap: 8px; color: rgba(255,255,255,.6); }
-  ha-card.live.wait .ph::after { content: "In attesa del video…"; font-size: 15px; }
+  ha-card.live.wait .ph::after { content: attr(data-wait); font-size: 15px; }
   .badge { position: absolute; top: 10px; left: 10px; z-index: 2; display: none; align-items: center; gap: 6px;
            padding: 4px 10px 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 16px;
            color: #fff; background: rgba(0,0,0,.55); }
@@ -248,7 +248,7 @@ const STYLE = `
   :host([layout="overlay"]) .live #mute { top: auto; right: auto; bottom: 12px; left: 12px; z-index: 4; width: calc((100% - 24px) / 4);
                height: 84px; border-radius: 0; background: none; display: flex; flex-direction: column; align-items: center;
                justify-content: center; gap: 6px; font-size: 12px; font-weight: 600; }
-  :host([layout="overlay"]) .live #mute::after { content: "Audio"; line-height: 16px; }
+  :host([layout="overlay"]) .live #mute::after { content: attr(aria-label); line-height: 16px; }
   :host([layout="overlay"]) .live #mute ha-icon { --mdc-icon-size: 24px; }
   /* Scorciatoie "Apri" extra: chip di vetro sopra la barra (la prima è "Apri", già nella barra). */
   :host([layout="overlay"]) .live .sc { display: flex; position: absolute; left: 12px; right: 12px; bottom: 108px; justify-content: center;
@@ -364,7 +364,7 @@ const STYLE = `
                 color: var(--ink); background: var(--fill); }
   ${CT} #view { order: 5; display: flex; }
   ${CT} #view .lbl { font-size: 0; }  /* nel tile solo "Vedi": il nome accessibile resta "Vedi esterno" (aria-label) */
-  ${CT} #view .lbl::after { content: "Vedi"; font-size: 14px; }
+  ${CT} #view .lbl::after { content: attr(data-short); font-size: 14px; }
   ${CT}[data-state="ringing"] #view { display: none; }
   ${CT} :is(#open, .sc button) { order: 6; color: color-mix(in srgb, var(--vi-primary) 60%, var(--ink)); background: color-mix(in srgb, var(--vi-primary) 16%, transparent); }
   ${CT} :is(#open, .sc button).warn { color: var(--vi-on-warn); background: var(--vi-warn); }

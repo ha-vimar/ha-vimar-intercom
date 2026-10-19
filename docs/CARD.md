@@ -19,13 +19,13 @@
 | ![popup layout](images/card-popup.png) | ![ring history](images/card-history.png) | ![compact tile](images/card-compact-tile.png) |
 
 The integration ships a dashboard card and loads it itself, so there is nothing to add under
-Resources. Pick **Citofono Vimar** in the card picker (camera, name, layout and history have a
+Resources. Pick **Vimar Intercom** in the card picker (camera, name, layout and history have a
 visual editor; the rest stays in YAML) or add it by hand:
 
 ```yaml
 type: custom:vimar-intercom-card
 # optional, these are the defaults:
-name: Citofono
+name: Intercom    # without it: "Intercom" in your language ("Citofono" in Italian)
 camera: camera.vimar_intercom_intercom
 status: sensor.vimar_intercom_intercom_stato
 lock: lock.vimar_intercom_serratura
@@ -49,28 +49,33 @@ where the buttons go while it is live:
   the picture.
 
 After a hang-up the last picture stays 1.5 s with the buttons off, so a second tap does not land
-on whatever moves in below when the card shrinks. **Vedi esterno** calls the video panel; the
+on whatever moves in below when the card shrinks. **View outside** calls the video panel; the
 view lasts as long as the panel allows (it depends on the plant: about 30 s on a 2FV2 with the silence frames the integration sends, 120 s on a 2F 40507), then the video ends
-and the card closes. To look again, press **Vedi esterno** again, as on the in-home monitor.
+and the card closes. To look again, press **View outside** again, as on the in-home monitor.
 The buttons change with the state:
 
 | State | Buttons |
 |---|---|
-| idle | Vedi esterno, Parla, Apri |
-| ringing | —, Rispondi (answers and opens the microphone), Apri |
-| calling | Annulla, Microfono (only to turn it off), Apri (the pill counts the seconds; after 20 s it says the panel is not answering) |
-| in call | Riaggancia, Microfono (on/off), Apri |
+| idle | View outside, Talk, Open |
+| ringing | —, Answer (answers and opens the microphone), Open |
+| calling | Cancel, Microphone (only to turn it off), Open (the pill counts the seconds; after 20 s it says the panel is not answering) |
+| in call | Hang up, Microphone (on/off), Open |
 
 Each button keeps its place: call on the left, voice in the middle, door on the right, so a tap
 never lands on a button that just changed. A failed call, answer or door opening shows its error
-in place of the state line for a few seconds. **Apri** needs two taps within 3 s. There is no
+in place of the state line for a few seconds. **Open** needs two taps within 3 s. There is no
 reject button during the ring: the ring stops on its own, and a stray tap would send the visitor
 away.
 
 Audio goes over `/api/vimar_intercom/audio_ws`, the same channel the iOS app uses: 8 kHz PCM
 both ways, with the browser's echo cancellation. The browser only allows the microphone over
-**HTTPS** (or on localhost); over plain HTTP the Parla button is off (its tooltip says why) and
-the rest still works. Labels are in Italian.
+**HTTPS** (or on localhost); over plain HTTP the Talk button is off (its tooltip says why) and
+the rest still works.
+
+**Language.** The card's labels, its visual editor and its entry in the card picker follow the
+language of your Home Assistant user (profile → Language): Italian for Italian, English for
+every other language. After changing the language, reload the page. The names of the entities
+come from the integration, not from the card.
 
 **Video.** Over HTTPS, on browsers with WebCodecs (Chrome, Edge, Firefox, Safari and iOS from
 16.4), the card decodes the panel's H.264 from the same WebSocket and paints it on a canvas:
@@ -83,12 +88,12 @@ into view, e.g. `/lovelace/camera#citofono` as the tap action of a ring notifica
 
 **Last rings.** With a snapshot folder (`snapshot_dir`) set, the photo of the last ring on the
 row is the history button (during a call the button is on the video): the latest rings
-(option `history`, default 8) with photo, time and outcome: *Risposto* (answered from HA), *Rifiutato* (declined from HA),
-*Aperto* (the door opened from HA during the ring),
-*Messaggio di assenza* (away message), *Risposto altrove* (answered on another device: the indoor
-monitor or the Vimar app, when the plant says so), *Nessuna risposta* (not answered, as far as HA knows;
+(option `history`, default 8) with photo, time and outcome: *Answered* (answered from HA), *Declined* (declined from HA),
+*Opened* (the door opened from HA during the ring),
+*Away message*, *Answered elsewhere* (answered on another device: the indoor
+monitor or the Vimar app, when the plant says so), *No answer* (not answered, as far as HA knows;
 on a 40507, for example, a ring answered on the Tab itself ends like an unanswered one and shows here, while one
-answered in the Vimar app shows as *Risposto altrove*). Tap a photo to see it large; a ring with a clip shows a play
+answered in the Vimar app shows as *Answered elsewhere*). Tap a photo to see it large; a ring with a clip shows a play
 icon on its thumbnail and the tap plays the video instead. The photo appears about a second
 after the ring and is replaced by a better one after `snapshot_delay`; the clip when the ring
 (or the call) ends. The integration keeps the list in `squillo.json` next to the files (last 200

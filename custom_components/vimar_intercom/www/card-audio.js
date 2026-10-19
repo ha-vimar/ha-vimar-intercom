@@ -1,6 +1,8 @@
 // The card's audio (listen, talk, mute), moved out of vimar-intercom-card.js as is:
 // the same methods, mixed into the card class.
 
+import { t } from "./card-i18n.js";
+
 const RATE = 8000;
 
 // Why the microphone failed, in words the user can act on. A denied permission is
@@ -8,10 +10,9 @@ const RATE = 8000;
 const micError = (e) => {
   if (["NotAllowedError", "SecurityError"].includes(e.name)) {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    return ios ? "Permesso del microfono negato: Impostazioni → Home Assistant (o Safari) → Microfono."
-      : "Permesso del microfono negato: consentilo a questo sito o app.";
+    return t(ios ? "mic_denied_ios" : "mic_denied");
   }
-  return `Audio non disponibile: ${e instanceof DOMException ? `${e.name}: ${e.message}` : e.message || e}`;
+  return t("audio_unavailable", { error: e instanceof DOMException ? `${e.name}: ${e.message}` : e.message || e });
 };
 
 const CardAudio = (Base) => class extends Base {
@@ -45,8 +46,7 @@ const CardAudio = (Base) => class extends Base {
         await this._call("answer", this._talk).catch(() => {});
       }
       if (this._err.textContent === this._hint) {
-        this._err.textContent = window.isSecureContext ? "Microfono non disponibile in questa app o browser."
-          : "Microfono non disponibile: serve HTTPS (usa l'indirizzo https di Home Assistant).";
+        this._err.textContent = t(window.isSecureContext ? "mic_unavailable" : "mic_needs_https");
       }
       return;
     }
@@ -69,7 +69,7 @@ const CardAudio = (Base) => class extends Base {
       if (this._state === "ringing") {
         this._mine = true;
         await this._call("answer", this._talk);
-      } else if (answering && this._state !== "in_call") throw new Error("lo squillo è finito");
+      } else if (answering && this._state !== "in_call") throw new Error(t("ring_ended"));
       else if (this._state !== "in_call") {
         this._mine = true;
         await this._call("call", this._talk);
@@ -203,7 +203,7 @@ const CardAudio = (Base) => class extends Base {
       // Solo la sessione corrente: chiuso da noi, o un WS vecchio (microfono spento
       // e riacceso in fretta) che si chiude in ritardo e spegnerebbe quello nuovo.
       if (this._ws !== ws) return;
-      this._err.textContent = "Audio interrotto.";
+      this._err.textContent = t("audio_interrupted");
       this._stopAudio();
     };
 

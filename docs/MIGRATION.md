@@ -61,7 +61,7 @@ integration only knows version 1 and has no migration for it, so the old entry s
 - **Dashboard card:** the type is still `custom:vimar-intercom-card` and it still loads by itself,
   with nothing to add under Resources. The options are different, though (`title`, `device_id`,
   `show_actuators` and `hidden_entities` are ignored), so the simplest fix is to delete the old card
-  and add **Citofono Vimar** from the card picker. See [The intercom card](CARD.md).
+  and add **Vimar Intercom** from the card picker. See [The intercom card](CARD.md).
 
 ## Already swapped the code?
 

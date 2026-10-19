@@ -1549,8 +1549,46 @@ def test_editor_visuale(monkeypatch, engine):  # noqa: F811
                 got = await c.page.evaluate("({ last: changed.at(-1), layout: card.getAttribute('layout') })")
                 assert got["last"] == {"type": "custom:vimar-intercom-card", "name": "Portone"} and got["layout"] == "overlay"
                 stub = await c.page.evaluate("customElements.get('vimar-intercom-card').getStubConfig(card._hass, ['camera.x'])")
-                assert stub == {"camera": "camera.vimar_intercom_intercom", "name": "Citofono", "layout": "overlay", "history": 8}
+                assert stub == {"camera": "camera.vimar_intercom_intercom", "layout": "overlay", "history": 8}  # name: in the user's language
                 assert not (await c.T())["errors"] and not rig.services
+    run(s())
+
+
+@pytest.mark.parametrize(("lang", "want"), [("en", "en"), ("en-GB", "en"), ("de", "en"), ("it-IT", "it")])
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_labels_follow_the_user_language(monkeypatch, engine, lang, want):  # noqa: F811
+    """hass.locale.language picks the card's strings: Italian for "it" (any region), English for
+    "en" and for every language without a table. Buttons, state, editor and card picker."""
+    idle, buttons, name, answer, decline, field, option, picker = {
+        "en": ("Ready", ["View outside", "Talk", "Hang up", "Open"], "Intercom", "Answer", "Decline", "While live",
+               "Buttons below the video", "Vimar Intercom"),
+        "it": ("Pronto", ["Vedi esterno", "Parla", "Riaggancia", "Apri"], "Citofono", "Rispondi", "Rifiuta", "In diretta",
+               "Tasti sotto il video", "Citofono Vimar"),
+    }[want]
+
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, query=f"&lang={lang}") as c:
+                await c.until(f"info().pill === '{idle}'")
+                got = await c.page.evaluate("""(() => { const r = card.shadowRoot;
+                  const ed = customElements.get('vimar-intercom-card').getConfigElement();
+                  document.body.append(ed); ed.hass = card._hass; ed.setConfig({ type: 'custom:vimar-intercom-card' });
+                  return { buttons: ['view', 'talk', 'hangup', 'open'].map((id) => r.querySelector(`#${id} .lbl`).textContent),
+                           name: r.querySelector('.name').textContent,
+                           short: r.querySelector('#view .lbl').dataset.short,
+                           wait: r.querySelector('.ph').dataset.wait,
+                           mute: r.getElementById('mute').getAttribute('aria-label'),
+                           field: ed.querySelector('select[name=layout]').parentElement.firstChild.textContent,
+                           option: ed.querySelectorAll('select[name=layout] option')[1].textContent,
+                           picker: window.customCards.find((x) => x.type === 'vimar-intercom-card').name }; })()""")
+                assert got["buttons"] == buttons and got["name"] == name, got
+                assert got["short"] and got["wait"] and got["mute"] == "Audio", got
+                assert (got["field"], got["option"], got["picker"]) == (field, option, picker), got
+                rig.ring("ring-lang")
+                await c.until(f"info().talk === '{answer}'")
+                assert await c.page.evaluate("card.shadowRoot.querySelector('#hangup .lbl').textContent") == decline
+                assert not (await c.T())["errors"]
     run(s())
 
 

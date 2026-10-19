@@ -10,6 +10,7 @@ VideoDecoder (browser senza WebCodecs), `?badwc` ne mette uno che fallisce la
 configurazione (codec non supportato): in entrambi i casi la card deve tornare a /av.
 `?flakywc` ne mette uno che si rompe al 10° chunk (dati corrotti): la card resta sul
 canvas e riparte dal prossimo IDR.
+`?lang=en` sets hass.locale.language (default "it", the card's labels in Italian).
 `?ios` dà alla pagina lo user agent di un iPhone. `?layout=sotto` (o popup) passa `layout` in setConfig. `ha-form` è un finto minimo (label +
 input/select nativi, `value-changed` come quello vero) per provare l'editor visuale.
 """
@@ -125,6 +126,7 @@ const SET = {
 const setEnts = Object.entries(SET).filter(([, v]) => !WANT || WANT.includes(v.k));
 const mkHass = (status, lastRing = {}, ringTime = null) => ({
   user: { is_admin: !QS.has("noadmin") },
+  locale: { language: QS.get("lang") || "it" },  // the card's language: `?lang=en` (or any other)
   formatEntityState: (s, v) => (v === "none" ? "Nessuno (usa il testo)" : v),  // come la traduzione dello stato del select
   fetchWithAuth: (p, init) => fetch(p, init),
   entities: Object.fromEntries([["camera.vimar_intercom_intercom", 0], ...setEnts].map(([id]) => [id, { entity_id: id, device_id: "dev1", platform: "vimar_intercom" }])),

@@ -1,7 +1,8 @@
 // The visual config editor, moved out of vimar-intercom-card.js as is.
 
+import { setLang, t } from "./card-i18n.js";
+
 const DEFAULTS = {
-  name: "Citofono",
   camera: "camera.vimar_intercom_intercom",
   status: "sensor.vimar_intercom_intercom_stato",
   lock: "lock.vimar_intercom_serratura",
@@ -18,30 +19,19 @@ const DEFAULTS = {
 // Editor visuale: un ha-form di HA con cinque campi. Le altre chiavi (status, lock, last_ring,
 // anchor) restano in YAML e passano intatte. Un campo svuotato o lasciato al default non finisce in YAML.
 const EDITOR_TAG = "vimar-intercom-card-editor";
-const SCHEMA = [
+// Option labels in the user's language: ed_<field>_<value> (compact_style: ed_compact_<value>).
+const opts = (key, values) => ({ select: { mode: "dropdown", options: values.map((value) => ({ value, label: t(`ed_${key}_${value}`) })) } });
+const schema = () => [
   { name: "camera", selector: { entity: { domain: "camera" } } },
   { name: "name", selector: { text: {} } },
-  { name: "layout", selector: { select: { mode: "dropdown", options: [
-    { value: "overlay", label: "Video a tutta card" },
-    { value: "sotto", label: "Tasti sotto il video" },
-    { value: "popup", label: "Popup al tocco" },
-  ] } } },
-  { name: "compact_style", selector: { select: { mode: "dropdown", options: [
-    { value: "pillola", label: "Pillola" },
-    { value: "tile", label: "Tile" },
-  ] } } },
-  { name: "idle_picture", selector: { select: { mode: "dropdown", options: [
-    { value: "last_ring", label: "Foto dell'ultimo squillo" },
-    { value: "standby", label: "Icona del citofono" },
-  ] } } },
+  { name: "layout", selector: opts("layout", ["overlay", "sotto", "popup"]) },
+  { name: "compact_style", selector: opts("compact", ["pillola", "tile"]) },
+  { name: "idle_picture", selector: opts("idle", ["last_ring", "standby"]) },
   { name: "shortcuts", selector: { entity: { multiple: true, domain: ["lock", "button"] } } },
   { name: "history", selector: { number: { min: 0, max: 50, mode: "box" } } },
   { name: "confirm_open", selector: { boolean: {} } },
   { name: "listen_on_ring", selector: { boolean: {} } },
 ];
-const FIELD = { camera: "Telecamera", name: "Nome", layout: "In diretta", compact_style: "Card compatta (layout popup)", idle_picture: "Da fermo",
-  shortcuts: "Scorciatoie Apri sulla card compatta (vuoto = serratura)", history: "Squilli in cronologia (0 = niente)",
-  confirm_open: "Apri con doppio tocco", listen_on_ring: "Ascolta il visitatore durante lo squillo" };
 
 class VimarIntercomCardEditor extends HTMLElement {
   setConfig(config) {
@@ -51,6 +41,7 @@ class VimarIntercomCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    setLang(hass);
     this._sync();
   }
 
@@ -58,12 +49,12 @@ class VimarIntercomCardEditor extends HTMLElement {
     if (!this._hass || !this._cfg) return;  // il selettore entità vuole hass
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.schema = SCHEMA;
-      this._form.computeLabel = (s) => FIELD[s.name] || s.name;
+      this._form.schema = this._schema = schema();
+      this._form.computeLabel = (s) => t(`ed_${s.name}`);
       this._form.addEventListener("value-changed", (e) => {
         e.stopPropagation();
         const config = { ...this._cfg };
-        for (const { name } of SCHEMA) {
+        for (const { name } of this._schema) {
           const v = e.detail.value[name];
           if (v === undefined || v === "" || v === DEFAULTS[name] || v?.length === 0) delete config[name]; else config[name] = v;
         }

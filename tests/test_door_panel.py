@@ -319,6 +319,17 @@ def test_open_door_senza_target_non_ripiega_sull_sga():
     assert 'default: "55001"' not in open_door
 
 
+def test_open_door_non_assegna_un_ruolo_agli_indirizzi_di_esempio():
+    """55001/55002 non hanno un ruolo fisso (ADR-13): su un 2F 55002 è il Tab stesso,
+    non la «targa interna». Le opzioni del selettore restano solo esempi."""
+    yaml = (COMPONENT / "services.yaml").read_text(encoding="utf-8")
+    open_door = yaml.split("open_door:", 1)[1].split("\n\n", 1)[0]
+    etichette = re.findall(r"- label: (.+)", open_door)
+    assert etichette
+    for etichetta in etichette:
+        assert not re.search(r"(?i)targa|cancello|portone", etichetta), etichetta
+
+
 def test_open_door_accetta_open_e_open_2f_ma_non_altri_message():
     """`command: OPEN` (la colonna MSG dell'attuatore porta) e `OPEN_2F` passano;
     un MESSAGE qualsiasi no, il servizio è aperto a ogni utente."""

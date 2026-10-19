@@ -92,7 +92,7 @@ class PlantMessages:
             self._handle_call_info(raw)
             return
 
-        # NEW_PHONEBOOK;<gid>;<ver>  [da confermare sul campo]
+        # NEW_PHONEBOOK;<ver>;<gid>  [APK, ordine verificato nel sorgente]
         if upper.startswith("NEW_PHONEBOOK"):
             self._handle_new_phonebook(raw)
             return

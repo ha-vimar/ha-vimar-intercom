@@ -76,9 +76,9 @@ open_door:
       selector:
         select:
           options:
-            - label: Cancello (targa esterna 55001)
+            - label: "55001 (esempio)"
               value: "55001"
-            - label: Portone (targa interna 55002)
+            - label: "55002 (esempio)"
               value: "55002"
           custom_value: true
     command:

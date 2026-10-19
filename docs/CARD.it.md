@@ -25,7 +25,7 @@ cronologia hanno l'editor visuale; il resto resta in YAML) oppure si scrive a ma
 ```yaml
 type: custom:vimar-intercom-card
 # facoltativi, questi sono i valori predefiniti:
-name: Citofono
+name: Citofono   # senza: "Citofono" nella lingua dell'utente ("Intercom" in inglese)
 camera: camera.vimar_intercom_intercom
 status: sensor.vimar_intercom_intercom_stato
 lock: lock.vimar_intercom_serratura
@@ -71,6 +71,11 @@ L'audio passa da `/api/vimar_intercom/audio_ws`, lo stesso canale dell'app iOS: 
 due sensi, con la cancellazione dell'eco del browser. Il browser concede il microfono solo in
 **HTTPS** (o su localhost); in HTTP semplice il pulsante Parla è spento (il suggerimento dice
 perché) e il resto funziona comunque.
+
+**Lingua.** Le scritte della card, il suo editor visuale e la voce nell'elenco delle card seguono
+la lingua dell'utente di Home Assistant (profilo → Lingua): italiano per l'italiano, inglese per
+tutte le altre lingue. Dopo aver cambiato lingua, ricaricare la pagina. I nomi delle entità
+vengono dall'integrazione, non dalla card.
 
 **Video.** In HTTPS, sui browser con WebCodecs (Chrome, Edge, Firefox, Safari e iOS dalla
 16.4), la card decodifica l'H.264 della targa dallo stesso WebSocket e lo disegna su un canvas:

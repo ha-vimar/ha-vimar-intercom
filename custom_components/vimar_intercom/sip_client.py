@@ -2218,8 +2218,13 @@ async def _process_request(raw, _fire):
     elif kind == "MESSAGE":
         _LOGGER.debug("SIP MESSAGE body=%r from=%s", body, hdrs.get("from",""))
         # Cap generoso (era 200: troncava GET_INIT_STATUS_REPLY ~266B → perdeva dnd/voicemail).
+        panda = hdrs.get("panda", "").strip().lower()
         if _is_duplicate(kind, hdrs):
             _LOGGER.debug("Duplicate MESSAGE, answered but not broadcast")
+        elif panda != "blue":
+            # The apps drop every MESSAGE whose Panda is not blue, header missing
+            # included (PROTOCOL §4): a text message must not reach the parser.
+            _LOGGER.debug("MESSAGE with Panda %r is not a system message, not broadcast", panda)
         else:
             await broadcast("message", (body or "")[:4096])
         from_hdr = hdrs.get("from", "")

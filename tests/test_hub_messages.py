@@ -358,6 +358,27 @@ def test_an_unknown_message_changes_nothing(plain_hub):
     assert plain_hub.stats == before
 
 
+def test_every_line_of_a_message_is_read_on_its_own(plain_hub):
+    """The apps split a system MESSAGE into lines and classify each one (PROTOCOL §4)."""
+    plain_hub._handle_incoming_message("VOICEMAIL;ON\r\n\nDND;ON\n")
+    assert plain_hub.stats["voicemail"] is True and plain_hub.stats["dnd"] is True
+    assert plain_hub.stats["mode_seq"] == 2
+
+
+def test_no_line_of_a_notify_is_read_as_a_plant_message(plain_hub):
+    """A NOTIFY has no Panda header: none of its lines may reach the parser."""
+    before = dict(plain_hub.stats)
+    plain_hub._update_stats("message", "NOTIFY dnd: x\r\nDND;ON")
+    after = {k: v for k, v in plain_hub.stats.items() if not k.startswith("last_message_in")}
+    assert after == {k: v for k, v in before.items() if not k.startswith("last_message_in")}
+
+
+def test_a_command_inside_another_line_is_not_read(plain_hub):
+    before = dict(plain_hub.stats)
+    plain_hub._handle_incoming_message("SOMETHING_NEW;{}\nhello DND;ON")
+    assert plain_hub.stats == before
+
+
 # ─── a ring answered on another device (#164) ───────────────────────────────
 
 @pytest.fixture

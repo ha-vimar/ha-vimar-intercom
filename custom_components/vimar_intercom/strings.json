@@ -253,13 +253,29 @@
         "name": "In chiamata"
       },
       "ringing": {
-        "name": "Squillo"
+        "name": "Squillo",
+        "state_attributes": {
+          "chiamante": {
+            "name": "Chiamante"
+          },
+          "chiamante_id": {
+            "name": "ID chiamante"
+          }
+        }
       },
       "calling": {
         "name": "Chiamata in uscita"
       },
       "new_videomessage": {
-        "name": "Nuovo videomessaggio"
+        "name": "Nuovo videomessaggio",
+        "state_attributes": {
+          "ultimo_cambio": {
+            "name": "Ultimo cambio"
+          },
+          "spazio": {
+            "name": "Spazio"
+          }
+        }
       }
     },
     "button": {
@@ -314,7 +330,15 @@
     },
     "sensor": {
       "devices": {
-        "name": "Dispositivi"
+        "name": "Dispositivi",
+        "state_attributes": {
+          "dispositivi": {
+            "name": "Dispositivi"
+          },
+          "riepilogo": {
+            "name": "Riepilogo"
+          }
+        }
       },
       "status": {
         "name": "Stato",
@@ -324,53 +348,329 @@
           "ringing": "Squilla",
           "in_call": "In chiamata",
           "calling": "Chiamata in corso"
+        },
+        "state_attributes": {
+          "registrato": {
+            "name": "Registrato"
+          },
+          "in_chiamata": {
+            "name": "In chiamata"
+          },
+          "squillo": {
+            "name": "Squillo"
+          },
+          "chiamata_in_uscita": {
+            "name": "Chiamata in uscita"
+          },
+          "sip_user": {
+            "name": "Utente SIP"
+          },
+          "sip_domain": {
+            "name": "Dominio SIP"
+          },
+          "proxy": {
+            "name": "Proxy"
+          },
+          "transport": {
+            "name": "Trasporto"
+          },
+          "ip_locale": {
+            "name": "IP locale"
+          },
+          "ultima_registrazione": {
+            "name": "Ultima registrazione"
+          },
+          "registrazioni_fallite": {
+            "name": "Registrazioni fallite"
+          },
+          "ultimo_errore": {
+            "name": "Ultimo errore"
+          },
+          "ultimo_errore_ora": {
+            "name": "Ora ultimo errore"
+          },
+          "avviato_il": {
+            "name": "Avviato il"
+          },
+          "gid_appartamento": {
+            "name": "GID appartamento"
+          },
+          "nomi_appartamento": {
+            "name": "Nomi appartamento"
+          },
+          "cifratura_impianto": {
+            "name": "Cifratura impianto"
+          },
+          "srtp_attivo": {
+            "name": "SRTP attivo"
+          }
         }
       },
       "last_caller": {
-        "name": "Ultimo chiamante"
+        "name": "Ultimo chiamante",
+        "state_attributes": {
+          "id": {
+            "name": "ID"
+          },
+          "uri": {
+            "name": "URI"
+          },
+          "ora": {
+            "name": "Ora"
+          }
+        }
       },
       "last_ring": {
-        "name": "Ultimo squillo"
+        "name": "Ultimo squillo",
+        "state_attributes": {
+          "chiamante": {
+            "name": "Chiamante"
+          },
+          "foto": {
+            "name": "Foto"
+          },
+          "foto_url": {
+            "name": "URL foto"
+          },
+          "clip": {
+            "name": "Clip"
+          },
+          "clip_url": {
+            "name": "URL clip"
+          }
+        }
       },
       "ring_count": {
-        "name": "Squilli"
+        "name": "Squilli",
+        "state_attributes": {
+          "non_risposti_da_ha": {
+            "name": "Non risposti da HA"
+          },
+          "nota": {
+            "name": "Nota",
+            "state": {
+              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
+              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+            }
+          }
+        }
       },
       "call_count": {
-        "name": "Chiamate"
+        "name": "Chiamate",
+        "state_attributes": {
+          "ultima_direzione": {
+            "name": "Ultima direzione",
+            "state": {
+              "in": "In arrivo",
+              "out": "In uscita"
+            }
+          },
+          "ultimo_inizio": {
+            "name": "Ultimo inizio"
+          },
+          "ultima_fine": {
+            "name": "Ultima fine"
+          },
+          "nota": {
+            "name": "Nota",
+            "state": {
+              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
+              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+            }
+          }
+        }
       },
       "last_call_duration": {
         "name": "Durata ultima chiamata"
       },
       "last_door": {
-        "name": "Ultima apertura"
+        "name": "Ultima apertura",
+        "state_attributes": {
+          "target": {
+            "name": "Targa"
+          },
+          "target_id": {
+            "name": "ID targa"
+          },
+          "esito": {
+            "name": "Esito",
+            "state": {
+              "opened": "Aperta",
+              "busy": "Occupato",
+              "queued": "In coda",
+              "unconfirmed": "Non confermata",
+              "not_registered": "Non registrato",
+              "timeout": "Nessuna risposta",
+              "error": "Errore",
+              "send_failed": "Non inviato"
+            }
+          },
+          "codice": {
+            "name": "Codice"
+          },
+          "comando": {
+            "name": "Comando"
+          },
+          "origine_comando": {
+            "name": "Origine comando",
+            "state": {
+              "phonebook": "Rubrica",
+              "default": "Predefinito",
+              "explicit": "Indicato nella chiamata"
+            }
+          },
+          "aperture": {
+            "name": "Aperture"
+          }
+        }
       },
       "last_command": {
-        "name": "Ultimo comando"
+        "name": "Ultimo comando",
+        "state_attributes": {
+          "body": {
+            "name": "Body"
+          },
+          "target": {
+            "name": "Destinatario"
+          },
+          "ora": {
+            "name": "Ora"
+          }
+        }
       },
       "last_message_in": {
-        "name": "Ultimo messaggio ricevuto"
+        "name": "Ultimo messaggio ricevuto",
+        "state_attributes": {
+          "ora": {
+            "name": "Ora"
+          }
+        }
       },
       "vm_level": {
-        "name": "Spazio segreteria"
+        "name": "Spazio segreteria",
+        "state_attributes": {
+          "nota": {
+            "name": "Nota",
+            "state": {
+              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
+              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+            }
+          }
+        }
       },
       "rubrica_ver": {
-        "name": "Versione rubrica"
+        "name": "Versione rubrica",
+        "state_attributes": {
+          "vm_ver": {
+            "name": "Versione videomessaggi"
+          },
+          "nota": {
+            "name": "Nota",
+            "state": {
+              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
+              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+            }
+          }
+        }
       },
       "last_missed_call": {
-        "name": "Ultima chiamata persa"
+        "name": "Ultima chiamata persa",
+        "state_attributes": {
+          "sip_id": {
+            "name": "ID SIP"
+          },
+          "ts": {
+            "name": "Ora"
+          },
+          "totale": {
+            "name": "Totale"
+          }
+        }
       }
     },
     "switch": {
       "segreteria": {
-        "name": "Segreteria"
+        "name": "Segreteria",
+        "state_attributes": {
+          "modo": {
+            "name": "Messaggio da"
+          },
+          "target": {
+            "name": "Destinatario"
+          },
+          "comando_on": {
+            "name": "Comando on"
+          },
+          "comando_off": {
+            "name": "Comando off"
+          },
+          "stato_reale": {
+            "name": "Stato confermato"
+          },
+          "ultimo_esito": {
+            "name": "Ultimo esito"
+          },
+          "nota": {
+            "name": "Nota",
+            "state": {
+              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
+              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+            }
+          }
+        }
       },
       "dnd": {
-        "name": "Non disturbare"
+        "name": "Non disturbare",
+        "state_attributes": {
+          "target": {
+            "name": "Destinatario"
+          },
+          "comando_on": {
+            "name": "Comando on"
+          },
+          "comando_off": {
+            "name": "Comando off"
+          },
+          "stato_reale": {
+            "name": "Stato confermato"
+          },
+          "ultimo_esito": {
+            "name": "Ultimo esito"
+          },
+          "nota": {
+            "name": "Nota",
+            "state": {
+              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
+              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+            }
+          }
+        }
       }
     },
     "text": {
       "away_text": {
         "name": "Segreteria · testo del messaggio"
+      }
+    },
+    "camera": {
+      "camera": {
+        "state_attributes": {
+          "card_entities": {
+            "name": "Entità della card"
+          }
+        }
       }
     }
   },

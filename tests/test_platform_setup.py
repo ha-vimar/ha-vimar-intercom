@@ -593,3 +593,34 @@ def test_enum_sensor_states_are_translated():
     for d in enums:
         for name, table in tables.items():
             assert set(table[d.key]["state"]) == set(d.options), (name, d.key)
+
+
+def test_every_attribute_has_a_translated_name(tmp_path, monkeypatch):
+    """Attribute keys stay as they are (automations read them); Home Assistant shows them by
+    the name under the entity's translation_key, in the user's language."""
+    from custom_components.vimar_intercom import hub as hub_mod
+    entities = _every_entity(tmp_path)
+    hub = next(e for e in entities.values() if hasattr(e, "_hub"))._hub
+    hub.devices, hub.devices_public, hub.devices_summary = [], [], []
+    hub.ring_media = types.MethodType(hub_mod.VimarIntercomHub.ring_media, hub)
+    tables = {name: json.loads((BASE / name).read_text(encoding="utf-8"))["entity"]
+              for name in ("strings.json", "translations/en.json", "translations/it.json")}
+    seen = 0
+    for uid, e in entities.items():
+        try:
+            attrs = e.extra_state_attributes
+        except AttributeError:  # the stub base: an entity without attributes of its own
+            continue
+        if not isinstance(attrs, dict):
+            continue
+        domain = e.entity_id.split(".")[0]
+        for name, table in tables.items():
+            names = table[domain][e._attr_translation_key].get("state_attributes", {})
+            missing = set(attrs) - set(names)
+            assert not missing, (name, uid, sorted(missing))
+            assert all(names[a]["name"] for a in attrs), (name, uid)
+        seen += len(attrs)
+    assert seen > 60  # every entity with attributes was reached (none fell back to None)
+    for d in sensor.SENSORS:
+        if d.attrs_fn:
+            assert isinstance(d.attrs_fn(hub), dict), d.key

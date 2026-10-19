@@ -253,13 +253,29 @@
         "name": "In call"
       },
       "ringing": {
-        "name": "Ringing"
+        "name": "Ringing",
+        "state_attributes": {
+          "chiamante": {
+            "name": "Caller"
+          },
+          "chiamante_id": {
+            "name": "Caller ID"
+          }
+        }
       },
       "calling": {
         "name": "Outgoing call"
       },
       "new_videomessage": {
-        "name": "New video message"
+        "name": "New video message",
+        "state_attributes": {
+          "ultimo_cambio": {
+            "name": "Last change"
+          },
+          "spazio": {
+            "name": "Storage"
+          }
+        }
       }
     },
     "button": {
@@ -314,7 +330,15 @@
     },
     "sensor": {
       "devices": {
-        "name": "Devices"
+        "name": "Devices",
+        "state_attributes": {
+          "dispositivi": {
+            "name": "Devices"
+          },
+          "riepilogo": {
+            "name": "Summary"
+          }
+        }
       },
       "status": {
         "name": "Status",
@@ -324,53 +348,329 @@
           "ringing": "Ringing",
           "in_call": "In call",
           "calling": "Calling"
+        },
+        "state_attributes": {
+          "registrato": {
+            "name": "Registered"
+          },
+          "in_chiamata": {
+            "name": "In call"
+          },
+          "squillo": {
+            "name": "Ringing"
+          },
+          "chiamata_in_uscita": {
+            "name": "Outgoing call"
+          },
+          "sip_user": {
+            "name": "SIP user"
+          },
+          "sip_domain": {
+            "name": "SIP domain"
+          },
+          "proxy": {
+            "name": "Proxy"
+          },
+          "transport": {
+            "name": "Transport"
+          },
+          "ip_locale": {
+            "name": "Local IP"
+          },
+          "ultima_registrazione": {
+            "name": "Last registration"
+          },
+          "registrazioni_fallite": {
+            "name": "Failed registrations"
+          },
+          "ultimo_errore": {
+            "name": "Last error"
+          },
+          "ultimo_errore_ora": {
+            "name": "Last error time"
+          },
+          "avviato_il": {
+            "name": "Started at"
+          },
+          "gid_appartamento": {
+            "name": "Apartment GID"
+          },
+          "nomi_appartamento": {
+            "name": "Apartment names"
+          },
+          "cifratura_impianto": {
+            "name": "System media encryption"
+          },
+          "srtp_attivo": {
+            "name": "SRTP active"
+          }
         }
       },
       "last_caller": {
-        "name": "Last caller"
+        "name": "Last caller",
+        "state_attributes": {
+          "id": {
+            "name": "ID"
+          },
+          "uri": {
+            "name": "URI"
+          },
+          "ora": {
+            "name": "Time"
+          }
+        }
       },
       "last_ring": {
-        "name": "Last ring"
+        "name": "Last ring",
+        "state_attributes": {
+          "chiamante": {
+            "name": "Caller"
+          },
+          "foto": {
+            "name": "Photo"
+          },
+          "foto_url": {
+            "name": "Photo URL"
+          },
+          "clip": {
+            "name": "Clip"
+          },
+          "clip_url": {
+            "name": "Clip URL"
+          }
+        }
       },
       "ring_count": {
-        "name": "Rings"
+        "name": "Rings",
+        "state_attributes": {
+          "non_risposti_da_ha": {
+            "name": "Not answered from HA"
+          },
+          "nota": {
+            "name": "Note",
+            "state": {
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
+            }
+          }
+        }
       },
       "call_count": {
-        "name": "Calls"
+        "name": "Calls",
+        "state_attributes": {
+          "ultima_direzione": {
+            "name": "Last direction",
+            "state": {
+              "in": "Incoming",
+              "out": "Outgoing"
+            }
+          },
+          "ultimo_inizio": {
+            "name": "Last start"
+          },
+          "ultima_fine": {
+            "name": "Last end"
+          },
+          "nota": {
+            "name": "Note",
+            "state": {
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
+            }
+          }
+        }
       },
       "last_call_duration": {
         "name": "Last call duration"
       },
       "last_door": {
-        "name": "Last door opening"
+        "name": "Last door opening",
+        "state_attributes": {
+          "target": {
+            "name": "Panel"
+          },
+          "target_id": {
+            "name": "Panel ID"
+          },
+          "esito": {
+            "name": "Result",
+            "state": {
+              "opened": "Opened",
+              "busy": "Busy",
+              "queued": "Queued",
+              "unconfirmed": "Not confirmed",
+              "not_registered": "Not registered",
+              "timeout": "No answer",
+              "error": "Error",
+              "send_failed": "Not sent"
+            }
+          },
+          "codice": {
+            "name": "Code"
+          },
+          "comando": {
+            "name": "Command"
+          },
+          "origine_comando": {
+            "name": "Command source",
+            "state": {
+              "phonebook": "Phonebook",
+              "default": "Default",
+              "explicit": "Given in the call"
+            }
+          },
+          "aperture": {
+            "name": "Openings"
+          }
+        }
       },
       "last_command": {
-        "name": "Last command"
+        "name": "Last command",
+        "state_attributes": {
+          "body": {
+            "name": "Body"
+          },
+          "target": {
+            "name": "Target"
+          },
+          "ora": {
+            "name": "Time"
+          }
+        }
       },
       "last_message_in": {
-        "name": "Last message received"
+        "name": "Last message received",
+        "state_attributes": {
+          "ora": {
+            "name": "Time"
+          }
+        }
       },
       "vm_level": {
-        "name": "Voicemail storage"
+        "name": "Voicemail storage",
+        "state_attributes": {
+          "nota": {
+            "name": "Note",
+            "state": {
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
+            }
+          }
+        }
       },
       "rubrica_ver": {
-        "name": "Phonebook version"
+        "name": "Phonebook version",
+        "state_attributes": {
+          "vm_ver": {
+            "name": "Video message version"
+          },
+          "nota": {
+            "name": "Note",
+            "state": {
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
+            }
+          }
+        }
       },
       "last_missed_call": {
-        "name": "Last missed call"
+        "name": "Last missed call",
+        "state_attributes": {
+          "sip_id": {
+            "name": "SIP ID"
+          },
+          "ts": {
+            "name": "Time"
+          },
+          "totale": {
+            "name": "Total"
+          }
+        }
       }
     },
     "switch": {
       "segreteria": {
-        "name": "Voicemail"
+        "name": "Voicemail",
+        "state_attributes": {
+          "modo": {
+            "name": "Message from"
+          },
+          "target": {
+            "name": "Target"
+          },
+          "comando_on": {
+            "name": "Command on"
+          },
+          "comando_off": {
+            "name": "Command off"
+          },
+          "stato_reale": {
+            "name": "Confirmed state"
+          },
+          "ultimo_esito": {
+            "name": "Last result"
+          },
+          "nota": {
+            "name": "Note",
+            "state": {
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
+            }
+          }
+        }
       },
       "dnd": {
-        "name": "Do not disturb"
+        "name": "Do not disturb",
+        "state_attributes": {
+          "target": {
+            "name": "Target"
+          },
+          "comando_on": {
+            "name": "Command on"
+          },
+          "comando_off": {
+            "name": "Command off"
+          },
+          "stato_reale": {
+            "name": "Confirmed state"
+          },
+          "ultimo_esito": {
+            "name": "Last result"
+          },
+          "nota": {
+            "name": "Note",
+            "state": {
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
+            }
+          }
+        }
       }
     },
     "text": {
       "away_text": {
         "name": "Voicemail message text"
+      }
+    },
+    "camera": {
+      "camera": {
+        "state_attributes": {
+          "card_entities": {
+            "name": "Card entities"
+          }
+        }
       }
     }
   },

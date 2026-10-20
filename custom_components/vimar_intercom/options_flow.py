@@ -69,7 +69,6 @@ from .const import (
     HOMEKIT_ANSWER_TALK,
     HOMEKIT_DATA,
     HOMEKIT_QR_URL,
-    INTERNAL_PANEL_TARGET,
     MY_NAME,
     PICG_TARGET,
     SGA_TARGET,
@@ -242,9 +241,10 @@ def _targets_schema(form: dict) -> dict:
             KEY_CAMERA_TARGET,
             default=form.get(KEY_CAMERA_TARGET) or "",
         ): str,
+        # Empty is valid too: «Chiama Casa» then calls the PICG (runtime.configure).
         vol.Optional(
             KEY_INTERNAL_PANEL_TARGET,
-            default=form.get(KEY_INTERNAL_PANEL_TARGET) or INTERNAL_PANEL_TARGET,
+            default=form.get(KEY_INTERNAL_PANEL_TARGET) or "",
         ): str,
         # Nessun default fisso: vuoto è un valore valido (ripiego in
         # runtime.configure), non «55001».
@@ -390,21 +390,21 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             self._internal_panel_suggestion = next(iter(candidates)) if len(candidates) == 1 else ""
             if not self._internal_panel_suggestion and not errors:
                 errors["base"] = "internal_panel_not_found"
+        # The declared PICG is proposed even when it is also the SGA: on a 40507
+        # (55001) it is what rings the indoor monitor.
         suggestion = self._internal_panel_suggestion
-        if suggestion == str(current.get(KEY_SGA_TARGET) or SGA_TARGET).strip():
-            suggestion = ""
+        picg = str(current.get(KEY_PICG_TARGET) or PICG_TARGET).strip()
         return self.async_show_form(
             step_id="internal_panel",
             data_schema=vol.Schema({vol.Required(
                 KEY_INTERNAL_PANEL_TARGET,
                 default=(user_input or {}).get(KEY_INTERNAL_PANEL_TARGET,
-                    suggestion or current.get(KEY_INTERNAL_PANEL_TARGET)
-                    or INTERNAL_PANEL_TARGET),
+                    suggestion or current.get(KEY_INTERNAL_PANEL_TARGET) or picg),
             ): str}),
             errors=errors,
             description_placeholders={
                 "detected": self._internal_panel_suggestion or "—",
-                "current": str(current.get(KEY_INTERNAL_PANEL_TARGET) or INTERNAL_PANEL_TARGET),
+                "current": str(current.get(KEY_INTERNAL_PANEL_TARGET) or picg),
             },
         )
 

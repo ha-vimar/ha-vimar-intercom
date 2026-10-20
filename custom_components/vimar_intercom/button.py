@@ -48,7 +48,7 @@ async def async_setup_entry(
         # Targa video = opzione camera_target (issue #3). Prima era l'SGA, che
         # riceve i comandi ma non accetta chiamate su tutti gli impianti.
         VimarCallTargetButton(hub, entry.entry_id, R.CAMERA_TARGET, "chiama_video_esterno", "call_ext"),
-        # Pannello interno = opzione internal_panel_target (default in const).
+        # Pannello interno = opzione internal_panel_target, altrimenti il PICG (runtime.configure).
         VimarCallTargetButton(hub, entry.entry_id, R.INTERNAL_PANEL_TARGET,
                               "chiama_casa_interno", "call_int"),
         VimarAnswerButton(hub, entry.entry_id),

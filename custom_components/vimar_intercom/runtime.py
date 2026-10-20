@@ -160,7 +160,7 @@ RING_END_WEBHOOK_URL: str = ""
 CAMERA_TARGET:         str = _const.CAMERA_TARGET
 # True when the user chose the video panel: a learned one never replaces it.
 CAMERA_TARGET_CONFIGURED: bool = False
-INTERNAL_PANEL_TARGET: str = _const.INTERNAL_PANEL_TARGET
+INTERNAL_PANEL_TARGET: str = _const.PICG_TARGET
 # La targa che apre la porta: il GID_PE dell'attuatore porta nella rubrica.
 # Non è per forza l'SGA: su un 2FV2 l'SGA è il 61000 e la porta la apre la
 # targa 55001 (è lì che la manda l'app VIEW). Senza un valore dalla rubrica si
@@ -342,9 +342,11 @@ def configure(data: dict) -> None:
     CAMERA_TARGET = (configured
                      or str(data.get("learned_camera_target") or "").strip()
                      or _const.CAMERA_TARGET)
+    # No panel chosen: the apartment's PICG, which rings the indoor monitor on the
+    # plants tried (a fixed 55002 got 486 on a 40507).
     INTERNAL_PANEL_TARGET = (
         (str(data.get("internal_panel_target") or "").strip())
-        or _const.INTERNAL_PANEL_TARGET
+        or PICG_TARGET
     )
     # Apri-porta: opzione door_target (compilata dall'import rubrica o a mano);
     # se vuota, la targa dell'attuatore porta fra quelli salvati — le entry

@@ -67,9 +67,10 @@ def test_nessun_indirizzo_di_impianto_cablato(modulo):
 
 
 def test_le_targhe_da_chiamare_vengono_dalle_opzioni():
-    """Issue #3: targa video e pannello interno sono opzioni (runtime), con il
-    default storico isolato in const; button.py non li ripete e non chiama l'SGA."""
-    assert const.INTERNAL_PANEL_TARGET == "55002"
+    """Issue #3: targa video e pannello interno sono opzioni (runtime): la targa ha il
+    default storico in const, il pannello ripiega sul PICG; button.py non li ripete e
+    non chiama l'SGA."""
+    assert not hasattr(const, "INTERNAL_PANEL_TARGET"), "Chiama Casa ripiega sul PICG, non su un indirizzo fisso"
     assert const.CAMERA_TARGET == "55100"
     src = _codice("button.py")
     assert '"55002"' not in src and '"55100"' not in src

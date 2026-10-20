@@ -102,7 +102,7 @@
       },
       "internal_panel": {
         "title": "Find indoor monitor",
-        "description": "The system declares PICG {detected}. The current Call Home destination is {current}. If the declared PICG differs from the SGA, it is proposed as the indoor monitor; otherwise the current destination is kept, because the PICG may be a controller rather than a monitor. Confirm the destination or enter a known indoor monitor address. Saving does not place a call.",
+        "description": "The system declares the PICG {detected}. The current Call Home target is {current}. The declared PICG is proposed as the indoor monitor, also when it is the same as the SGA: on the plants tried it is the address that rings the monitor. Confirm the target or enter the known address of an indoor monitor. Saving does not start a call.",
         "data": {
           "internal_panel_target": "Indoor monitor SIP address"
         }
@@ -144,7 +144,7 @@
           "sga_target": "Target for VOICEMAIL;/DND;, and for the door-open command when “Entrance panel that opens the door” is empty. Empty = historical default (55001). Change it only if your system uses a different SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
           "picg_target": "Target for GET_INIT_STATUS. On systems verified so far it matches the SGA. Empty = historical default (55001).",
           "camera_target": "Panel called by the camera, by “Call” and by “Call the entrance panel (video)”: the PHONEBOOK row with TYPE='PE' in rubrica.db (the phonebook import fills it in). Empty = the panel learned from the last ring with video, else 55100. This is not the SGA.",
-          "internal_panel_target": "Target of the “Call the indoor monitor” button. The phonebook does not say which one it is: enter it by hand. Empty = historical default (55002).",
+          "internal_panel_target": "Target of the “Call the indoor monitor” button. Empty = the apartment's PICG (the GET_INIT_STATUS target), which rings the indoor monitor on the plants tried. Use “Find indoor monitor” to propose it, or enter a known address.",
           "door_target": "Where the door-open command goes: the GID_PE of the door actuator in the phonebook (on a 2FV2 it is not the SGA). Filled in by importing or downloading the phonebook. Empty = the door actuator's panel if actuators were imported, otherwise the SGA.",
           "away_message_file": "Audio file (mp3, wav...) played to the visitor when nobody answers, e.g. /config/media/citofono/messaggio.mp3 (or pick the file on the device page: upload it from Media > Local media > citofono/messaggi). Empty = off.",
           "away_message_upload": "The file goes to media folder/citofono/messaggi and becomes the away message right away. Max 5 MB; if a different file with the same name is already there, this one gets -2 added.",

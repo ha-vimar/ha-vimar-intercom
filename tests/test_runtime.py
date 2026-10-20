@@ -60,6 +60,11 @@ def test_intercom_calls_the_camera_target_not_the_sga():
     assert runtime.DOOR_ESTERNO == "sip:61000@sip.example.test"
 
 
+def test_a_blank_internal_panel_follows_the_configured_picg():
+    runtime.configure(_base_data(picg_target="60001", internal_panel_target=" "))
+    assert runtime.INTERNAL_PANEL_TARGET == "60001"
+
+
 def test_camera_and_internal_panel_targets_override():
     runtime.configure(_base_data(camera_target="55001", internal_panel_target="60001"))
     assert runtime.CAMERA_TARGET == "55001"
@@ -69,7 +74,8 @@ def test_camera_and_internal_panel_targets_override():
 def test_camera_and_internal_panel_targets_blank_fall_back():
     runtime.configure(_base_data(camera_target="  ", internal_panel_target=""))
     assert runtime.CAMERA_TARGET == const.CAMERA_TARGET
-    assert runtime.INTERNAL_PANEL_TARGET == const.INTERNAL_PANEL_TARGET
+    # «Chiama Casa» without a target calls the apartment's PICG, not a fixed 55002
+    assert runtime.INTERNAL_PANEL_TARGET == runtime.PICG_TARGET
     assert runtime.INTERCOM.startswith(f"sip:{const.CAMERA_TARGET}@")
 
 

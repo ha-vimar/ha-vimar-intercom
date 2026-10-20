@@ -102,7 +102,7 @@
       },
       "internal_panel": {
         "title": "Rileva il posto interno",
-        "description": "L’impianto dichiara il PICG {detected}. La destinazione attuale di Chiama Casa è {current}. Se il PICG dichiarato è diverso dall’SGA viene proposto come posto interno; altrimenti resta la destinazione attuale, perché il PICG può essere un controllore anziché un monitor. Conferma la destinazione o inserisci l’indirizzo noto di un posto interno. Il salvataggio non avvia una chiamata.",
+        "description": "L’impianto dichiara il PICG {detected}. La destinazione attuale di Chiama Casa è {current}. Il PICG dichiarato viene proposto come posto interno, anche quando coincide con l’SGA: sugli impianti provati è l’indirizzo che fa squillare il monitor. Conferma la destinazione o inserisci l’indirizzo noto di un posto interno. Il salvataggio non avvia una chiamata.",
         "data": {
           "internal_panel_target": "Indirizzo SIP del posto interno"
         }
@@ -144,7 +144,7 @@
           "sga_target": "Destinatario di VOICEMAIL;/DND;, e dell'apertura porta se «Targa che apre la porta» è vuota. Vuoto = default storico (55001). Cambialo solo se il tuo impianto usa un altro SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
           "picg_target": "Destinatario di GET_INIT_STATUS. Sugli impianti verificati finora coincide con l'SGA. Vuoto = default storico (55001).",
           "camera_target": "Targa chiamata dalla camera, da «Chiama» e da «Chiama video (esterno)»: la riga PHONEBOOK con TYPE='PE' in rubrica.db (l'import rubrica la compila da solo). Vuoto = la targa imparata dall'ultimo squillo con video, altrimenti 55100. Non è l'SGA.",
-          "internal_panel_target": "Destinatario del pulsante «Chiama casa (interno)». La rubrica non lo dice: va inserito a mano. Vuoto = default storico (55002).",
+          "internal_panel_target": "Destinatario del pulsante «Chiama casa (interno)». Vuoto = il PICG dell'appartamento (quello di GET_INIT_STATUS), che sugli impianti provati fa squillare il posto interno. Usa «Rileva il posto interno» per proporlo, o inserisci un indirizzo noto.",
           "door_target": "La targa a cui va il comando di apertura: il GID_PE dell'attuatore porta nella rubrica (su un 2FV2 non è l'SGA). Si compila da sola importando o scaricando la rubrica. Vuoto = la targa dell'attuatore porta, se gli attuatori sono stati importati, altrimenti l'SGA.",
           "away_message_file": "File audio (mp3, wav...) da far sentire al visitatore se nessuno risponde, es. /config/media/citofono/messaggio.mp3 (o scegli il file dalla pagina del dispositivo: caricalo da Media > Local media > citofono/messaggi). Vuoto = disattivato.",
           "away_message_upload": "Il file finisce in cartella media/citofono/messaggi e diventa subito il messaggio di assenza. Massimo 5 MB; se c'è già un file diverso con lo stesso nome, a questo si aggiunge -2.",

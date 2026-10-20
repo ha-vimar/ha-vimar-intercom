@@ -54,7 +54,7 @@ aggiungila di nuovo.
 - **Eventi:** il vecchio evento sul bus `vimar_intercom_ring` non c'è più. Il campanello è
   un'entità `event`: usa come trigger il suo stato, o il sensore binario dello squillo. Il vecchio
   evento diceva quale targa suonava; qui c'è l'attributo `chiamante` del sensore dello squillo e il
-  sensore *Intercom Ultimo Chiamante*. `vimar_intercom_missed_call` esiste ma con un payload
+  sensore *Ultimo chiamante* (`sensor.vimar_intercom_intercom_ultimo_chiamante`). `vimar_intercom_missed_call` esiste ma con un payload
   diverso, e il vecchio
   `vimar_intercom_video_message` ora è `vimar_intercom_videomessage`, anche lui con un payload
   diverso. Dettagli in [Eventi](ENTITIES.it.md#eventi).

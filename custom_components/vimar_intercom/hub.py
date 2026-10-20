@@ -2,6 +2,7 @@
 
 import asyncio
 import functools
+import json
 import logging
 import os
 import re
@@ -108,6 +109,12 @@ def _uri_to_id(uri: str | None) -> str | None:
 
 MAX_CALL_DURATION = 300  # 5 minutes — auto-hangup safety net
 DOOR_TLS_TIMEOUT = 20  # MESSAGE over the cloud: the relay answered after ~15.2 s in #14
+# #59: after a DND/voicemail change over SIP, how long to wait for the Tab's own
+# announcement before asking GET_INIT_STATUS (well inside the switch's CONFIRM_S, 10 s).
+ANNOUNCE_WAIT_S = 5.0
+# action=status over the Tab's local HTTP API: (connect, read). It runs in the keepalive
+# and at start, before the GET_INIT_STATUS fallback.
+STATUS_HTTP_TIMEOUT = (2.0, 4.0)
 
 
 def _message_timeout() -> int:
@@ -253,6 +260,11 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         # Evita di iniettare hass nell'hub, coerente con ring/state callbacks.
         self._event_callbacks: list[Callable] = []
         self._init_status_sent = False
+        # #59: the Tab's state over its local HTTP API (action=status), silent for the
+        # VIEW app. None: not tried yet; False: the Tab did not answer at the first try,
+        # GET_INIT_STATUS until the next start; True: it answers.
+        self._status_over_http: bool | None = None
+        self._parsing_http_status = False  # see _request_status_http
         # SET_APT_PARAMS in attesa della risposta, per MSGID (PROTOCOL §3: l'unico
         # comando che correla la risposta per ID).
         self._apt_param_waiters: dict[str, asyncio.Future] = {}
@@ -1567,9 +1579,53 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         self._touch()
         return True, "ERR_NONE"
 
-    async def async_request_status(self) -> None:
-        """GET_INIT_STATUS al PICG: la risposta aggiorna segreteria, DND e il resto."""
+    async def async_request_status(self, after_command: bool = False) -> None:
+        """Read the Tab's state again: segreteria, DND and the rest.
+
+        after_command: a DND/voicemail switch just changed it. Over the silent HTTP API
+        the state is read back. Over SIP every GET_INIT_STATUS shows "Apartment
+        configuration changed" on the phones (#59), and the 40507 announces the change
+        itself (#192): wait ANNOUNCE_WAIT_S for an announcement, and ask only if none
+        came (plants that do not announce, #9). In the background: the switch's own
+        confirmation window (CONFIRM_S) keeps running meanwhile."""
+        if after_command and not self._http_status_possible():
+            self._spawn(self._status_unless_announced(self.stats.get("mode_seq", 0)),
+                        "status after a command")
+            return
         await self._request_init_status()
+
+    async def _status_unless_announced(self, seq: int) -> None:
+        await asyncio.sleep(ANNOUNCE_WAIT_S)
+        if self.stats.get("mode_seq", 0) != seq:
+            _LOGGER.debug("Status after a command: the Tab announced it, nothing asked")
+            return
+        await self._request_init_status()
+
+    def _http_status_possible(self) -> bool:
+        """Local UDP, and the Tab has not refused the HTTP API yet (#59)."""
+        return bool(R.USE_LOCAL_UDP and R.LOCAL_PROXY) and self._status_over_http is not False
+
+    async def _request_status_http(self) -> bool | None:
+        """The state from `action=status` on the Tab's local HTTP API (#59), parsed as a
+        GET_INIT_STATUS_REPLY. True: read. False: the Tab refuses the API (port closed,
+        401, not JSON). None: not this time (timeout, empty answer): try it again later."""
+        try:
+            params = await asyncio.get_running_loop().run_in_executor(
+                None, functools.partial(rest_client.get_status, R.LOCAL_PROXY, R.SIP_USER, R.SIP_PASSWORD,
+                                        timeout=STATUS_HTTP_TIMEOUT))
+        except Exception as e:  # noqa: BLE001 - whatever it is, GET_INIT_STATUS this time
+            _LOGGER.info("Stato via HTTP non disponibile (%s): uso GET_INIT_STATUS", type(e).__name__)
+            return None if "timeout" in type(e).__name__.lower() else False
+        if not params:
+            return None
+        # Not a reply to a find_sga probe: that one waits for a GET_INIT_STATUS answer.
+        self._parsing_http_status = True
+        try:
+            self._parse_init_status_reply(
+                "GET_INIT_STATUS_REPLY;" + json.dumps([{"PARAM": k, "VALUE": v} for k, v in params.items()]))
+        finally:
+            self._parsing_http_status = False
+        return True
 
     @staticmethod
     def _probe_outcome(ok: bool, msg: str) -> str:
@@ -1694,7 +1750,19 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         La risposta arriva in modo asincrono come SIP MESSAGE
         (GET_INIT_STATUS_REPLY) → parsata in _handle_incoming_message.
         Funziona sia in UDP locale sia in cloud TLS.
+
+        On local UDP the silent HTTP API is tried first (#59); a Tab that does not
+        answer it at the first try keeps GET_INIT_STATUS until the next start.
         """
+        if self._http_status_possible():
+            read = await self._request_status_http()
+            if read:
+                self._status_over_http = True
+                self._init_status_sent = True
+                _LOGGER.info("Stato letto via HTTP (action=status)")
+                return
+            if read is False and self._status_over_http is None:
+                self._status_over_http = False  # refused at the first try: SIP until the next start
         try:
             # Sent directly, not through async_send_command: that one records
             # the user's last command (last_command_* sensors), and the switches

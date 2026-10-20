@@ -138,7 +138,7 @@ class _Hub:
     async def async_send_command(self, **_kw):
         return self._ok, self._msg
 
-    async def async_request_status(self):
+    async def async_request_status(self, after_command=False):
         pass
 
     def set_away_enabled(self, on):

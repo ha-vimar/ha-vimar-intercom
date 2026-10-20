@@ -118,7 +118,7 @@ class _Hub:
         self.richieste = 0
         self._init_seq = 0
 
-    async def async_request_status(self):
+    async def async_request_status(self, after_command=False):
         self.richieste += 1
 
 

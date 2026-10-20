@@ -471,7 +471,7 @@ def test_a_switch_stops_following_the_hub_and_its_timer_when_removed():
     async def last_state():
         return None
 
-    async def request_status():
+    async def request_status(after_command=False):
         return None
 
     dnd.async_get_last_state = last_state

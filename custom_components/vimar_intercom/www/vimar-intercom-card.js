@@ -136,7 +136,14 @@ const template = () => {
     <dialog class="set" aria-label="${t("settings")}"></dialog>`;
 };
 
-const SC = { lock: ["unlock", "mdi:door-open"], button: ["press", "mdi:gesture-tap-button"] };  // dominio → servizio, icona
+const SC = { lock: ["unlock", "mdi:door-open"], button: ["press", "mdi:gesture-tap-button"] };
+// A shortcut's label: the entity's own name. With has_entity_name the friendly name starts with
+// the device's ("Vimar Intercom Apri porta"), too long for a round button: that part goes.
+const ownName = (hass, id) => {
+  const fn = hass.states[id]?.attributes?.friendly_name || id, e = hass.entities?.[id];
+  const d = e?.device_id && hass.devices?.[e.device_id], dn = d && (d.name_by_user || d.name);
+  return dn && fn.startsWith(`${dn} `) ? fn.slice(dn.length + 1) : fn;
+};  // dominio → servizio, icona
 // The ring (last_ring state) whose popup was closed by hand on this page: it does not open by
 // itself again for that ring, whatever follows (answered elsewhere, call ended, card rebuilt).
 let dismissedRing = null;
@@ -846,7 +853,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   _shortcuts() {
     const list = this._list().map((s) => {
       const st = this._hass.states[s.entity], dom = s.entity.split(".")[0];
-      return { ...s, name: s.name || (dom === "lock" ? t("open") : st?.attributes?.friendly_name || s.entity),
+      return { ...s, name: s.name || (dom === "lock" ? t("open") : ownName(this._hass, s.entity)),
         icon: s.icon || st?.attributes?.icon || SC[dom][1], off: st?.state === "unavailable" };
     });
     const key = JSON.stringify(list);

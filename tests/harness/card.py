@@ -129,7 +129,8 @@ const mkHass = (status, lastRing = {}, ringTime = null) => ({
   locale: { language: QS.get("lang") || "it" },  // the card's language: `?lang=en` (or any other)
   formatEntityState: (s, v) => (v === "none" ? "Nessuno (usa il testo)" : v),  // come la traduzione dello stato del select
   fetchWithAuth: (p, init) => fetch(p, init),
-  entities: Object.fromEntries([["camera.vimar_intercom_intercom", 0], ...setEnts].map(([id]) => [id, { entity_id: id, device_id: "dev1", platform: "vimar_intercom" }])),
+  entities: Object.fromEntries([["camera.vimar_intercom_intercom", 0], ["button.vimar_intercom_apri_porta", 0], ...setEnts].map(([id]) => [id, { entity_id: id, device_id: "dev1", platform: "vimar_intercom" }])),
+  devices: { dev1: { id: "dev1", name: "Vimar Intercom", name_by_user: null } },
   states: {
     ...Object.fromEntries(setEnts.map(([id, v]) => [id, { state: v.state, attributes: v.attributes }])),
     "camera.vimar_intercom_intercom": { state: "idle", attributes: { card_entities: Object.fromEntries(setEnts.map(([id, v]) => [v.k === "vm" ? "segreteria" : v.k, id])) } },
@@ -137,6 +138,7 @@ const mkHass = (status, lastRing = {}, ringTime = null) => ({
     "sensor.vimar_intercom_intercom_ultimo_squillo": { state: ringTime || "unknown", attributes: lastRing },
     "lock.vimar_intercom_serratura": { state: "locked" },
     "button.garage": { state: "unknown", attributes: { friendly_name: "Garage" } },
+    "button.vimar_intercom_apri_porta": { state: "unknown", attributes: { friendly_name: "Vimar Intercom Apri porta" } },
   },
   callService: async (d, sv, data) => {
     T.calls.push(d + "." + sv);
@@ -144,7 +146,7 @@ const mkHass = (status, lastRing = {}, ringTime = null) => ({
       (T.settings ||= []).push([d, sv, data]);
       // `?setfail`: the switch fails as HA sends a translated error (English message, key, placeholders)
       if (d === "switch" && QS.has("setfail")) throw { message: `${data.entity_id}: command failed (Timeout)`, translation_domain: "vimar_intercom",
-                                                      translation_key: "switch_failed", translation_placeholders: { entity: data.entity_id, error: "Timeout" } };
+                                                      translation_key: "switch_failed", translation_placeholders: { entity: "Non disturbare", error: "Timeout" } };
       return { context: {} };
     }
     const j = await (await fetch(`/svc/${d}/${sv}`, { method: "POST" })).json();

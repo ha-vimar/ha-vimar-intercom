@@ -1131,6 +1131,14 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         # OPEN_2F only when the phonebook has none. An explicit command wins.
         if command:
             body, source = command, "explicit"
+        elif not target and R.DOOR_OPEN_CURRENT and (sip.ringing() or (sip.in_call and self._ring_answered)):
+            # Behind a gateway the entrance of the call in progress (#186): a real
+            # ring, or a ring HA answered. Not our own outgoing calls (a view, the
+            # indoor monitor): the gateway's current entrance may be another door.
+            # Not the test ring either: no entrance behind it.
+            door_target = C.OPEN_CURRENT_TARGET
+            uri = sip_uri(door_target)
+            body, source = C.OPEN_CURRENT_COMMAND, "current_call"
         else:
             body, source = R.door_command_for(door_target)
             if source == "default" and door_target not in self._door_default_logged:
@@ -1161,6 +1169,9 @@ class VimarIntercomHub(PlantMessages, RingMedia):
             self._opened_during_ring(ring)
             return ok, msg, code
 
+        if source == "current_call" and code == 404:
+            _LOGGER.info("Door command: %s does not exist on this plant: turn off the option "
+                         "to open the calling entrance (OPEN_CURRENT)", door_target)
         if not may_retry:
             return False, msg, code  # a second copy could open the door twice
 

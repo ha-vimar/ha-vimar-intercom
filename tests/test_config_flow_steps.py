@@ -977,3 +977,35 @@ def test_import_summary_keeps_sga_and_picg_changes_separate(of):
     assert "52011" in form["description_placeholders"]["picg_info"]
     assert saved["data"]["sga_target"] == "53011"
     assert saved["data"]["picg_target"] == "52011"
+
+
+@pytest.mark.parametrize("options, expected", [({}, False), ({"door_open_current": True}, True)])
+def test_the_open_current_door_is_off_unless_chosen(of, monkeypatch, options, expected):
+    """#186: OPEN_CURRENT only on the plants that need it, chosen by hand."""
+    flow = _options_flow(of, options=options)
+    defaults = {}
+
+    def optional(key, default=None, **_kw):
+        defaults[key] = default
+        return key
+
+    monkeypatch.setattr(of.vol, "Optional", optional)
+    asyncio.run(flow.async_step_settings())
+    assert defaults["door_open_current"] is expected
+
+
+@pytest.mark.parametrize("saved, given, expected", [
+    ({}, {"door_open_current": True}, True),
+    ({"door_open_current": True}, {"door_open_current": False}, False),
+    ({"door_open_current": True}, {}, True),   # a form without the field keeps it
+])
+def test_the_open_current_choice_is_saved_and_kept(of, saved, given, expected):
+    from custom_components.vimar_intercom import runtime
+
+    flow = _options_flow(of, options=saved)
+    result = asyncio.run(flow.async_step_settings(
+        {"local_proxy": "192.0.2.1", "use_local_udp": False, **given}))
+    assert result["data"]["door_open_current"] is expected
+    runtime.configure({**flow._entry.data, **result["data"]})
+    assert runtime.DOOR_OPEN_CURRENT is expected
+    runtime.configure(ENTRY_DATA)

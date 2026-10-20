@@ -93,6 +93,17 @@ The same-VLAN captures do not replace an integration/plain-client test without
 Docker NAT, and they do not prove local support impossible under all settings.
 Sources and remaining questions: [tracking issue #179](https://github.com/ha-vimar/ha-vimar-intercom/issues/179).
 
+### The door behind a gateway (40515, cloud, #186)
+
+On a larger 2FV2 building with a gateway between the apartments and several entrance
+panels, the VIEW app has no standalone "open door": it opens the entrance only during a
+call from it. While the panel rings it sends a `MESSAGE` to **60002** (the gateway's
+"current entrance"), `Panda: command`, body **`OPEN_CURRENT`**, gets `200 OK` and the
+door opens; then it declines the call (`603`). Seen in a decrypted capture of the app on
+one plant. The phonebook's door command does not open there. The option *During a call,
+open the calling entrance (OPEN_CURRENT)* does the same from the door button, the lock
+and the card; it is off by default, since a single-panel 2F has no 60002.
+
 ## Consequences for the code
 
 1. **Verify the transport, do not infer it.** `planttype` gives the starting

@@ -33,6 +33,11 @@ LOCAL_UDP_PORT = 5060    # porta UDP locale su HA
 # Costruiti a runtime da hub.py usando le credenziali del config entry.
 # Il comando ATT_ID 8 = modulo 2F (Serratura)
 DOOR_COMMAND = "OPEN_2F"
+# Behind a gateway (2FV2, 40515 cloud, #186) the app opens the entrance of the call
+# in progress: OPEN_CURRENT to the gateway's "current entrance" (GidPEfakeSerratura).
+# Seen on the wire on one plant, the door opened. Only with the door_open_current option.
+OPEN_CURRENT_TARGET  = "60002"
+OPEN_CURRENT_COMMAND = "OPEN_CURRENT"
 
 # ─── RTP / Media ──────────────────────────────────────────────────────────────
 RTP_AUDIO_PORT     = 7200

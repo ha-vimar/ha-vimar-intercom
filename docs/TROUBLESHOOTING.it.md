@@ -86,8 +86,8 @@ prima di scrivere. **(1.0.21+)** Oscurano anche i dati dell'impianto (la 1.0.20 
 
 - **Indirizzi IP**: quelli privati ovunque, quelli pubblici dove possono essere solo tuoi o di un telefono
   (`received=`, l'host di un URI SIP, l'hop di un `Via`). Restano il primo e l'ultimo numero: `192.x.x.23`.
-- **Id SIP**: quello di Home Assistant e quelli degli altri telefoni e dispositivi negli URI SIP (`<sip:id…45#9f1c@…>`).
-  L'interno breve di una targa come `55001` resta leggibile: è quello che dice di quale targa parla una riga.
+- **Id SIP**: quello di Home Assistant e quelli degli altri telefoni e dispositivi negli URI SIP (`<sip:id…45#9f1c@…>`), compresi gli id di 5 cifre dei telefoni (`6xxxx`).
+  L'interno breve di una targa come `55001` e gli indirizzi del protocollo (60000-60002, 61000) restano leggibili: dicono di quale targa o servizio parla una riga.
 - **Il GID dell'appartamento** (`gid#xxxx`), il MAC del citofono, i domini SIP, IMEI e UUID del dispositivo, il nome del
   dispositivo e i nomi della rubrica.
 

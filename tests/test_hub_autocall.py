@@ -113,11 +113,11 @@ def test_squillo_insieme_al_bye_della_targa_non_e_un_eco(hub, monkeypatch):
 
 def test_init_status_non_si_marca_inviato_se_fallisce(hub, monkeypatch):
     async def _fail(*args, **kwargs):
-        return False, "timeout"
+        return False, "timeout", None
 
     # GET_INIT_STATUS goes straight to the SIP layer (it is not the user's command).
     monkeypatch.setattr(R, "SIP_DOMAIN", "d")
-    monkeypatch.setattr(sip, "do_system_message", _fail)
+    monkeypatch.setattr(sip, "send_message", _fail)
 
     asyncio.run(hub._request_init_status())
 
@@ -126,14 +126,44 @@ def test_init_status_non_si_marca_inviato_se_fallisce(hub, monkeypatch):
 
 def test_init_status_si_marca_inviato_se_riesce(hub, monkeypatch):
     async def _ok(*args, **kwargs):
-        return True, "200"
+        return True, "200", 200
 
     # GET_INIT_STATUS goes straight to the SIP layer (it is not the user's command).
     monkeypatch.setattr(R, "SIP_DOMAIN", "d")
-    monkeypatch.setattr(sip, "do_system_message", _ok)
+    monkeypatch.setattr(sip, "send_message", _ok)
 
     asyncio.run(hub._request_init_status())
 
+    assert hub._init_status_sent is True
+
+
+@pytest.mark.parametrize("local, wait", [(True, 15), (False, 20)])
+def test_init_status_waits_for_the_cloud_relay(hub, monkeypatch, local, wait):
+    """Over the cloud the relay answered after ~15.2 s (#14, #186): 15 s ran out just
+    before it, and GET_INIT_STATUS was sent again at every renewal. Same wait as the door."""
+    timeouts = []
+
+    async def _send(uri, body, extra_headers=None, timeout=15):
+        timeouts.append(timeout)
+        return True, "200", 200
+
+    monkeypatch.setattr(R, "SIP_DOMAIN", "d")
+    monkeypatch.setattr(R, "USE_LOCAL_UDP", local)
+    monkeypatch.setattr(sip, "send_message", _send)
+    asyncio.run(hub._request_init_status())
+    assert timeouts == [wait]
+
+
+def test_init_status_queued_by_the_relay_is_not_sent_again(hub, monkeypatch):
+    """A 202 from the relay is a success for send_message (any 2xx): the panel's reply
+    (or its silence) decides, and the keepalive does not send it again."""
+    async def _queued(*args, **kwargs):
+        return True, "OK (202)", 202
+
+    monkeypatch.setattr(R, "SIP_DOMAIN", "d")
+    monkeypatch.setattr(R, "USE_LOCAL_UDP", False)
+    monkeypatch.setattr(sip, "send_message", _queued)
+    asyncio.run(hub._request_init_status())
     assert hub._init_status_sent is True
 
 

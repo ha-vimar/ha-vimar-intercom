@@ -3,9 +3,12 @@ import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions, symlinks and bash")
 
 SPEC = importlib.util.spec_from_file_location(
     "dev_reset", Path(__file__).resolve().parents[1] / "docker/reset.py")

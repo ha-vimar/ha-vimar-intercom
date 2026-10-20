@@ -2,6 +2,7 @@ name: Docker development
 
 on:
   push:
+    branches: [main]
     paths:
       - "docker/**"
       - "tests/test_dev_compose_linux.py"

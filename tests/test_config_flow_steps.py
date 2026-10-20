@@ -545,7 +545,7 @@ class _Hub:
         self.stats, self.registered, self.token_later = stats, registered, token_later
         self._init_seq = 0
 
-    async def async_request_status(self):
+    async def async_request_status(self, after_command=False):
         if self.token_later:
             self.stats["init_status"] = {"token": self.token_later}
 

@@ -160,8 +160,9 @@ class PlantMessages:
 
         st = self.stats
         st["init_status"] = {**st.get("init_status", {}), **pairs}
-        self._init_seq += 1
-        self._resolve_probe("GET_INIT_STATUS", pairs)
+        if not getattr(self, "_parsing_http_status", False):  # an HTTP read answers no probe (#59)
+            self._init_seq += 1
+            self._resolve_probe("GET_INIT_STATUS", pairs)
 
         def _as_bool(v):
             return str(v).strip() in ("1", "true", "True", "ON", "on")

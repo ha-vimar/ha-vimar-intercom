@@ -188,7 +188,7 @@ class _Hub:
         self.inviati.append(body)
         return self.ok, "200" if self.ok else "Timeout"
 
-    async def async_request_status(self):
+    async def async_request_status(self, after_command=False):
         self.status_chiesti += 1
 
     async def async_set_apt_param(self, p, v):

@@ -12,7 +12,8 @@ che da app), quindi lo switch riflette lo stato effettivo e non è ottimistico.
 Issue #9: su un impianto che non annuncia nulla (risponde 200 al comando senza
 agire, o non manda mai VOICEMAIL;/DND;) lo switch mostrava per sempre l'ultimo
 comando come se fosse lo stato. Ora il valore supposto dura CONFIRM_S dopo
-l'invio, e intanto si chiede lo stato al citofono (GET_INIT_STATUS); se nessuno
+l'invio, e intanto si rilegge lo stato (via HTTP in UDP locale; via SIP con
+GET_INIT_STATUS solo se l'annuncio non arriva entro pochi secondi, #59); se nessuno
 conferma, lo switch torna "sconosciuto". Al riavvio si riprende solo uno stato
 che il Tab aveva confermato, non una supposizione.
 Il comando è confermato sul campo: `VOICEMAIL;ON` → 55001 accende la segreteria
@@ -230,9 +231,10 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
         if not ok:
             # The entity's own translated name ("Do not disturb"); its entity_id only if it has none.
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="switch_failed", translation_placeholders={"entity": str(getattr(self, "name", None) or self.entity_id), "error": str(msg)})
-        # Il Tab di solito annuncia il cambio da solo; chi non lo fa può comunque
-        # rispondere a GET_INIT_STATUS con dnd/voicemail.
-        await self._hub.async_request_status()
+        # Il Tab di solito annuncia il cambio da solo; chi non lo fa (#9) risponde a
+        # GET_INIT_STATUS, che l'hub manda solo se l'annuncio non arriva (#59): ogni
+        # GET_INIT_STATUS fa comparire «Configurazione modificata» sui telefoni.
+        await self._hub.async_request_status(after_command=True)
 
 
 class VimarVoicemailSwitch(VimarModeSwitch):

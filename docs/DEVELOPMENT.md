@@ -80,8 +80,10 @@ existing development configuration.
 
 The pytest suite includes a Linux Docker Engine lifecycle check on disposable
 GitHub Actions runners: fresh onboarding, restart persistence, deletion of
-root-owned state and fresh onboarding after reset. Local unit-test runs skip
-that check and never start Docker automatically.
+root-owned state and fresh onboarding after reset. It has the `docker` marker,
+excluded from default runs and the required Python jobs. A separate workflow
+runs it once when `docker/**`, the lifecycle test or its workflow changes.
+Local unit-test runs never start Docker automatically.
 
 ## Network isolation and scope
 

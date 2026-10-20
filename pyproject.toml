@@ -6,11 +6,12 @@ requires-python = ">=3.13"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not live and not media and not browser and not slow'"
+addopts = "-m 'not live and not media and not browser and not slow and not docker'"
 markers = [
     "live: richiede il Tab reale in rete (escluso di default)",
-    "slow: end-to-end SIP and call-flow tests, about two minutes together (excluded by default; CI runs them: -m 'not live and not media and not browser')",
+    "slow: end-to-end SIP and call-flow tests, about two minutes together (excluded by default; CI runs them: -m 'not live and not media and not browser and not docker')",
     "media: media vero con ffmpeg e aiohttp (escluso di default: -m media)",
+    "docker: Linux Docker Engine lifecycle on disposable GitHub Actions runners (excluded by default: -m docker)",
     "browser: la card in Chromium/WebKit con playwright e aiohttp (escluso di default: -m browser)",
 ]
 

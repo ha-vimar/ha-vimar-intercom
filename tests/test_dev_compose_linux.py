@@ -1,7 +1,8 @@
 """Exercise Linux Docker Engine ownership/reset in a disposable CI checkout.
 
-Only GitHub Actions runs this test automatically. Local unit tests must not
-start Docker or operate a developer's retained Home Assistant configuration.
+A dedicated, path-filtered GitHub Actions workflow selects the docker marker.
+Local unit tests must not start Docker or operate a developer's retained
+Home Assistant configuration.
 """
 import json
 import os
@@ -16,6 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(
     sys.platform != "linux" or os.environ.get("GITHUB_ACTIONS") != "true",
     reason="Linux Docker Engine lifecycle check runs only on disposable GitHub Actions runners",

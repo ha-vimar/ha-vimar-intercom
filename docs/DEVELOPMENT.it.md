@@ -74,8 +74,10 @@ Poi `./docker/dev.sh` crea una nuova istanza. Per conservare i dati, usa invece
 `docker compose -f docker/docker-compose.yaml down` oppure arresta i container.
 La suite pytest include, sui runner Linux temporanei di GitHub Actions, una
 verifica con Docker Engine: onboarding, persistenza al riavvio, reset dei dati
-di root e nuovo onboarding dopo il reset. Nei test locali questa verifica viene
-saltata e Docker non viene avviato automaticamente.
+di root e nuovo onboarding dopo il reset. Il marker `docker` la esclude dai test
+predefiniti e dai job Python obbligatori. Un workflow separato la esegue una sola
+volta quando cambiano `docker/**`, il test o il relativo workflow. I test locali
+non avviano Docker automaticamente.
 
 ## Isolamento e limiti
 

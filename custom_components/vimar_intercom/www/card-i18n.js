@@ -76,6 +76,7 @@ const STRINGS = {
     audio_unavailable: "Audio unavailable: {error}",
     mic_unavailable: "Microphone not available in this app or browser.",
     mic_needs_https: "Microphone not available: it needs HTTPS (use Home Assistant's https address).",
+    audio_needs_https: "Audio not available: it needs HTTPS (use Home Assistant's https address).",
     ring_ended: "the ring has ended",
     audio_interrupted: "Audio interrupted.",
     // visual editor
@@ -166,6 +167,7 @@ const STRINGS = {
     audio_unavailable: "Audio non disponibile: {error}",
     mic_unavailable: "Microfono non disponibile in questa app o browser.",
     mic_needs_https: "Microfono non disponibile: serve HTTPS (usa l'indirizzo https di Home Assistant).",
+    audio_needs_https: "Audio non disponibile: serve HTTPS (usa l'indirizzo https di Home Assistant).",
     ring_ended: "lo squillo è finito",
     audio_interrupted: "Audio interrotto.",
     ed_camera: "Telecamera",

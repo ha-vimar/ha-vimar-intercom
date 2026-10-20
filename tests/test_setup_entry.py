@@ -52,6 +52,37 @@ def test_a_data_only_change_does_not_reload(init):
     assert reloads == []
 
 
+CONNECTION = {"sip_user": "60992", "sip_password": "old", "sip_domain": "plant.example.test",
+              "local_proxy": "192.0.2.10", "use_local_udp": True}
+
+
+def test_new_credentials_from_reconfigure_reload(init):
+    """Reconfigure only saves the entry (HA 2026.12 wants the update listener to reload):
+    a change of the SIP credentials must reload, or the old ones stay in use."""
+    hass, reloads = _hass(init, {"camera_target": "55100"})
+    hass.data[init.DOMAIN]["e1"]["connection"] = init._connection(CONNECTION)
+    entry = _entry(data={**CONNECTION, "sip_password": "new"}, options={"camera_target": "55100"})
+    asyncio.run(init._async_update_listener(hass, entry))
+    assert reloads == ["e1"]
+
+
+def test_a_learned_value_next_to_the_same_credentials_does_not_reload(init):
+    hass, reloads = _hass(init, {"camera_target": "55100"})
+    hass.data[init.DOMAIN]["e1"]["connection"] = init._connection(CONNECTION)
+    entry = _entry(data={**CONNECTION, "detected_model": "40507"}, options={"camera_target": "55100"})
+    asyncio.run(init._async_update_listener(hass, entry))
+    assert reloads == []
+
+
+def test_a_new_intercom_address_reloads(init):
+    """zeroconf_moved saves the Tab's new address and leaves the reload to the listener."""
+    hass, reloads = _hass(init, {"camera_target": "55100"})
+    hass.data[init.DOMAIN]["e1"]["connection"] = init._connection(CONNECTION)
+    entry = _entry(data={**CONNECTION, "local_proxy": "192.0.2.11"}, options={"camera_target": "55100"})
+    asyncio.run(init._async_update_listener(hass, entry))
+    assert reloads == ["e1"]
+
+
 def test_an_options_change_reloads(init):
     hass, reloads = _hass(init, {"camera_target": "55100"})
     entry = _entry(options={"camera_target": "55200"})

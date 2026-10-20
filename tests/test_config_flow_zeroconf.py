@@ -40,10 +40,11 @@ def cf():
 
 
 class _Entry:
-    def __init__(self, data, options=None):
+    def __init__(self, data, options=None, state="loaded"):
         self.entry_id = "e1"
         self.data = data
         self.options = options or {}
+        self.state = types.SimpleNamespace(value=state)
 
 
 def _flow(cf, entries=()):
@@ -103,7 +104,8 @@ def test_gia_configurato_col_mac_del_qr_aggiorna_l_ip_e_ricarica(cf):
     assert r == {"type": "abort", "reason": "address_updated"}
     data, options = calls["update"][0]
     assert data["local_proxy"] == "192.0.2.10" and options["local_proxy"] == "192.0.2.10"
-    assert calls["reload"] == ["e1"]
+    # No reload from here: local_proxy is connection data, the update listener reloads.
+    assert calls["reload"] == []
 
 
 # ─── #46: nothing in an mDNS record is authenticated, the MAC is public ─────
@@ -225,7 +227,8 @@ def test_con_una_entry_il_cambio_ip_e_seguito(cf):
     r = asyncio.run(flow.async_step_zeroconf(_info("192.0.2.10", TXT_40507)))
     assert r["step_id"] == "zeroconf_moved"
     asyncio.run(flow.async_step_zeroconf_moved({}))
-    assert calls["reload"] == ["e1"]
+    # No reload from here: local_proxy is connection data, the update listener reloads.
+    assert calls["reload"] == []
     assert calls["update"][0][0]["local_proxy"] == "192.0.2.10"
 
 
@@ -257,3 +260,14 @@ def test_an_ignored_discovery_is_not_offered_again(cf):
     flow._abort_if_unique_id_configured = lambda **kw: checked.append(calls["unique_id"])
     asyncio.run(flow.async_step_zeroconf(_info("192.0.2.10", TXT_40507)))
     assert checked == ["AABBCCDDEEFF"]
+
+
+def test_a_new_address_for_an_entry_not_set_up_schedules_its_reload(cf):
+    """An entry waiting in setup_retry (the Tab moved and the old address does not
+    answer) has no update listener: the flow reloads it with the new address."""
+    entry = _Entry({"mac": "AA-BB-CC-DD-EE-FF", "local_proxy": "192.0.2.99", "use_local_udp": True},
+                   state="setup_retry")
+    flow, calls = _flow(cf, [entry])
+    asyncio.run(flow.async_step_zeroconf(_info("192.0.2.10", TXT_40507)))
+    asyncio.run(flow.async_step_zeroconf_moved({}))
+    assert calls["reload"] == ["e1"]

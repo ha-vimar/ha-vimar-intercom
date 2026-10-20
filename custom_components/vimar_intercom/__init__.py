@@ -148,7 +148,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {"hub": hub, "audio_ws_clients": audio_ws_clients,
-                                         "applied": dict(entry.options)}
+                                         "applied": dict(entry.options),
+                                         "connection": _connection(entry.data)}
     # Il messaggio di assenza si è unito a Segreteria: via l'entità separata rimasta orfana.
     reg = er.async_get(hass)
     if orphan := reg.async_get_entity_id("switch", DOMAIN, f"{entry.entry_id}_away_message"):
@@ -309,16 +310,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the integration when the options are saved, except when:
+# The entry data that decides how the integration registers: a change here (a new
+# pairing QR from Reconfigure) needs a reload. The rest of the data is learned at
+# runtime (detected model, panels) and must not reload.
+CONNECTION_KEYS = ("sip_user", "sip_password", "sip_ha1", "sip_domain", "local_domain", "cloud_domain",
+                   "sip_cloud_domain", "cloud_proxy", "local_proxy", "use_local_udp", "local_udp_port",
+                   "gid", "plant_type", "mac", "product_code")
 
-    - nothing in the options changed: the listener fires on every change of
-      the entry, including the integration saving the detected model or a
-      learned panel into the entry data, and that used to reload everything,
-      in the middle of a call too;
+
+def _connection(data) -> dict:
+    """The part of the entry data that the SIP registration uses."""
+    return {k: data.get(k) for k in CONNECTION_KEYS}
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the integration when the options or the connection data change, except when:
+
+    - nothing that matters changed: the listener fires on every change of the
+      entry, including the integration saving the detected model or a learned
+      panel into the entry data, and that used to reload everything, in the
+      middle of a call too;
     - only the away message keys changed: those apply in memory.
+
+    Reconfigure saves new credentials without reloading (HA 2026.12 wants the
+    update listener to do it): here they reload.
     """
     data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if data is not None and _connection(entry.data) != data.get("connection", _connection(entry.data)):
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
     if data is not None and not _options_changed(data.get("applied"), entry.options):
         return
     if data is not None and away_config.apply_options(data, entry.options):

@@ -424,6 +424,15 @@ async def _probe_transport(
     return first_local, False, f"{first_name}: {msg}. {second_name}: {msg2}"
 
 
+def _entry_loaded(entry) -> bool:
+    """True when the entry is set up: only then its update listener exists and reloads it.
+
+    After ConfigEntryNotReady or a setup error there is no listener: whoever changes
+    the entry has to reload it."""
+    state = getattr(entry, "state", None)
+    return str(getattr(state, "value", state)) == "loaded"
+
+
 # ─── Config Flow ─────────────────────────────────────────────────────────────
 
 
@@ -548,7 +557,7 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @callback
     def _update_proxy(self, entry, proxy: str) -> None:
-        """Il DHCP ha dato un altro IP al Tab: si aggiorna l'entry e si ricarica.
+        """Il DHCP ha dato un altro IP al Tab: si aggiorna l'entry (il listener ricarica).
         Solo in modalità locale, dove l'IP serve davvero."""
         conf = {**entry.data, **entry.options}
         if not proxy or conf.get(KEY_LOCAL_PROXY) == proxy or not conf.get(KEY_USE_LOCAL_UDP, True):
@@ -557,8 +566,11 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         kwargs = {"data": {**entry.data, KEY_LOCAL_PROXY: proxy}}
         if KEY_LOCAL_PROXY in entry.options:
             kwargs["options"] = {**entry.options, KEY_LOCAL_PROXY: proxy}
+        # The update listener reloads a loaded entry (local_proxy is connection data,
+        # __init__._connection); one that failed to set up has no listener.
         self.hass.config_entries.async_update_entry(entry, **kwargs)
-        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        if not _entry_loaded(entry):
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
 
     async def async_step_zeroconf_confirm(
         self, user_input: dict | None = None
@@ -848,7 +860,11 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     moved = use_local_udp != wanted_local
                     if moved:
                         _LOGGER.warning("Reconfigure: %s", msg)
-                    return self.async_update_reload_and_abort(
+                    # A loaded entry is saved without reloading: its update listener reloads on
+                    # new credentials (HA 2026.12). One that is not set up has no listener.
+                    finish = (self.async_update_and_abort if _entry_loaded(entry)
+                              else self.async_update_reload_and_abort)
+                    return finish(
                         entry,
                         unique_id=f"{credentials['sip_user']}@{credentials['sip_domain']}",
                         data_updates={**credentials, KEY_USE_LOCAL_UDP: use_local_udp,

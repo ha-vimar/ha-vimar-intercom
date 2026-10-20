@@ -31,7 +31,8 @@ NEW_QR = {"id": "60994", "pwd": "new", "domain": "plant.example.test", "planttyp
 
 
 def _flow(cf, monkeypatch, probe_ok=True):
-    entry = types.SimpleNamespace(entry_id="e1", data=dict(ENTRY_DATA), options={"camera_target": "55100"})
+    entry = types.SimpleNamespace(entry_id="e1", data=dict(ENTRY_DATA), options={"camera_target": "55100"},
+                                  state=types.SimpleNamespace(value="loaded"))
     flow = cf.VimarIntercomConfigFlow()
     flow.context = {"source": "reconfigure", "entry_id": "e1"}
     flow.hass = types.SimpleNamespace(async_add_executor_job=_job)
@@ -43,7 +44,14 @@ def _flow(cf, monkeypatch, probe_ok=True):
         flow.updates.append((e, kw))
         return {"type": "abort", "reason": "reconfigure_successful"}
 
-    flow.async_update_reload_and_abort = update_reload_and_abort
+    flow.async_update_and_abort = update_reload_and_abort
+    flow.reloaded = []
+
+    def reload_and_abort(e, **kw):
+        flow.reloaded.append(e)
+        return update_reload_and_abort(e, **kw)
+
+    flow.async_update_reload_and_abort = reload_and_abort
     flow.probes = []
 
     async def probe(credentials, **kw):
@@ -148,3 +156,18 @@ def test_the_same_transport_clears_an_old_fallback_note(cf, monkeypatch):
     (_, update), = flow.updates
     assert update["data_updates"]["setup_note"] == ""
     assert update["reason"] == "reconfigure_successful"
+
+
+def test_a_loaded_entry_is_saved_and_left_to_the_update_listener(cf, monkeypatch):
+    flow, _ = _flow(cf, monkeypatch)
+    asyncio.run(flow.async_step_reconfigure({"qr_text": "QR"}))
+    assert len(flow.updates) == 1 and flow.reloaded == []
+
+
+def test_an_entry_that_is_not_set_up_is_reloaded_by_reconfigure(cf, monkeypatch):
+    """After ConfigEntryNotReady or a setup error there is no update listener: without
+    a reload the new credentials would be saved and never used."""
+    flow, entry = _flow(cf, monkeypatch)
+    entry.state = types.SimpleNamespace(value="setup_retry")
+    asyncio.run(flow.async_step_reconfigure({"qr_text": "QR"}))
+    assert flow.reloaded == [entry]

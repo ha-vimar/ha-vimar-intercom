@@ -13,18 +13,23 @@ from . import runtime as R
 _LOGGER = logging.getLogger(__name__)
 
 
-# Nomi "umani" degli indirizzi SIP dell'impianto
+# Names of the plant's well-known SIP addresses, shown in sensor states and attributes
+# (#178): Italian when Home Assistant is in Italian, English otherwise.
 SIP_ID_NAMES = {
-    "55001": "Targa Esterna",
-    "55002": "Targa Interna",
-    "60001": "Monitor Interno",
+    "it": {"55001": "Targa Esterna", "55002": "Targa Interna", "60001": "Monitor Interno"},
+    "en": {"55001": "Entrance panel", "55002": "Internal panel", "60001": "Indoor monitor"},
 }
+
+
+def sip_id_names() -> dict[str, str]:
+    """The names in the Home Assistant language (runtime.LANGUAGE)."""
+    return SIP_ID_NAMES["it" if R.LANGUAGE.lower().startswith("it") else "en"]
 
 
 def sip_id_name(sip_id: str | None) -> str | None:
     if not sip_id:
         return None
-    return SIP_ID_NAMES.get(sip_id, sip_id)
+    return sip_id_names().get(sip_id, sip_id)
 
 
 class PlantMessages:

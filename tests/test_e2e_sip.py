@@ -149,7 +149,7 @@ def test_cloud_irraggiungibile_all_avvio_si_riprova(monkeypatch):
         data=dict(sip_user=USER, sip_password=PASSWORD, sip_domain=DOMAIN,
                   cloud_proxy="localhost", use_local_udp=False,
                   device_imei="000", device_uuid="uuid-test", av_key="av-key-test"))
-    hass = types.SimpleNamespace(data={})
+    hass = types.SimpleNamespace(data={}, config=types.SimpleNamespace(language="it"))
 
     async def s():
         with pytest.raises(_NotReady):

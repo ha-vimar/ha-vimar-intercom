@@ -101,6 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Le options (impostazioni rete modificate da OptionsFlow) sovrascrivono
     # i valori di default presenti in entry.data.
     runtime.configure({**entry.data, **entry.options})
+    runtime.LANGUAGE = hass.config.language or ""
     _LOGGER.info(
         "Runtime configurato: user=%s domain=%s local_proxy=%s udp=%s",
         runtime.SIP_USER, runtime.SIP_DOMAIN,

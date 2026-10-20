@@ -97,7 +97,7 @@
       },
       "settings": {
         "title": "Vimar Intercom settings",
-        "description": "SIP network and dynamic actuators. In the Actuators field paste the JSON list produced by tools/parse_rubrica.py, or go back to the menu and use \"Import actuators from rubrica.db\". {actuators_error}",
+        "description": "SIP network and dynamic actuators. In the Actuators field paste the JSON list produced by tools/parse_rubrica.py, or go back to the menu and use \"Import actuators from rubrica.db\".",
         "data": {
           "local_proxy": "Intercom IP address",
           "use_local_udp": "Use local SIP UDP",
@@ -213,10 +213,9 @@
     "error": {
       "invalid_ip": "Invalid IP address.",
       "sip_registration_failed": "SIP registration failed.",
-      "invalid_actuators": "Invalid actuators list: {actuators_error}",
       "invalid_actuator_target": "Invalid actuator target ({actuators_error}): digits only (e.g. 55001) or AUTO.",
       "rubrica_import_failed": "Import failed. See description above for details.",
-      "rubrica_no_actuators": "No actuators found for the specified GID. See description above.",
+      "rubrica_no_actuators": "No actuators found for GID {rubrica_gid}: check the apartment GID.",
       "internal_panel_not_found": "The nickname reply does not declare a unique valid PICG. Enter a known indoor monitor address manually.",
       "internal_panel_no_reply": "No nickname reply arrived from the configured PICG. Some cloud plants do not answer GET_NICKS even at an existing address. This does not prove the address is wrong; enter a known indoor monitor address manually.",
       "internal_panel_unavailable": "The nickname lookup could not run: the integration may be disconnected or another search may be in progress. Retry once it is available, or enter a known indoor monitor address manually.",
@@ -236,7 +235,13 @@
       "no_cloud_token": "The status reply did not include a phonebook token. Use the intercom download or import rubrica.db instead.",
       "no_cloud_status": "No status reply was received. Check that the integration is connected and that the PICG address is correct, then retry. This does not establish whether the system supports cloud phonebook downloads.",
       "cloud_auth_failed": "The Vimar cloud rejected the token.",
-      "cloud_failed": "Phonebook download from the cloud failed."
+      "cloud_failed": "Phonebook download from the cloud failed.",
+      "actuators_bad_json": "Invalid actuators list: not valid JSON ({actuators_error})",
+      "actuators_not_list": "Invalid actuators list: it must be a JSON list, [ ... ]",
+      "actuators_not_object": "Invalid actuators list: item {actuators_error} is not a JSON object",
+      "actuators_missing_keys": "Invalid actuators list: missing keys in item {actuators_error} (needed: name, msg, target, icon)",
+      "actuators_bad_icon": "Invalid actuators list: icon not allowed in item {actuators_error} (allowed: door, light, switch)",
+      "cloud_missing_data": "Phonebook download from the cloud not possible: missing {cloud_missing} (the cloud domain and proxy come from the QR code)."
     }
   },
   "entity": {
@@ -556,6 +561,36 @@
     },
     "command_queued": {
       "message": "Command not confirmed: the relay queued it (202) and no device confirmed it"
+    },
+    "proxy_unreachable": {
+      "message": "SIP proxy unreachable: {error}"
+    },
+    "call_failed": {
+      "message": "Call failed: {error}"
+    },
+    "call_target_failed": {
+      "message": "Call to {target} failed: {error}"
+    },
+    "answer_failed": {
+      "message": "Answer failed: {error}"
+    },
+    "decline_failed": {
+      "message": "Decline failed: {error}"
+    },
+    "test_ring_busy": {
+      "message": "Test ring not started: a call is already in progress"
+    },
+    "actuator_failed": {
+      "message": "{name} failed: {error}"
+    },
+    "vm_timeout_not_allowed": {
+      "message": "Value not allowed by the intercom: {option}"
+    },
+    "vm_timeout_failed": {
+      "message": "Voicemail delay not changed: {error}"
+    },
+    "switch_failed": {
+      "message": "{entity}: command failed ({error})"
     }
   }
 }

@@ -130,22 +130,22 @@ def scan_targets(
                 continue
             t = sip_target(item)
             if t is None:
-                raise ValueError(f"indirizzo non valido: {item!r}")
+                raise ValueError(f"invalid address: {item!r}")
             if t not in out:
                 out.append(t)
     else:
         a, b = sip_target(start), sip_target(end if end not in (None, "") else start)
         if a is None or b is None:
-            raise ValueError("start/end devono essere indirizzi SIP numerici")
+            raise ValueError("start/end must be numeric SIP addresses")
         lo, hi = int(a), int(b)
         if hi < lo:
-            raise ValueError("end è minore di start")
+            raise ValueError("end is lower than start")
         if hi - lo + 1 > MAX_SCAN_TARGETS:
-            raise ValueError(f"al massimo {MAX_SCAN_TARGETS} indirizzi per ricerca")
+            raise ValueError(f"at most {MAX_SCAN_TARGETS} addresses per search")
         width = len(a)
         out = [str(n).zfill(width) for n in range(lo, hi + 1)]
     if not out:
-        raise ValueError("nessun indirizzo da interrogare")
+        raise ValueError("no address to probe")
     if len(out) > MAX_SCAN_TARGETS:
-        raise ValueError(f"al massimo {MAX_SCAN_TARGETS} indirizzi per ricerca")
+        raise ValueError(f"at most {MAX_SCAN_TARGETS} addresses per search")
     return out

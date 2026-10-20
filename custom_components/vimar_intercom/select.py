@@ -104,12 +104,12 @@ class VimarVmTimeoutSelect(SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         if option not in self.options:
-            raise HomeAssistantError(f"Valore non ammesso dal citofono: {option}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="vm_timeout_not_allowed", translation_placeholders={"option": str(option)})
         ok, msg = await self._hub.async_set_apt_param("vm_timeout", int(option))
         if msg == QUEUED:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="command_queued")
         if not ok:
-            raise HomeAssistantError(f"Ritardo segreteria non cambiato: {msg}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="vm_timeout_failed", translation_placeholders={"error": str(msg)})
         self.async_write_ha_state()
 
 

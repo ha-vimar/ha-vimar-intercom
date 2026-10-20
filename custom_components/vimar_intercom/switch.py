@@ -228,7 +228,8 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
         if msg == QUEUED:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="command_queued")
         if not ok:
-            raise HomeAssistantError(f"{self.entity_id}: comando non riuscito ({msg})")
+            # The entity's own translated name ("Do not disturb"); its entity_id only if it has none.
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="switch_failed", translation_placeholders={"entity": str(getattr(self, "name", None) or self.entity_id), "error": str(msg)})
         # Il Tab di solito annuncia il cambio da solo; chi non lo fa può comunque
         # rispondere a GET_INIT_STATUS con dnd/voicemail.
         await self._hub.async_request_status()

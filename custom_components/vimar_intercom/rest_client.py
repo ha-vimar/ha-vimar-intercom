@@ -112,17 +112,17 @@ def _request(
     except requests.exceptions.RequestException as err:
         # Il messaggio di requests contiene l'URL ma non le credenziali
         # (stanno nell'header Authorization, non nell'URL).
-        raise RestUnavailable(f"{host} non raggiungibile: {err}") from err
+        raise RestUnavailable(f"{host} unreachable: {err}") from err
 
     if resp.status_code == 401:
         raise RestAuthError(
-            f"401 da {host}: credenziali SIP rifiutate, oppure "
-            f"{params} non esiste su questo impianto"
+            f"401 from {host}: SIP credentials rejected, or "
+            f"{params} does not exist on this system"
         )
     if resp.status_code == 304:
         return resp
     if resp.status_code != 200:
-        raise RestError(f"{host} ha risposto {resp.status_code} a {path} {params}")
+        raise RestError(f"{host} answered {resp.status_code} to {path} {params}")
     return resp
 
 
@@ -209,7 +209,7 @@ def download_db(
     Con `dest` il contenuto viene anche scritto su quel percorso.
     """
     if name not in (DB_RUBRICA, DB_MAILBOX):
-        raise ValueError(f"nome non valido: {name!r}")
+        raise ValueError(f"invalid name: {name!r}")
 
     headers = {"If-Modified-Since": if_modified_since} if if_modified_since else None
     resp = _request(
@@ -222,8 +222,8 @@ def download_db(
     data = _body(resp)
     if not data.startswith(b"SQLite format 3"):
         raise RestError(
-            f"{host} ha risposto 200 ma il contenuto non è un database SQLite "
-            f"({len(data)} byte)"
+            f"{host} answered 200 but the content is not an SQLite database "
+            f"({len(data)} bytes)"
         )
     if dest:
         with open(dest, "wb") as fh:
@@ -243,9 +243,9 @@ def parse_status(raw: bytes | str) -> dict[str, Any]:
     try:
         items = json.loads(raw)
     except (ValueError, TypeError) as err:
-        raise RestError(f"risposta non JSON: {err}") from err
+        raise RestError(f"not a JSON answer: {err}") from err
     if not isinstance(items, list):
-        raise RestError("risposta inattesa: atteso un array JSON")
+        raise RestError("unexpected answer: a JSON array was expected")
 
     out: dict[str, Any] = {}
     for item in items:
@@ -263,9 +263,9 @@ def parse_nicknames(raw: bytes | str) -> list[dict[str, str]]:
     try:
         items = json.loads(raw)
     except (ValueError, TypeError) as err:
-        raise RestError(f"risposta non JSON: {err}") from err
+        raise RestError(f"not a JSON answer: {err}") from err
     if not isinstance(items, list):
-        raise RestError("risposta inattesa: atteso un array JSON")
+        raise RestError("unexpected answer: a JSON array was expected")
 
     out: list[dict[str, str]] = []
     for item in items:

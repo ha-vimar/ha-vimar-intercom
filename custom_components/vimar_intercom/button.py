@@ -88,7 +88,7 @@ class VimarCallButton(ButtonEntity):
     async def async_press(self) -> None:
         ok, msg = await self._hub.async_call()
         if not ok:
-            raise HomeAssistantError(f"Chiamata non riuscita: {msg}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="call_failed", translation_placeholders={"error": str(msg)})
 
 
 class VimarCallTargetButton(ButtonEntity):
@@ -108,7 +108,7 @@ class VimarCallTargetButton(ButtonEntity):
     async def async_press(self) -> None:
         ok, msg = await self._hub.async_call(target=self._target)
         if not ok:
-            raise HomeAssistantError(f"Chiamata a {self._target} non riuscita: {msg}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="call_target_failed", translation_placeholders={"target": str(self._target), "error": str(msg)})
 
 
 class VimarAnswerButton(ButtonEntity):
@@ -153,7 +153,7 @@ class VimarAnswerButton(ButtonEntity):
     async def async_press(self) -> None:
         ok, msg = await self._hub.async_answer()
         if not ok:
-            raise HomeAssistantError(f"Risposta non riuscita: {msg}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="answer_failed", translation_placeholders={"error": str(msg)})
 
 
 class VimarDeclineButton(VimarAnswerButton):
@@ -173,7 +173,7 @@ class VimarDeclineButton(VimarAnswerButton):
     async def async_press(self) -> None:
         ok, msg = await self._hub.async_decline()
         if not ok:
-            raise HomeAssistantError(f"Rifiuto non riuscito: {msg}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="decline_failed", translation_placeholders={"error": str(msg)})
 
 
 class VimarHangupButton(ButtonEntity):
@@ -237,7 +237,7 @@ class VimarTestRingButton(ButtonEntity):
         # and automations, so administrators and automations only.
         await require_admin(self.hass, self._context)
         if not self._hub.simulate_ring(20):
-            raise HomeAssistantError("Squillo di prova non avviato: una chiamata è già in corso")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="test_ring_busy")
 
 
 class VimarActuatorButton(ButtonEntity):
@@ -275,4 +275,4 @@ class VimarActuatorButton(ButtonEntity):
         if msg == QUEUED:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="command_queued")
         if not ok:
-            raise HomeAssistantError(f"{self._attr_name} non riuscito: {msg}")
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="actuator_failed", translation_placeholders={"name": str(self._attr_name), "error": str(msg)})

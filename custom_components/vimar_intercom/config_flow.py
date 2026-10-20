@@ -832,6 +832,12 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["qr_text"] = "qr_invalid"
                 self._qr_error = str(exc)
             else:
+                # The new QR may belong to another entry: stop before the probe, which
+                # would register on that entry's slot.
+                new_uid = f"{credentials['sip_user']}@{credentials['sip_domain']}"
+                if any(e.unique_id == new_uid and e.entry_id != entry.entry_id
+                       for e in self._async_current_entries(include_ignore=False)):
+                    return self.async_abort(reason="already_configured")
                 # What setup learned and a new QR may lack: the Tab's own address as
                 # local domain where the QR says 127.0.0.1 (40515, from mDNS), and the MAC.
                 if (entry.data.get(KEY_LOCAL_DOMAIN)

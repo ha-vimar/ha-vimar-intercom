@@ -28,6 +28,7 @@ from .config_flow import (
     KEY_CAMERA_TARGET,
     KEY_CLOUD_DOMAIN,
     KEY_CLOUD_PROXY,
+    KEY_DOOR_OPEN_CURRENT,
     KEY_DOOR_TARGET,
     KEY_GID,
     KEY_INTERNAL_PANEL_TARGET,
@@ -252,6 +253,11 @@ def _targets_schema(form: dict) -> dict:
             KEY_DOOR_TARGET,
             default=form.get(KEY_DOOR_TARGET) or "",
         ): str,
+        # Off by default: only plants behind a gateway have the 60002 it goes to (#186).
+        vol.Optional(
+            KEY_DOOR_OPEN_CURRENT,
+            default=bool(form.get(KEY_DOOR_OPEN_CURRENT, False)),
+        ): bool,
     }
 
 
@@ -453,6 +459,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         KEY_VOICE_ANSWER:   voice_answer,
                         KEY_ACTUATORS:      actuators,
                         **targets,
+                        KEY_DOOR_OPEN_CURRENT: bool(user_input.get(
+                            KEY_DOOR_OPEN_CURRENT, current.get(KEY_DOOR_OPEN_CURRENT, False))),
                         KEY_AWAY_FILE:      away_file,
                         KEY_AWAY_TEXT:      away_text,
                         KEY_AWAY_TTS:       away_tts,

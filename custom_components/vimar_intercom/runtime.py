@@ -166,6 +166,8 @@ INTERNAL_PANEL_TARGET: str = _const.PICG_TARGET
 # targa 55001 (è lì che la manda l'app VIEW). Senza un valore dalla rubrica si
 # resta sull'SGA, come prima.
 DOOR_TARGET: str = _const.SGA_TARGET
+# Option: during a call, open the calling entrance with OPEN_CURRENT (#186). Off by default.
+DOOR_OPEN_CURRENT: bool = False
 
 # ─── URI calcolati da SIP_DOMAIN (popolati in configure) ─────────────────────
 INTERCOM:     str = ""   # sip:<CAMERA_TARGET>@<domain> — destinatario di default delle chiamate
@@ -270,7 +272,7 @@ def configure(data: dict) -> None:
     global INTERCOM, DOOR_ESTERNO, VOICE_ANSWER
     global ACTUATORS
     global SGA_TARGET, PICG_TARGET
-    global CAMERA_TARGET, INTERNAL_PANEL_TARGET, DOOR_TARGET, CAMERA_TARGET_CONFIGURED
+    global CAMERA_TARGET, INTERNAL_PANEL_TARGET, DOOR_TARGET, CAMERA_TARGET_CONFIGURED, DOOR_OPEN_CURRENT
     global AWAY_MESSAGE_FILE, AWAY_MESSAGE_TEXT, AWAY_MESSAGE_TTS, AWAY_MESSAGE_DELAY
     global SNAPSHOT_DIR, SNAPSHOT_DELAY, VIEW_KEEPALIVE, ALLOWED_USERS
     global VIDEO_BANDWIDTH, SESSION_BANDWIDTH
@@ -294,6 +296,7 @@ def configure(data: dict) -> None:
     VIDEO_ENABLED  = bool(data.get("video_enabled", True))
     MEDIA_ENC_OPTION = media_enc_mode(data.get("media_enc"))
     VOICE_ANSWER = voice_answer_mode(data.get("voice_answer"))
+    DOOR_OPEN_CURRENT = bool(data.get("door_open_current", False))
 
     # ─── Scelta del dominio SIP attivo ───────────────────────────────────────
     # Il QR porta due domini: «domain» (locale del Tab) e «cdomain» (cloud).

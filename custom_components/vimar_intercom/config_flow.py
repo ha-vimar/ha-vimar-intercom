@@ -798,6 +798,71 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict | None = None
+    ) -> FlowResult:
+        """A new pairing QR for the entry already set up (the intercom refuses the old one).
+
+        Only the SIP credentials change: the entry, its device identity, network
+        settings and options stay, so entities, automations and dashboards keep
+        working. The new QR is first tried with a real registration, as at setup."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                fields = await self.hass.async_add_executor_job(
+                    qr_decoder.decode, user_input.get("qr_text", "").strip()
+                )
+                credentials = qr_decoder.extract_sip_credentials(fields)
+            except qr_decoder.QRDecodeError as exc:
+                _LOGGER.warning("QR decode error: %s", exc)
+                errors["qr_text"] = "qr_invalid"
+                self._qr_error = str(exc)
+            else:
+                # What setup learned and a new QR may lack: the Tab's own address as
+                # local domain where the QR says 127.0.0.1 (40515, from mDNS), and the MAC.
+                if (entry.data.get(KEY_LOCAL_DOMAIN)
+                        and not discovery.is_routable_domain(credentials.get(KEY_LOCAL_DOMAIN))):
+                    credentials[KEY_LOCAL_DOMAIN] = entry.data[KEY_LOCAL_DOMAIN]
+                if not credentials.get(KEY_MAC) and entry.data.get(KEY_MAC):
+                    credentials[KEY_MAC] = entry.data[KEY_MAC]
+                self._credentials = credentials
+                identity = {k: entry.data[k] for k in ("device_imei", "device_uuid", "device_name")
+                            if entry.data.get(k)}
+                wanted_local = entry.data.get(KEY_USE_LOCAL_UDP, True)
+                use_local_udp, ok, msg = await _probe_transport(
+                    credentials,
+                    local_proxy=entry.data.get(KEY_LOCAL_PROXY, ""),
+                    local_udp_port=int(entry.data.get(KEY_LOCAL_UDP_PORT, DEFAULT_LOCAL_UDP_PORT)),
+                    identity=identity,
+                    prefer_local=wanted_local,
+                    local_domain=self._local_test_domain(),
+                )
+                self._qr_error = msg
+                if not ok:
+                    errors["qr_text"] = "sip_registration_failed"
+                else:
+                    # Only the other transport worked: the entry moves to it, and says so
+                    # (as setup does with transport_fallback), never silently.
+                    moved = use_local_udp != wanted_local
+                    if moved:
+                        _LOGGER.warning("Reconfigure: %s", msg)
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        unique_id=f"{credentials['sip_user']}@{credentials['sip_domain']}",
+                        data_updates={**credentials, KEY_USE_LOCAL_UDP: use_local_udp,
+                                      KEY_SETUP_NOTE: msg if moved else ""},
+                        reason="reconfigure_transport_changed" if moved else "reconfigure_successful",
+                    )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({vol.Required("qr_text"): str}),
+            errors=errors,
+            description_placeholders={"error_detail": self._qr_error or ""},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(

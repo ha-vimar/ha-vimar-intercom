@@ -157,7 +157,12 @@ const CardAudio = (Base) => class extends Base {
   // "Audio" stesso, tocco vero — parte comunque, anche a `listen_on_ring` spento: è
   // l'utente a chiederlo, non l'anteprima automatica.
   async _startListen(auto = false) {
-    if (!window.isSecureContext) return;
+    // Not on HTTP: a tap said nothing at all (40507, 20/10/2026); now it says why, like the
+    // microphone. The automatic listen on ring stays silent.
+    if (!window.isSecureContext) {
+      if (!auto) this._err.textContent = t("audio_needs_https");
+      return;
+    }
     this._listenStarting = true;
     try {
       const ctx = await this._unlockedContext();

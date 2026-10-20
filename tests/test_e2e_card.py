@@ -289,6 +289,26 @@ def test_rispondi_senza_https_solo_video(monkeypatch, engine):  # noqa: F811
     run(s())
 
 
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_audio_senza_https_lo_dice(monkeypatch, engine):  # noqa: F811
+    """Dal campo (40507, 20/10/2026): HA aperta in HTTP, il tondo "Audio" sul video non
+    faceva niente al tocco. L'ascolto resta riservato all'HTTPS, ma ora il tocco dice
+    perché, come il microfono, e non tocca la chiamata."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, insecure=True, webcodecs=False) as c:
+                rig.ring("ring-http")
+                await c.until("info().pill === 'Suonano alla porta'")
+                assert not (await c.info())["mute"]["hidden"]
+                await c.tap("mute")
+                await c.until("info().err.startsWith('Audio non disponibile')")
+                assert "HTTPS" in (await c.info())["err"]
+                assert (await c.info())["pill"] == "Suonano alla porta" and not rig.services
+                assert not (await c.T())["errors"]
+    run(s())
+
+
 MIC_OFF = "info().audio === 'off' && card.shadowRoot.getElementById('talk').getAttribute('aria-pressed') === 'false'"
 
 

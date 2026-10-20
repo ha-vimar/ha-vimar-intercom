@@ -151,7 +151,7 @@ class _Hub:
 def _switch(hub):
     switch_mod.HomeAssistantError = _HAError  # negli stub è un jolly, non un'eccezione
     sw = switch_mod.VimarVoicemailSwitch(
-        hub, "e1", key="segreteria", name="Segreteria", icon="mdi:voicemail",
+        hub, "e1", key="segreteria", object_id="segreteria", icon="mdi:voicemail",
         target="55001", cmd_on="VOICEMAIL;ON", cmd_off="VOICEMAIL;OFF",
         state_attr="voicemail", hname="Panda", hvalue="blue")
     sw.async_write_ha_state = lambda: None

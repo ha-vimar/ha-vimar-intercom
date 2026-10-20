@@ -208,7 +208,7 @@ class _Hub:
 
 def _dnd(hub):
     sw = _carica("switch")
-    s = sw.VimarModeSwitch(hub, "e1", key="dnd", name="Non Disturbare", icon="x", target="55001",
+    s = sw.VimarModeSwitch(hub, "e1", key="dnd", object_id="dnd", icon="x", target="55001",
                            cmd_on="DND;ON", cmd_off="DND;OFF", state_attr="dnd",
                            hname="Panda", hvalue="blue")
 
@@ -409,7 +409,7 @@ def test_dnd_disponibile_da_registrato_anche_senza_stato_del_tab():
 def test_segreteria_e_ritardo_disponibili_solo_con_risposta_del_tab(monkeypatch):
     hub = _Hub()
     sw = _carica("switch")
-    s = sw.VimarVoicemailSwitch(hub, "e1", key="segreteria", name="Segreteria", icon="x", target="55001",
+    s = sw.VimarVoicemailSwitch(hub, "e1", key="segreteria", object_id="segreteria", icon="x", target="55001",
                            cmd_on="VOICEMAIL;ON", cmd_off="VOICEMAIL;OFF", state_attr="voicemail",
                            hname="Panda", hvalue="blue")
     sel = _carica("select")
@@ -431,7 +431,7 @@ def _seg(hub, monkeypatch, testo="ciao", file=""):
     hub.away_enabled = False
     hub.set_away_enabled = lambda on: setattr(hub, "away_enabled", on)
     hub.on_voicemail_on = lambda: hub.set_away_enabled(False)
-    s = sw.VimarVoicemailSwitch(hub, "e1", key="segreteria", name="Segreteria", icon="x", target="55001",
+    s = sw.VimarVoicemailSwitch(hub, "e1", key="segreteria", object_id="segreteria", icon="x", target="55001",
                            cmd_on="VOICEMAIL;ON", cmd_off="VOICEMAIL;OFF", state_attr="voicemail",
                            hname="Panda", hvalue="blue")
     s.async_write_ha_state = lambda: None

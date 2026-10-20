@@ -109,7 +109,7 @@
           "sga_target": "SGA (id SIP segreteria/DND)",
           "picg_target": "PICG (id SIP GET_INIT_STATUS)",
           "camera_target": "Targa video (id SIP da chiamare)",
-          "internal_panel_target": "Pannello interno (id SIP «Chiama Casa»)",
+          "internal_panel_target": "Pannello interno (id SIP «Chiama casa (interno)»)",
           "door_target": "Targa che apre la porta",
           "away_message_file": "Messaggio se nessuno risponde (file audio)",
           "away_message_upload": "Oppure carica il file audio (mp3, wav, m4a)",
@@ -131,8 +131,8 @@
           "actuators": "Lista JSON di oggetti name, msg, target, icon. icon: door|light|switch. target \"AUTO\" usa la targa che apre la porta. Vuoto = nessun bottone.",
           "sga_target": "Destinatario di VOICEMAIL;/DND;, e dell'apertura porta se «Targa che apre la porta» è vuota. Vuoto = default storico (55001). Cambialo solo se il tuo impianto usa un altro SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
           "picg_target": "Destinatario di GET_INIT_STATUS. Sugli impianti verificati finora coincide con l'SGA. Vuoto = default storico (55001).",
-          "camera_target": "Targa chiamata dalla camera, da «Chiama» e da «Chiama Video (esterno)»: la riga PHONEBOOK con TYPE='PE' in rubrica.db (l'import rubrica la compila da solo). Vuoto = la targa imparata dall'ultimo squillo con video, altrimenti 55100. Non è l'SGA.",
-          "internal_panel_target": "Destinatario del pulsante «Chiama Casa (interno)». La rubrica non lo dice: va inserito a mano. Vuoto = default storico (55002).",
+          "camera_target": "Targa chiamata dalla camera, da «Chiama» e da «Chiama video (esterno)»: la riga PHONEBOOK con TYPE='PE' in rubrica.db (l'import rubrica la compila da solo). Vuoto = la targa imparata dall'ultimo squillo con video, altrimenti 55100. Non è l'SGA.",
+          "internal_panel_target": "Destinatario del pulsante «Chiama casa (interno)». La rubrica non lo dice: va inserito a mano. Vuoto = default storico (55002).",
           "door_target": "La targa a cui va il comando di apertura: il GID_PE dell'attuatore porta nella rubrica (su un 2FV2 non è l'SGA). Si compila da sola importando o scaricando la rubrica. Vuoto = la targa dell'attuatore porta, se gli attuatori sono stati importati, altrimenti l'SGA.",
           "away_message_file": "File audio (mp3, wav...) da far sentire al visitatore se nessuno risponde, es. /config/media/citofono/messaggio.mp3 (o scegli il file dalla pagina del dispositivo: caricalo da Media > Local media > citofono/messaggi). Vuoto = disattivato.",
           "away_message_upload": "Il file finisce in cartella media/citofono/messaggi e diventa subito il messaggio di assenza. Massimo 5 MB; se c'è già un file diverso con lo stesso nome, a questo si aggiunge -2.",
@@ -240,59 +240,119 @@
     }
   },
   "entity": {
-    "camera": {
-      "videocitofono": {
-        "name": "Videocitofono"
-      }
-    },
-    "lock": {
-      "serratura": {
-        "name": "Serratura"
+    "binary_sensor": {
+      "sip_registered": {
+        "name": "Registrazione SIP"
+      },
+      "in_call": {
+        "name": "In chiamata"
+      },
+      "ringing": {
+        "name": "Squillo"
+      },
+      "calling": {
+        "name": "Chiamata in uscita"
+      },
+      "new_videomessage": {
+        "name": "Nuovo videomessaggio"
       }
     },
     "button": {
-      "chiama": {
+      "call": {
         "name": "Chiama"
       },
-      "riaggancia": {
+      "call_ext": {
+        "name": "Chiama video (esterno)"
+      },
+      "call_int": {
+        "name": "Chiama casa (interno)"
+      },
+      "answer": {
+        "name": "Rispondi"
+      },
+      "decline": {
+        "name": "Rifiuta"
+      },
+      "hangup": {
         "name": "Riaggancia"
+      },
+      "door_street": {
+        "name": "Apri porta"
+      },
+      "test_ring": {
+        "name": "Squillo di prova"
       }
     },
     "event": {
-      "campanello": {
+      "doorbell": {
         "name": "Campanello"
       },
       "fuoriporta": {
         "name": "Fuoriporta"
       }
     },
-    "binary_sensor": {
-      "registrazione_sip": {
-        "name": "Registrazione SIP"
-      },
-      "in_chiamata": {
-        "name": "In Chiamata"
-      },
-      "nuovo_videomessaggio": {
-        "name": "Nuovo Videomessaggio"
-      }
-    },
-    "sensor": {
-      "spazio_segreteria": {
-        "name": "Spazio Segreteria"
-      },
-      "versione_rubrica": {
-        "name": "Versione Rubrica"
-      },
-      "ultima_chiamata_persa": {
-        "name": "Ultima Chiamata Persa"
+    "lock": {
+      "lock": {
+        "name": "Serratura"
       }
     },
     "select": {
+      "vm_timeout": {
+        "name": "Segreteria · ritardo"
+      },
       "away_file": {
+        "name": "Segreteria · file audio",
         "state": {
           "none": "Nessuno (usa il testo)"
         }
+      }
+    },
+    "sensor": {
+      "devices": {
+        "name": "Dispositivi"
+      },
+      "status": {
+        "name": "Stato",
+        "state": {
+          "offline": "Non raggiungibile",
+          "idle": "Pronto",
+          "ringing": "Squilla",
+          "in_call": "In chiamata",
+          "calling": "Chiamata in corso"
+        }
+      },
+      "last_caller": {
+        "name": "Ultimo chiamante"
+      },
+      "last_ring": {
+        "name": "Ultimo squillo"
+      },
+      "ring_count": {
+        "name": "Squilli"
+      },
+      "call_count": {
+        "name": "Chiamate"
+      },
+      "last_call_duration": {
+        "name": "Durata ultima chiamata"
+      },
+      "last_door": {
+        "name": "Ultima apertura"
+      },
+      "last_command": {
+        "name": "Ultimo comando"
+      },
+      "last_message_in": {
+        "name": "Ultimo messaggio ricevuto"
+      },
+      "vm_level": {
+        "name": "Spazio segreteria"
+      },
+      "rubrica_ver": {
+        "name": "Versione rubrica"
+      },
+      "last_missed_call": {
+        "name": "Ultima chiamata persa"
       }
     },
     "switch": {
@@ -301,6 +361,11 @@
       },
       "dnd": {
         "name": "Non disturbare"
+      }
+    },
+    "text": {
+      "away_text": {
+        "name": "Segreteria · testo del messaggio"
       }
     }
   },

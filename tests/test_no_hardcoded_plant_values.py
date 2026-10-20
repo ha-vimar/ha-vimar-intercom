@@ -77,7 +77,7 @@ def test_le_targhe_da_chiamare_vengono_dalle_opzioni():
     assert "R.INTERNAL_PANEL_TARGET" in src
     assert "R.CAMERA_TARGET" in src
     # «Chiama Video (esterno)» non deve più chiamare l'SGA.
-    riga = next(r for r in src.splitlines() if "Chiama Video" in r)
+    riga = next(r for r in src.splitlines() if '"call_ext"' in r)
     assert "SGA_TARGET" not in riga
 
 

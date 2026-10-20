@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .device import device_info
+from .device import device_info, legacy_entity_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ async def async_setup_entry(
         # dell'attuatore porta nella rubrica (door_target), o l'SGA se la
         # rubrica non è stata importata. Un indirizzo sbagliato risponde 200
         # senza effetto e la serratura mostra "sbloccata" con la porta chiusa.
-        VimarIntercomLock(hub, entry.entry_id, key="lock", name="Serratura",
+        VimarIntercomLock(hub, entry.entry_id, key="lock", object_id="serratura",
                           door_target=None),
     ])
 
@@ -41,14 +41,15 @@ class VimarIntercomLock(LockEntity):
     after 5 seconds.
     """
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_icon = "mdi:door-closed-lock"
 
-    def __init__(self, hub, entry_id: str, *, key: str, name: str, door_target: str | None) -> None:
+    def __init__(self, hub, entry_id: str, *, key: str, object_id: str, door_target: str | None) -> None:
         self._hub = hub
         self._door_target = door_target
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_unique_id = f"{entry_id}_{key}"
+        self.entity_id = legacy_entity_id("lock", object_id)
         self._is_locked = True
         self._relock_task: asyncio.Task | None = None
         self._attr_device_info = device_info(entry_id)

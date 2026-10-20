@@ -6,6 +6,50 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
+## [1.0.24] - 2026-10-20
+
+> **⚠ Before you update**
+>
+> - the displayed entity names change (for example "Intercom Stato" becomes "Vimar Intercom Stato"); automations and dashboards that use entity_ids keep working, names you renamed yourself stay as they are, and only templates that read `friendly_name` may need a look ([#191](https://github.com/ha-vimar/ha-vimar-intercom/pull/191))
+> - the `nota` attribute now holds a short key (for example `since_integration_start`) instead of an Italian sentence; it is still shown as a sentence in Home Assistant, but a template that read its text must be updated ([#194](https://github.com/ha-vimar/ha-vimar-intercom/pull/194))
+> - on any install not in Italian the panel names change (for example "Targa Esterna" becomes "Entrance panel"); an automation or template that compared them to the Italian name must use the new one or the SIP id (`chiamante_id`, `target_id`) ([#195](https://github.com/ha-vimar/ha-vimar-intercom/pull/195))
+> - if "Call Home (indoor)" does not ring your indoor monitor, you may have 55002 stored from an earlier version (the settings form used to fill it in): run Configure → Find indoor monitor and confirm the proposed PICG, or clear the field. If it works for you with no target set, check it after updating: an empty field now calls the PICG; to keep 55002, set it there ([#198](https://github.com/ha-vimar/ha-vimar-intercom/pull/198)).
+> - if your entrance panel really has no camera, turn off "Enable video in outgoing calls" (Configure → Network and actuators) after updating: a pairing QR with VIDEO=0 no longer turns it off. If your QR had VIDEO=0 and you ever saved that settings page, the switch was saved off: turn it on to get video ([#204](https://github.com/ha-vimar/ha-vimar-intercom/pull/204)).
+
+### Enhancements
+
+- The dashboard card, its visual editor and its card picker entry follow your Home Assistant language: Italian for Italian, English for every other language ([#178](https://github.com/ha-vimar/ha-vimar-intercom/pull/178)) ([#187](https://github.com/ha-vimar/ha-vimar-intercom/pull/187))
+- Entity names follow your Home Assistant language (English or Italian) and start with the device name, e.g. "Vimar Intercom Status"; entity_ids do not change ([#178](https://github.com/ha-vimar/ha-vimar-intercom/pull/178)) ([#191](https://github.com/ha-vimar/ha-vimar-intercom/pull/191))
+- Error messages from the buttons, the voicemail settings, the setup and the options follow your Home Assistant language ([#178](https://github.com/ha-vimar/ha-vimar-intercom/pull/178)) ([#193](https://github.com/ha-vimar/ha-vimar-intercom/pull/193))
+- Entity attributes are shown with names in your Home Assistant language, and the example package also comes in English ([#178](https://github.com/ha-vimar/ha-vimar-intercom/pull/178)) ([#194](https://github.com/ha-vimar/ha-vimar-intercom/pull/194))
+- The names of the plant's panels and monitor (Last caller, caller and panel attributes) follow your Home Assistant language ([#178](https://github.com/ha-vimar/ha-vimar-intercom/pull/178)) ([#195](https://github.com/ha-vimar/ha-vimar-intercom/pull/195))
+- Reconfigure (⋮ menu of the integration) takes a new pairing QR without deleting the integration: entities, automations and options stay ([#196](https://github.com/ha-vimar/ha-vimar-intercom/pull/196)).
+- When the intercom refuses Home Assistant's registration (403 or 404), a repair now says so and explains how to pair again, instead of the entities just going unavailable ([#197](https://github.com/ha-vimar/ha-vimar-intercom/pull/197)).
+
+### Bug fixes
+
+- A phone running the Video Door app on the same plant is no longer detected as an "Elvox Pixel" entrance panel ([#190](https://github.com/ha-vimar/ha-vimar-intercom/pull/190)).
+- Only the intercom's system messages (Panda: blue) are read: a text message can no longer change Do Not Disturb or voicemail, and a message with several commands, one per line, is read in full. The Last received message sensor no longer shows text messages ([#192](https://github.com/ha-vimar/ha-vimar-intercom/pull/192)).
+- "Call Home (indoor)" and "Find indoor monitor" use the apartment's PICG, which rings the indoor monitor, instead of a fixed 55002 that some intercoms reject ([#198](https://github.com/ha-vimar/ha-vimar-intercom/pull/198)).
+- On a page opened over HTTP the card's Audio button now says it needs HTTPS instead of doing nothing ([#200](https://github.com/ha-vimar/ha-vimar-intercom/pull/200)).
+- Reconfigure refuses a QR that belongs to another configured intercom instead of moving the entry onto it ([#201](https://github.com/ha-vimar/ha-vimar-intercom/pull/201)).
+- Over the cloud, the intercom's status request waits for the relay's slower answer and is no longer sent again at every registration renewal ([#202](https://github.com/ha-vimar/ha-vimar-intercom/pull/202)).
+- A pairing QR with VIDEO=0 no longer takes video out of the calls Home Assistant makes: in the Vimar apps that field only rules the preview while it rings ([#204](https://github.com/ha-vimar/ha-vimar-intercom/pull/204)).
+
+### Documentation
+
+- Record additional Tab 7S Up 40517 local-call refusals, development QR policy and same-VLAN VIEW cloud routing observations ([#184](https://github.com/ha-vimar/ha-vimar-intercom/pull/184)).
+- The Open door service no longer labels 55001 and 55002 as outdoor and indoor panel: they are only examples, the right address comes from the phonebook ([#188](https://github.com/ha-vimar/ha-vimar-intercom/pull/188)).
+
+### Security
+
+- Debug logs also hide other phones' 5-digit SIP ids (6xxxx), in SIP addresses and in plant messages; panels' extensions and the protocol's own addresses (60000-60002, 61000) stay readable ([#203](https://github.com/ha-vimar/ha-vimar-intercom/pull/203)).
+
+### Other changes
+
+- Reconfigure and the intercom's new address reload the integration through its update listener, as Home Assistant 2026.12 requires ([#199](https://github.com/ha-vimar/ha-vimar-intercom/pull/199)).
+- Tests no longer contain values of the development plant, and a guard keeps them out ([#201](https://github.com/ha-vimar/ha-vimar-intercom/pull/201)).
+
 ## [1.0.23] - 2026-10-14
 
 ### Enhancements

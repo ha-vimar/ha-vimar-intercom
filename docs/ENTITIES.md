@@ -50,7 +50,9 @@ Home Assistant's "Recreate entity IDs" also gives back these entity_ids: it does
 the device or area name.
 Attributes are shown by a translated name too (*Caller* for `chiamante`), and some fixed values as well
 (the door opening `esito`, the `nota`); templates and automations keep using the keys and raw values
-listed in these pages.
+listed in these pages. The plant's well-known addresses are named in the same language too, in the
+*Last caller* state and in the caller/panel attributes: *Entrance panel* (55001), *Internal panel*
+(55002), *Indoor monitor* (60001); any other address is shown as it is.
 
 
 ---

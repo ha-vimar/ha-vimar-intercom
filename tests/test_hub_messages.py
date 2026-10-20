@@ -303,7 +303,7 @@ def test_a_refused_set_apt_param_command_fails_without_waiting(plain_hub, monkey
     ("MISSED_CALL", {"sip_id": None, "ts": None, "name": None}),
     ("MISSED_CALL;not json", {"sip_id": None, "ts": None, "name": None}),
     ("MISSED_CALL;[1]", {"sip_id": None, "ts": None, "name": None}),
-    ('MISSED_CALL;{"sip_id":"55001","ts":"t"}', {"sip_id": "55001", "ts": "t", "name": "Targa Esterna"}),
+    ('MISSED_CALL;{"sip_id":"55001","ts":"t"}', {"sip_id": "55001", "ts": "t", "name": "Entrance panel"}),
 ])
 def test_missed_calls_are_counted_whatever_the_payload(plain_hub, raw, expected):
     got = _events(plain_hub)

@@ -24,6 +24,9 @@ from . import plant_state as _plant_state
 _LOGGER = _logging.getLogger(__name__)
 
 # ─── Valori di default (vuoti) ───────────────────────────────────────────────
+# Home Assistant's language (hass.config.language), set at setup: the names of the
+# plant's SIP addresses follow it (plant_messages.sip_id_names).
+LANGUAGE: str = ""
 SIP_USER:     str = ""
 SIP_PASSWORD: str = ""
 SIP_DOMAIN:   str = ""   # dominio SIP attivo (locale o cloud, vedi configure)

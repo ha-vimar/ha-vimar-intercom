@@ -133,7 +133,7 @@ def _register_services(hass: HomeAssistant) -> None:
             return {"ok": False, "error": str(err)}
         hub = _entry_data(hass).get("hub")
         if hub is None:
-            return {"ok": False, "error": "Integrazione non caricata"}
+            return {"ok": False, "error": "Integration not loaded"}
         result = await hub.async_find_picg(
             targets,
             probe=call.data["probe"].upper(),

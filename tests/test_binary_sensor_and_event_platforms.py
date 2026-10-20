@@ -74,12 +74,12 @@ def test_binary_sensors_follow_the_hub_state():
 
 
 def test_ringing_sensor_names_the_caller(monkeypatch):
-    monkeypatch.setitem(hub_mod.SIP_ID_NAMES, "55999", "Targa di prova")
+    monkeypatch.setitem(hub_mod.SIP_ID_NAMES["en"], "55999", "Test panel")
     hub = _Hub()
     sensor = _setup(bs, hub)["e1_ringing"]
     assert sensor.extra_state_attributes == {"chiamante": None, "chiamante_id": None}
     hub.stats["last_caller_id"] = "55999"
-    assert sensor.extra_state_attributes == {"chiamante": "Targa di prova", "chiamante_id": "55999"}
+    assert sensor.extra_state_attributes == {"chiamante": "Test panel", "chiamante_id": "55999"}
 
 
 def test_videomessage_sensor_reports_when_and_how_much_space():

@@ -155,7 +155,7 @@ def _hass(tmp_path, entries=()):
         http=types.SimpleNamespace(async_register_static_paths=async_register_static_paths,
                                    register_view=views.append),
         bus=types.SimpleNamespace(async_fire=lambda t, d: fired.append((t, d))),
-        config=types.SimpleNamespace(path=lambda *p: str(tmp_path.joinpath(*p))),
+        config=types.SimpleNamespace(path=lambda *p: str(tmp_path.joinpath(*p)), language="it"),
         async_add_executor_job=executor)
     return hass
 
@@ -223,6 +223,7 @@ def test_setup_wires_the_hub_views_services_card_and_platforms(init, tmp_path):
     # An entry without identity gets one, saved in its data.
     assert entry.data["device_imei"] and entry.data["device_uuid"]
     assert runtime.SIP_USER == "1001"
+    assert runtime.LANGUAGE == "it"  # Home Assistant's language: the plant's SIP names follow it
     stored = hass.data[init.DOMAIN]["e1"]
     assert stored["hub"] is hub and stored["applied"] == {"camera_target": "55100"}
     assert stored["audio_ws_clients"] == set()
@@ -622,7 +623,7 @@ def test_find_sga_rejects_a_bad_range(svc):
 
 def test_find_sga_without_a_loaded_hub_says_so(svc):
     svc.hass.data[svc.init.DOMAIN].clear()
-    assert svc.run("find_sga", **_FIND) == {"ok": False, "error": "Integrazione non caricata"}
+    assert svc.run("find_sga", **_FIND) == {"ok": False, "error": "Integration not loaded"}
 
 
 class _Resp:

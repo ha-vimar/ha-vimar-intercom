@@ -50,7 +50,9 @@ Anche "Ricrea gli ID delle entità" di Home Assistant restituisce questi entity_
 il nome del dispositivo o dell'area.
 Anche gli attributi si vedono col nome tradotto (*Caller* per `chiamante` in inglese), e così alcuni valori
 fissi (l'`esito` dell'apertura, la `nota`); template e automazioni continuano a usare le chiavi e i valori
-grezzi elencati in queste pagine.
+grezzi elencati in queste pagine. Anche gli indirizzi noti dell'impianto prendono il nome nella stessa
+lingua, nello stato di *Ultimo chiamante* e negli attributi chiamante/targa: *Targa Esterna* (55001),
+*Targa Interna* (55002), *Monitor Interno* (60001); ogni altro indirizzo si vede così com'è.
 
 
 ---

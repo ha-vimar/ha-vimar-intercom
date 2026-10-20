@@ -16,7 +16,7 @@ from . import plant_state as S
 from . import runtime as R
 from . import sip_client as sip
 from .plant_messages import SIP_ID_NAMES as SIP_ID_NAMES
-from .plant_messages import PlantMessages
+from .plant_messages import PlantMessages, sip_id_names
 from .ring_media import RingMedia
 
 _LOGGER = logging.getLogger(__name__)
@@ -298,7 +298,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
 
     @property
     def devices_summary(self) -> list[str]:
-        return sip.DEVICES.describe(SIP_ID_NAMES, public=True)
+        return sip.DEVICES.describe(sip_id_names(), public=True)
 
     def restore_devices(self, items) -> None:
         """The device list saved before a restart (see DeviceInventory.load)."""

@@ -269,6 +269,16 @@ def test_a_second_setup_registers_the_card_and_services_once(init, tmp_path):
     assert init.removed_entities == ["switch.e1_away_message"]
 
 
+def test_an_entry_with_the_old_qr_video_gets_video_in_its_calls(init, tmp_path):
+    """Before 1.0.24 a VIDEO=0 QR was stored as video_enabled=False: at setup it moves to
+    qr_video, before runtime is configured, so our calls offer video again."""
+    hass = _hass(tmp_path)
+    _setup(init, hass, _entry(video_enabled=False))
+    assert runtime.VIDEO_ENABLED is True
+    data = hass.updates[-1]["data"] if hass.updates and "data" in hass.updates[-1] else None
+    assert data is not None and data["qr_video"] is False and "video_enabled" not in data
+
+
 def test_an_entry_with_identity_is_not_rewritten_at_setup(init, tmp_path):
     hass = _hass(tmp_path)
     _setup(init, hass, _entry())

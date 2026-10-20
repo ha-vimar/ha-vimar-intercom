@@ -44,9 +44,9 @@ USE_LOCAL_UDP:  bool = True   # True = UDP locale; False = TLS/TCP cloud
 LOCAL_UDP_PORT: int  = 5060   # porta UDP locale su HA
 
 # ─── Video ───────────────────────────────────────────────────────────────────
-# Not every entrance has a camera: the pairing QR says "video=0" on those. Our
-# own offers then carry no m=video (answers mirror the offer anyway). Entries
-# made before this field was stored have no value: True, as before.
+# The option "Enable video in outgoing calls" (on by default): off, our own offers
+# carry no m=video (answers mirror the offer anyway). The pairing QR's VIDEO field
+# (qr_video) does not set it: for the Vimar apps it only allows the ring preview.
 VIDEO_ENABLED: bool = True
 
 # ─── Media encryption ────────────────────────────────────────────────────────
@@ -289,6 +289,8 @@ def configure(data: dict) -> None:
 
     USE_LOCAL_UDP  = bool(data.get("use_local_udp", True))
     LOCAL_UDP_PORT = int(data.get("local_udp_port", 5060))
+    # The option "video in outgoing calls" only; the QR's VIDEO (qr_video) is about the
+    # ring preview, not our calls.
     VIDEO_ENABLED  = bool(data.get("video_enabled", True))
     MEDIA_ENC_OPTION = media_enc_mode(data.get("media_enc"))
     VOICE_ANSWER = voice_answer_mode(data.get("voice_answer"))

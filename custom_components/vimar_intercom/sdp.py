@@ -70,9 +70,9 @@ def _offered_line(offer: dict | None, kind: str) -> dict | None:
 def _offered_kinds(offer: dict | None) -> list[str]:
     """The m-lines of an offer, in its order.
 
-    With no offer (we make it), both; audio only when the pairing QR says the
-    entrance has no camera (video=0, R.VIDEO_ENABLED False): offering video
-    asks for a stream nobody will send.
+    With no offer (we make it), both; audio only when the user turned off
+    "Enable video in outgoing calls" (R.VIDEO_ENABLED False), for an entrance with
+    no camera: offering video asks for a stream nobody will send.
     """
     kinds = [k for k in ((offer or {}).get("order") or ("audio", "video"))
              if _offered_line(offer, k) is not None]

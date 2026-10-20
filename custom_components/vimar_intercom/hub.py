@@ -1704,8 +1704,12 @@ class VimarIntercomHub(PlantMessages, RingMedia):
             if uri is None:
                 ok, msg = False, "target non valido"
             else:
+                # Over the cloud the relay answered after ~15.2 s (#14, #186): wait as long
+                # as for the door. With the 15 s default the answer came just too late, the
+                # send counted as failed and the keepalive sent it again at every renewal.
                 ok, msg = await sip.do_system_message(
-                    uri, C.GET_INIT_STATUS, extra_headers={"Panda": "blue"})
+                    uri, C.GET_INIT_STATUS, extra_headers={"Panda": "blue"},
+                    timeout=_message_timeout())
             # Solo se l'invio e' riuscito: altrimenti il ramo di retry del
             # keepalive (if not self._init_status_sent) non potrebbe mai
             # scattare e i sensori resterebbero a None fino al riavvio di HA.

@@ -54,6 +54,16 @@
       "zeroconf_moved": {
         "title": "Has the intercom changed address?",
         "description": "The configured Vimar intercom announced itself at {new} instead of {old}. Confirm only if you moved it or your router gave it a new address: anyone on the local network can announce its MAC. On confirmation Home Assistant uses {new} and reloads the integration."
+      },
+      "reconfigure": {
+        "title": "New pairing QR",
+        "description": "Paste the text of the new QR the intercom created for Home Assistant (read it with a QR app and paste what it shows, not a photo). Only the SIP credentials change: entities, automations, options and network settings stay as they are (the transport changes only if the QR works solely on the other one, and you are told). Before saving, the QR is tried with a real registration. If it fails: {error_detail}",
+        "data": {
+          "qr_text": "QR text"
+        },
+        "data_description": {
+          "qr_text": "One long encoded string (Base64), exactly as the QR reader shows it. It contains the SIP password: do not use online decoders."
+        }
       }
     },
     "error": {
@@ -67,7 +77,9 @@
       "already_configured": "Device is already configured.",
       "no_mac": "The intercom announced itself without a MAC: add it by hand from Settings → Devices & services.",
       "single_instance_allowed": "Vimar Intercom is already set up: only one installation is supported.",
-      "address_updated": "Intercom address updated."
+      "address_updated": "Intercom address updated.",
+      "reconfigure_successful": "Credentials updated: the integration reloads with the new QR.",
+      "reconfigure_transport_changed": "Credentials updated, but the new QR works only on the other transport (local UDP or cloud TLS): the integration now uses that one and reloads. The detail is in the Home Assistant log."
     },
     "create_entry": {
       "transport_fallback": "Home Assistant could not register over {tried} and uses {used} instead: {detail}. It works, but if you expected {tried}, check the intercom's network settings."

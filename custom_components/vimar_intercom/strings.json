@@ -54,6 +54,16 @@
       "zeroconf_moved": {
         "title": "Il citofono ha cambiato indirizzo?",
         "description": "Il citofono Vimar configurato si è annunciato all'indirizzo {new} invece di {old}. Conferma solo se l'hai spostato o se il router gli ha dato un nuovo indirizzo: chiunque nella rete locale può annunciarsi con il suo MAC. Confermando, Home Assistant userà {new} e ricaricherà l'integrazione."
+      },
+      "reconfigure": {
+        "title": "Nuovo QR di abbinamento",
+        "description": "Incolla il testo del QR nuovo generato dal citofono per Home Assistant (leggilo con un'app per QR e incolla quello che mostra, non una foto). Cambiano solo le credenziali SIP: entità, automazioni, opzioni e impostazioni di rete restano come sono (il trasporto cambia solo se il QR funziona soltanto sull'altro, e in quel caso viene detto). Prima di salvare il QR viene provato con una registrazione vera. In caso di errore: {error_detail}",
+        "data": {
+          "qr_text": "Testo QR"
+        },
+        "data_description": {
+          "qr_text": "Un'unica lunga stringa codificata (Base64), così come la mostra il lettore di QR. Contiene la password SIP: non usare decodificatori online."
+        }
       }
     },
     "error": {
@@ -67,7 +77,9 @@
       "already_configured": "Il dispositivo è già configurato.",
       "no_mac": "Il citofono si è annunciato senza MAC: aggiungilo a mano da Impostazioni → Dispositivi e servizi.",
       "single_instance_allowed": "C'è già un'installazione di Vimar Intercom: ne è supportata una sola.",
-      "address_updated": "Indirizzo del citofono aggiornato."
+      "address_updated": "Indirizzo del citofono aggiornato.",
+      "reconfigure_successful": "Credenziali aggiornate: l'integrazione si ricarica con il QR nuovo.",
+      "reconfigure_transport_changed": "Credenziali aggiornate, ma il QR nuovo funziona solo sull'altro trasporto (UDP locale o cloud TLS): l'integrazione ora usa quello e si ricarica. Il dettaglio è nel log di Home Assistant."
     },
     "create_entry": {
       "transport_fallback": "Home Assistant non è riuscito a registrarsi via {tried} e usa {used}: {detail}. Funziona, ma se ti aspettavi {tried} controlla le impostazioni di rete del citofono."

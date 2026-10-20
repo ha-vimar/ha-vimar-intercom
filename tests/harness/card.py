@@ -146,7 +146,7 @@ const mkHass = (status, lastRing = {}, ringTime = null) => ({
       (T.settings ||= []).push([d, sv, data]);
       // `?setfail`: the switch fails as HA sends a translated error (English message, key, placeholders)
       if (d === "switch" && QS.has("setfail")) throw { message: `${data.entity_id}: command failed (Timeout)`, translation_domain: "vimar_intercom",
-                                                      translation_key: "switch_failed", translation_placeholders: { entity: data.entity_id, error: "Timeout" } };
+                                                      translation_key: "switch_failed", translation_placeholders: { entity: "Non disturbare", error: "Timeout" } };
       return { context: {} };
     }
     const j = await (await fetch(`/svc/${d}/${sv}`, { method: "POST" })).json();

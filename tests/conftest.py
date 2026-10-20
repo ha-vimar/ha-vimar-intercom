@@ -123,8 +123,9 @@ def _stub_ha() -> None:
     ha.core.callback = lambda f: f
     ha.core.SupportsResponse = types.SimpleNamespace(NONE="none", OPTIONAL="optional", ONLY="only")
     # Real exception classes: code under test raises them and tests expect them.
-    for exc in ("Unauthorized", "ConfigEntryNotReady"):
-        setattr(ha.exceptions, exc, type(exc, (Exception,), {}))
+    ha.exceptions.Unauthorized = type("Unauthorized", (Exception,), {})
+    # As in HA: a HomeAssistantError, so it takes a translation key too.
+    ha.exceptions.ConfigEntryNotReady = type("ConfigEntryNotReady", (_HomeAssistantError,), {})
     ha.exceptions.HomeAssistantError = _HomeAssistantError
     ha.config_entries.ConfigEntry = _Any
     ha.config_entries.ConfigFlow = _ConfigFlow

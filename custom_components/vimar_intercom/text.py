@@ -7,7 +7,7 @@ from homeassistant.const import EntityCategory
 from . import runtime as R
 from .away_config import require_admin, set_away
 from .const import AWAY_TEXT_MAX
-from .device import device_info
+from .device import device_info, legacy_entity_id
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
@@ -15,8 +15,8 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
 
 class VimarAwayText(TextEntity):
-    _attr_has_entity_name = False
-    _attr_name = "Segreteria · testo del messaggio"
+    _attr_has_entity_name = True
+    _attr_translation_key = "away_text"
     _attr_icon = "mdi:text-to-speech"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
@@ -25,6 +25,7 @@ class VimarAwayText(TextEntity):
     def __init__(self, entry) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_away_text"
+        self.entity_id = legacy_entity_id("text", "segreteria_testo_del_messaggio")
         self._attr_device_info = device_info(entry.entry_id)
 
     @property

@@ -13,6 +13,14 @@ from . import plant_state as S
 from .const import DOMAIN, MANUFACTURER, MODEL
 
 
+def legacy_entity_id(domain: str, object_id: str) -> str:
+    """The entity_id a new install gets: the one the Italian names gave before they were
+    translated (#178). With translated names Home Assistant would build it from the name
+    in the install's language, and docs, the example package and the card's defaults
+    could not name it. An existing install keeps the entity_id in its registry."""
+    return f"{domain}.vimar_intercom_{object_id}"
+
+
 def device_info(entry_id: str) -> DeviceInfo:
     """DeviceInfo del citofono, con il modello rilevato se disponibile."""
     info = DeviceInfo(

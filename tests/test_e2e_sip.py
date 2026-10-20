@@ -103,7 +103,9 @@ def test_riconnessioni_parallele_una_sola_connessione(monkeypatch):
 
 
 class _NotReady(Exception):
-    pass
+    def __init__(self, *args, **translation):  # translation_key, placeholders: as in HA
+        super().__init__(*args)
+        self.translation_key = translation.get("translation_key")
 
 
 def test_cloud_irraggiungibile_all_avvio_si_riprova(monkeypatch):

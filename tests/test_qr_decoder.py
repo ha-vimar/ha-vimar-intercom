@@ -82,8 +82,8 @@ def _raw_qr(plaintext: bytes) -> str:
 
 
 @pytest.mark.parametrize("text, reason", [
-    ("   ", "vuoto"),
-    (base64.b64encode(b"x" * 48).decode(), "troppo corto"),
+    ("   ", "Empty"),
+    (base64.b64encode(b"x" * 48).decode(), "too short"),
     # 33 ciphertext bytes: not a multiple of the AES block, the decrypt fails.
     (base64.b64encode(b"k" * 32 + b"c" * 17 + b"i" * 16).decode(), "AES"),
 ])
@@ -93,12 +93,12 @@ def test_a_malformed_qr_is_refused_with_a_reason(text, reason):
 
 
 def test_a_qr_with_no_key_value_lines_is_refused():
-    with pytest.raises(qr.QRDecodeError, match="Nessun campo"):
+    with pytest.raises(qr.QRDecodeError, match="No field"):
         qr.decode(_make_qr("\n\njust words\n"))
 
 
 def test_a_qr_without_the_sip_fields_is_refused():
-    with pytest.raises(qr.QRDecodeError, match="obbligatori"):
+    with pytest.raises(qr.QRDecodeError, match="required SIP fields"):
         qr.decode(_make_qr("GID=101\nPLANTTYPE=2F\n"))
 
 

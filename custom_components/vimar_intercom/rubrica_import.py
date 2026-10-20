@@ -27,12 +27,12 @@ class RubricaImportError(Exception):
 def _connect_ro(path: str) -> sqlite3.Connection:
     p = Path(path)
     if not p.exists():
-        raise RubricaImportError(f"File non trovato: {path}")
+        raise RubricaImportError(f"File not found: {path}")
     try:
         con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
         con.execute("SELECT 1")  # verifica che sia davvero un database SQLite leggibile
     except sqlite3.Error as exc:
-        raise RubricaImportError(f"Non è un database SQLite valido: {exc}") from exc
+        raise RubricaImportError(f"Not a valid SQLite database: {exc}") from exc
     con.row_factory = sqlite3.Row
     return con
 
@@ -179,7 +179,7 @@ def parse_rubrica_file(path: str, gid: str = "101") -> dict:
             system = extract_system(con)
             camera = extract_camera_target(con, gid)
         except sqlite3.Error as exc:
-            raise RubricaImportError(f"Errore di lettura del database: {exc}") from exc
+            raise RubricaImportError(f"Database read error: {exc}") from exc
         return {
             "actuators": actuators,
             "system": system,

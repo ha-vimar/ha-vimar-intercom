@@ -162,10 +162,10 @@ def test_scan_targets_ignore_empty_items_and_duplicates():
 
 def test_scan_targets_refuse_too_long_an_explicit_list():
     many = " ".join(str(55000 + i) for i in range(v.MAX_SCAN_TARGETS + 1))
-    with pytest.raises(ValueError, match="al massimo"):
+    with pytest.raises(ValueError, match="at most"):
         v.scan_targets(None, None, many)
 
 
 def test_scan_targets_made_only_of_separators_are_refused():
-    with pytest.raises(ValueError, match="nessun indirizzo"):
+    with pytest.raises(ValueError, match="no address"):
         v.scan_targets(None, None, ", ;")

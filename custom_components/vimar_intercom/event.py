@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, EVENT_FUORIPORTA
-from .device import device_info
+from .device import device_info, legacy_entity_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ class VimarDoorbellEvent(EventEntity):
     notifications with video snapshot on Apple devices.
     """
 
-    _attr_has_entity_name = False
-    _attr_name = "Doorbell"
+    _attr_has_entity_name = True
+    _attr_translation_key = "doorbell"
     _attr_icon = "mdi:bell-ring"
     _attr_device_class = EventDeviceClass.DOORBELL
     _attr_event_types = ["ring"]
@@ -43,6 +43,7 @@ class VimarDoorbellEvent(EventEntity):
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_doorbell"
+        self.entity_id = legacy_entity_id("event", "doorbell")
         self._attr_device_info = device_info(entry_id)
 
     async def async_added_to_hass(self) -> None:
@@ -67,14 +68,15 @@ class VimarFuoriportaEvent(EventEntity):
     [da confermare sul campo — PROTOCOL.md §4]
     """
 
-    _attr_has_entity_name = False
-    _attr_name = "Fuoriporta"
+    _attr_has_entity_name = True
+    _attr_translation_key = "fuoriporta"
     _attr_icon = "mdi:doorbell"
     _attr_event_types = ["fuoriporta"]
 
     def __init__(self, hub, entry_id: str) -> None:
         self._hub = hub
         self._attr_unique_id = f"{entry_id}_fuoriporta"
+        self.entity_id = legacy_entity_id("event", "fuoriporta")
         self._attr_device_info = device_info(entry_id)
 
     async def async_added_to_hass(self) -> None:

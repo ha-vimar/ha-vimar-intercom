@@ -292,8 +292,10 @@ def test_an_entry_without_an_av_key_gets_one_once_and_it_is_not_logged(init, tmp
 def test_setup_retries_when_the_proxy_is_unreachable(init, tmp_path, monkeypatch):
     hass = _hass(tmp_path)
     monkeypatch.setattr(FakeHub, "start_error", OSError("unreachable"))
-    with pytest.raises(sys.modules["homeassistant.exceptions"].ConfigEntryNotReady):
+    with pytest.raises(sys.modules["homeassistant.exceptions"].ConfigEntryNotReady) as err:
         asyncio.run(init.async_setup_entry(hass, _entry()))
+    assert err.value.translation_key == "proxy_unreachable"
+    assert err.value.translation_placeholders == {"error": "unreachable"}
     hub = FakeHub.instances[-1]
     assert hub.stopped and hass.data[init.DOMAIN] == {}
     assert hass.forwarded == []

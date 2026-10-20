@@ -82,8 +82,9 @@ Both destinations mask passwords, digest responses, phonebook tokens and SRTP ke
 
 - **IP addresses**: private ones everywhere, public ones where they can only be yours or a phone's (`received=`, the
   host of a SIP URI, the hop of a `Via`). They keep the first and last number: `192.x.x.23`.
-- **SIP ids**: Home Assistant's own and the other phones' and devices' in SIP URIs (`<sip:id…45#9f1c@…>`). A panel's
-  short extension such as `55001` stays readable, since it is what tells you which panel a line is about.
+- **SIP ids**: Home Assistant's own and the other phones' and devices' in SIP URIs (`<sip:id…45#9f1c@…>`), the 5-digit
+  ids of the phones (`6xxxx`) included. A panel's short extension such as `55001` and the
+  protocol's own addresses (60000-60002, 61000) stay readable, since they tell you which panel or service a line is about.
 - **The apartment's GID** (`gid#xxxx`), the intercom's MAC, the SIP domains, the device IMEI and UUID, the device
   name and the names in the phonebook.
 

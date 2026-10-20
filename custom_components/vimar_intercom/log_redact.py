@@ -45,12 +45,14 @@ can still be followed:
   address after `received=`, as the host of a SIP URI (the home's public address, the
   other phones' Contacts), at the hop of a `Via` or as a URI without a user (loopback,
   0.0.0.0 and the RFC 5737 documentation blocks stay there);
-* the other phones' and devices' ids as the user of a SIP URI (`sip:7798765@…`);
+* the other phones' and devices' ids as the user of a SIP URI (`sip:7798765@…`), the
+  phones' 5-digit ids (`6xxxx`) too, also as a `SIP_ID` or an `EXT` (#163);
 * the apartment's GID, by its shape (`"PARAM":"GID"`, `gid=`, `apt_gid`, `NEW_PHONEBOOK`).
 
-The panels' extensions (`55001`, also as a `SIP_ID`), SIP methods and codes, ports and
-timings stay: they are what a log is read for. `redact()` alone still feeds the *Last Received Message*
-sensor, which shows the plant's own message.
+The panels' extensions (`55001`, also as a `SIP_ID`), the protocol's own addresses
+(60000, 60001, 60002, 61000), SIP methods and codes, ports and timings stay: they are what
+a log is read for. `redact()` alone still feeds the *Last Received Message* sensor, which
+shows the plant's own message.
 """
 
 from __future__ import annotations
@@ -169,6 +171,20 @@ _MIN_PLANT_VALUE = 4
 # A SIP_ID this short is a panel's or a monitor's extension (55001): it stays readable.
 _PANEL_EXT_MAX = 5
 
+# ...except another phone's: the phones seen so far have 5-digit ids 6xxxx (a local 2F
+# and cloud 2FV2 plants, #163). That is a shape seen on plants, not a protocol rule
+# (ADR-13): the tag keeps the last two digits, so a 6xxxx panel would still be told apart.
+# These stay readable: the protocol's own addresses (60000, the default PICG 60001,
+# OPEN_CURRENT's 60002, the 2FV2 SGA 61000) and every panel or porter (4xxxx, 5xxxx).
+_SERVICE_EXTS = frozenset({"60000", "60001", "60002", "61000"})
+
+
+def _is_private_id(value: str) -> bool:
+    """A numeric SIP id that is someone's: longer than an extension, or a 5-digit phone's."""
+    if len(value) > _PANEL_EXT_MAX:
+        return True
+    return len(value) == _PANEL_EXT_MAX and value[0] == "6" and value not in _SERVICE_EXTS
+
 # Tags are keyed with a key drawn at start-up: a value gets the same tag for the whole run,
 # but a tag can't be turned back into a 7-digit SIP id or an IMEI by trying every value,
 # as 16 bits of a plain hash could. After a restart the tags change.
@@ -236,8 +252,8 @@ _PRIVATE_IP = re.compile(r"(?<![\d.])(10|100|169|172|192)\.(\d{1,3})\.(\d{1,3})\
 
 
 # Another phone's or device's id as the user of a SIP URI (`<sip:7798765@…>`): digits,
-# longer than a panel's extension, and the whole user, up to the `@`.
-_URI_USER = re.compile(rf"(?i)(\bsips?:)(\d{{{_PANEL_EXT_MAX + 1},20}})(?=@)")
+# the whole user, up to the `@`. Which ones are masked: _is_private_id.
+_URI_USER = re.compile(rf"(?i)(\bsips?:)(\d{{{_PANEL_EXT_MAX},20}})(?=@)")
 
 # Any address, public too, at the hop of a Via (`SIP/2.0/UDP 9.9.9.23:5060`) or as a
 # URI without a user (`<sip:9.9.9.23:5060;lr>`): the home's or the relay peer's.
@@ -283,16 +299,17 @@ def _mask_header(m: re.Match) -> str:
     return f"{m.group(1)}{m.group(2)}{_tag(kind, core)}{value[len(core):]}"
 
 
-# A name or caller id in a plant message: `"NAME": "…"`, `'name': '…'`, `"SIP_ID": 7798765`.
+# A name or caller id in a plant message: `"NAME": "…"`, `'name': '…'`, `"SIP_ID": 7798765`,
+# and the extension of a place in GET_NICKS_REPLY (`"EXT": "…"`), where the phones appear.
 _NAME_FIELD = re.compile(
-    r"(?i)([\"'])(name|nick|nickname|myname|sip_id)\1(\s*:\s*)(?:([\"'])(.*?)\4|(\d+))"
+    r"(?i)([\"'])(name|nick|nickname|myname|sip_id|ext)\1(\s*:\s*)(?:([\"'])(.*?)\4|(\d+))"
 )
 
 
 def _mask_field(m: re.Match) -> str:
     quote, value = (m.group(4), m.group(5)) if m.group(6) is None else ("", m.group(6))
-    is_id = m.group(2).lower() == "sip_id"
-    if not value or value == MY_NAME or (is_id and value.isdigit() and len(value) <= _PANEL_EXT_MAX):
+    is_id = m.group(2).lower() in ("sip_id", "ext")
+    if not value or value == MY_NAME or (is_id and value.isdigit() and not _is_private_id(value)):
         return m.group(0)
     return (f"{m.group(1)}{m.group(2)}{m.group(1)}{m.group(3)}"
             f"{quote}{_tag('id' if is_id else 'name', value)}{quote}")
@@ -346,7 +363,8 @@ def redact_plant(text: str) -> str:
         tags, known = _plant
         if known:
             out = known.sub(lambda m: tags[m.group(0)], out)
-        out = _URI_USER.sub(lambda m: f"{m.group(1)}{_tag('id', m.group(2))}", out)
+        out = _URI_USER.sub(lambda m: f"{m.group(1)}{_tag('id', m.group(2))}"
+                            if _is_private_id(m.group(2)) else m.group(0), out)
         out = _RECEIVED.sub(lambda m: f"{m.group(1)}{_short_ip(m.group(2))}", out)
         out = _URI_HOST.sub(lambda m: f"{m.group(1)}{_short_ip(m.group(2))}", out)
         out = _VIA_HOST.sub(_mask_any_ip, out)

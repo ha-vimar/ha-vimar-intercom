@@ -409,3 +409,31 @@ def test_our_own_id_and_a_public_host_in_one_uri_keep_their_masks(plant):
     and the host after the `@` is still shortened."""
     out = lr.redact_plant("Contact: <sip:7712345@9.9.9.23:5060>")
     assert out == f"Contact: <sip:{lr._tag('id', '7712345')}@9.x.x.23:5060>"
+
+
+# ─── #163: other phones' 5-digit ids (6xxxx), as long as a panel's extension ──
+
+@pytest.mark.parametrize("text, hidden", [
+    ("INVITE sip:60941@d.invalid SIP/2.0", "60941"),
+    ("From: <sip:62345@d.invalid>;tag=1", "62345"),
+    ('MISSED_CALL;{"SIP_ID": "60937", "TS": 1}', "60937"),
+    ("{'sip_id': 60958}", "60958"),
+    ('GET_NICKS_REPLY;[{"ROLE": "PIM", "EXT": "60963", "NAME": "x"}]', "60963"),
+])
+def test_another_phones_five_digit_id_is_masked(text, hidden):
+    """On cloud 2FV2 plants the phones have 5-digit ids, the length of a panel's
+    extension: they stayed readable in an INVITE or a MESSAGE from another phone (#163)."""
+    lr.forget_plant_values()
+    assert hidden not in lr.redact_plant(text)
+
+
+@pytest.mark.parametrize("text", [
+    "INVITE sip:60001@d.invalid SIP/2.0", "To: <sip:60002@d.invalid>", "To: <sip:61000@d.invalid>",
+    "To: <sip:60000@d.invalid>", 'MISSED_CALL;{"SIP_ID": "60001", "TS": 1}', "INVITE sip:40001@d.invalid SIP/2.0",
+    "To: <sip:70001@d.invalid>", 'GET_NICKS_REPLY;[{"ROLE": "PICG", "EXT": "55001"}]',
+])
+def test_service_addresses_and_panels_stay_readable(text):
+    """60000-60002 and 61000 are the protocol's own addresses (default PICG, OPEN_CURRENT,
+    the 2FV2 SGA): reading the log needs them. A 5-digit id outside 6xxxx is a panel's."""
+    lr.forget_plant_values()
+    assert lr.redact_plant(text) == text

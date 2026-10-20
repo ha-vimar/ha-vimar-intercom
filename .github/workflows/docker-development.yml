@@ -1,0 +1,31 @@
+name: Docker development
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docker/**"
+      - "tests/test_dev_compose_linux.py"
+      - ".github/workflows/docker-development.yml"
+  pull_request:
+    paths:
+      - "docker/**"
+      - "tests/test_dev_compose_linux.py"
+      - ".github/workflows/docker-development.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    name: Linux Docker Engine lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest tests/test_dev_compose_linux.py -m docker -v

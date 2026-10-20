@@ -62,7 +62,7 @@ jobs:
       # sono esclusi di default in locale ma qui girano: -m sovrascrive addopts.
       # Coverage (lines + branches) of custom_components/vimar_intercom: the
       # threshold is fail_under in pyproject.toml, below it the job fails.
-      - run: python -m pytest tests -m "not live and not media and not browser" --cov --cov-report=term-missing
+      - run: python -m pytest tests -m "not live and not media and not browser and not docker" --cov --cov-report=term-missing
 
   media-browser:
     # A richiesta (workflow_dispatch): media vero (ffmpeg, aiohttp) e la card in

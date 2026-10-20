@@ -72,7 +72,7 @@ package `__init__`. `tests/harness/` is a fake panel on 127.0.0.1 for the SIP en
 pip install -r requirements-dev.txt
 python -m pytest tests                     # default run, without the slow e2e tests (~1 min)
 python -m pytest tests -m slow             # the slow e2e tests (~2 min)
-python -m pytest tests -m "not live and not media and not browser"   # both, what CI runs
+python -m pytest tests -m "not live and not media and not browser and not docker"   # both, what CI runs
 python -m pytest tests/test_srtp.py        # one file
 python -m pytest tests -k manifest         # by name
 python -m pytest tests -m media            # real ffmpeg/aiohttp media (needs ffmpeg, aiohttp)
@@ -80,7 +80,7 @@ python -m pytest tests -m browser          # the card in Chromium/WebKit (needs 
 .claude/skills/card-browser-tests/run.sh   # the same, in a disposable Playwright container
 ```
 
-`live`, `media` and `browser` are excluded by default (`addopts` in `pyproject.toml`). Missing
+`live`, `media`, `browser` and `docker` are excluded by default (`addopts` in `pyproject.toml`). Missing
 tools make `media`/`browser` tests skip. `live` needs the real intercom: see the safety rules.
 
 ### Coverage rule (mandatory, enforced in CI)

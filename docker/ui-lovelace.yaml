@@ -1,0 +1,17 @@
+title: Vimar Development
+views:
+  - title: Development
+    path: development
+    cards:
+      - type: markdown
+        title: Vimar Intercom development
+        content: |
+          This instance loads the current checkout and keeps its own configuration.
+
+          No production credentials, automations or intercom configuration are
+          seeded. The default network blocks outbound LAN and internet access.
+
+          [Open integrations](/config/integrations)
+
+          Add Vimar Intercom to inspect its setup form. Registration, calls and
+          media require a separate, deliberately configured network environment.

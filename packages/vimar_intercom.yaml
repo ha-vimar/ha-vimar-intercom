@@ -1,10 +1,11 @@
 # =============================================================================
 #  Vimar Intercom — esempio di package per Home Assistant
+#  Le stesse automazioni in inglese: vimar_intercom_en.yaml. Copiane una sola.
 #
 #  Copialo in `config/packages/` (serve `packages: !include_dir_named packages/`
-#  sotto `homeassistant:` in configuration.yaml) e adatta i nomi: gli entity_id
-#  qui sotto sono quelli di un'installazione con l'integrazione appena aggiunta,
-#  ma cambiano in base al nome che hai dato al dispositivo e all'area.
+#  sotto `homeassistant:` in configuration.yaml). Gli entity_id qui sotto sono
+#  quelli di un'installazione nuova, in qualunque lingua; un'installazione più
+#  vecchia, o un'entità rinominata, può averne di diversi.
 #  Cercali in Strumenti per sviluppatori → Stati filtrando per "vimar".
 #
 #  Da adattare di sicuro:

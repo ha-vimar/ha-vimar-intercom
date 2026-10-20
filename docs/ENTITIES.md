@@ -48,6 +48,9 @@ these pages and in the examples (for instance `sensor.vimar_intercom_intercom_st
 existing install keeps its own. A name or entity_id you changed in Home Assistant stays as you set it.
 Home Assistant's "Recreate entity IDs" also gives back these entity_ids: it does not add
 the device or area name.
+Attributes are shown by a translated name too (*Caller* for `chiamante`), and some fixed values as well
+(the door opening `esito`, the `nota`); templates and automations keep using the keys and raw values
+listed in these pages.
 
 
 ---
@@ -130,7 +133,7 @@ automation:
 
 ## Example automations
 
-[`packages/vimar_intercom.yaml`](../packages/vimar_intercom.yaml) (copy it into `config/packages/`) contains a
+[`packages/vimar_intercom_en.yaml`](../packages/vimar_intercom_en.yaml) (copy it into `config/packages/`; the same in Italian: [`vimar_intercom.yaml`](../packages/vimar_intercom.yaml), copy only one) contains a
 "ring → notification" automation driven by the state change of the `event` entity, plus a safety
 hang-up that closes a call left open for two minutes:
 

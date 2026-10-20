@@ -130,7 +130,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
         value_fn=lambda hub: hub.stats.get("ring_count"),
         attrs_fn=lambda hub: {
             "non_risposti_da_ha": hub.stats.get("missed_count"),
-            "nota": "Conteggio dall'ultimo avvio dell'integrazione",
+            "nota": "since_integration_start",
         },
     ),
     VimarSensorDescription(
@@ -143,7 +143,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
             "ultima_direzione": hub.stats.get("last_call_direction"),
             "ultimo_inizio": hub.stats.get("last_call_start"),
             "ultima_fine": hub.stats.get("last_call_end"),
-            "nota": "Conteggio dall'ultimo avvio dell'integrazione",
+            "nota": "since_integration_start",
         },
     ),
     VimarSensorDescription(
@@ -199,7 +199,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
         icon="mdi:voicemail",
         value_fn=lambda hub: hub.stats.get("vm_level"),
         attrs_fn=lambda hub: {
-            "nota": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
+            "nota": "video_message_storage",
         },
     ),
     VimarSensorDescription(
@@ -209,7 +209,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
         value_fn=lambda hub: hub.stats.get("rubrica_ver"),
         attrs_fn=lambda hub: {
             "vm_ver": hub.stats.get("vm_ver"),
-            "nota": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
+            "nota": "reimport_on_change",
         },
     ),
     VimarSensorDescription(

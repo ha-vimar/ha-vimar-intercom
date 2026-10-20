@@ -1,0 +1,106 @@
+# =============================================================================
+#  Vimar Intercom — example Home Assistant package (English)
+#  The same automations in Italian: vimar_intercom.yaml. Copy only one of the two.
+#
+#  Copy it into `config/packages/` (it needs `packages: !include_dir_named packages/`
+#  under `homeassistant:` in configuration.yaml). The entity_ids below are the ones
+#  a new install gets, in any language; an older install, or an entity you renamed,
+#  may differ. Find them in Developer tools → States, filtering by "vimar".
+#
+#  To change for sure:
+#    - notify.mobile_app_YOUR_PHONE   (Settings → Companion App)
+#    - the event/binary_sensor entity_ids if yours differ
+# =============================================================================
+
+automation:
+  # --- Ring → phone notification ----------------------------------------------
+  - id: vimar_intercom_squillo_notifica
+    alias: "Intercom - Ring → notification"
+    description: >-
+      On a ring, notifies with the photo of who is there (the ring preview),
+      "Answer" (answers and opens the camera) and "Open" (the door).
+    mode: single
+    max_exceeded: silent
+    trigger:
+      # The `event` entity changes state (a timestamp) at every press of the doorbell.
+      - platform: state
+        entity_id: event.vimar_intercom_doorbell
+        not_from: [unavailable, unknown]
+    action:
+      # The preview (early media) starts with the ring: ~3 s for a well-exposed photo.
+      - delay: "00:00:03"
+      - action: notify.mobile_app_YOUR_PHONE
+        data:
+          title: "🔔 Someone at the door"
+          message: "Ring at {{ now().strftime('%H:%M') }}."
+          data:
+            image: "/api/camera_proxy/camera.vimar_intercom_intercom"   # who is there, in the notification
+            push:
+              interruption-level: time-sensitive
+            actions:
+              - action: VIMAR_RISPONDI
+                title: "Answer (video only)"   # HA does not send your voice
+                uri: "entityId:camera.vimar_intercom_intercom"   # opens the camera in the app
+              - action: VIMAR_APRI
+                title: "Open"
+                destructive: true
+                authenticationRequired: true   # Face ID / passcode: iOS ONLY, not on Android
+
+  # --- "Answer" button → answers (then the camera shows the video) ------------
+  - id: vimar_intercom_notifica_rispondi
+    alias: "Intercom - Notification → answer"
+    mode: single
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: VIMAR_RISPONDI
+    action:
+      - action: vimar_intercom.answer
+
+  # --- "Open" button → opens the door, only within 3 minutes of the ring ------
+  - id: vimar_intercom_notifica_apri
+    alias: "Intercom - Notification → open"
+    mode: single
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: VIMAR_APRI
+    condition:
+      # A notification hours old must not open the door.
+      - "{{ states('event.vimar_intercom_doorbell') not in ['unknown', 'unavailable']
+            and now() - as_datetime(states('event.vimar_intercom_doorbell')) < timedelta(minutes=3) }}"
+    action:
+      - action: lock.unlock
+        target:
+          entity_id: lock.vimar_intercom_serratura
+
+  # --- Safety hang-up -----------------------------------------------------------
+  # A safety net: ends a call left open (an interrupted automation, a Home
+  # Assistant restart, a button pressed by mistake).
+  - id: vimar_intercom_hangup_sicurezza
+    alias: "Intercom - Safety hang-up"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.vimar_intercom_intercom_in_call
+        to: "on"
+        for: "00:02:00"
+    action:
+      - action: vimar_intercom.hangup
+
+# =============================================================================
+#  PHOTO OF WHO RINGS
+#
+#  No automation needed: in the integration's options set the ring photo folder
+#  (e.g. /config/media/citofono). At every ring the integration saves
+#  squillo_YYYYMMDD_HHMMSS.jpg and ultimo_squillo.jpg from the preview.
+#  Do not use /config/www: it is served on /local without login (the integration
+#  refuses it).
+#
+#  Do NOT add a `camera: platform: ffmpeg` pointed at /api/vimar_intercom/av:
+#  the ffmpeg platform probes its input when it loads, the endpoint keeps the
+#  connection open without data when no call is up, and Home Assistant stops
+#  answering until the probe times out (about a minute, seen in the field).
+# =============================================================================

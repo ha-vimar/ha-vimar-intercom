@@ -48,6 +48,9 @@ di queste pagine e degli esempi (per esempio `sensor.vimar_intercom_intercom_sta
 esistente tiene i suoi. Un nome o un entity_id cambiato a mano in Home Assistant resta come l'hai messo.
 Anche "Ricrea gli ID delle entità" di Home Assistant restituisce questi entity_id: non aggiunge
 il nome del dispositivo o dell'area.
+Anche gli attributi si vedono col nome tradotto (*Caller* per `chiamante` in inglese), e così alcuni valori
+fissi (l'`esito` dell'apertura, la `nota`); template e automazioni continuano a usare le chiavi e i valori
+grezzi elencati in queste pagine.
 
 
 ---
@@ -130,7 +133,7 @@ automation:
 
 ## Automazioni di esempio
 
-Il file [`packages/vimar_intercom.yaml`](../packages/vimar_intercom.yaml) (da copiare in `config/packages/`) contiene un'automazione
+Il file [`packages/vimar_intercom.yaml`](../packages/vimar_intercom.yaml) (da copiare in `config/packages/`; lo stesso in inglese: [`vimar_intercom_en.yaml`](../packages/vimar_intercom_en.yaml), copiane uno solo) contiene un'automazione
 "squillo → notifica" basata sul cambio di stato dell'entità `event`, più un riaggancio di sicurezza
 che chiude una chiamata rimasta aperta per due minuti:
 

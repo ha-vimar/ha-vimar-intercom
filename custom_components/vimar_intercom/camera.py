@@ -56,6 +56,7 @@ class VimarIntercomCamera(Camera):
 
     _attr_has_entity_name = True
     _attr_name = None  # the device's main entity: named after the device
+    _attr_translation_key = "camera"  # for its attribute names; the name stays the device's
     _attr_icon = "mdi:doorbell-video"
     _attr_supported_features = CameraEntityFeature.STREAM
 

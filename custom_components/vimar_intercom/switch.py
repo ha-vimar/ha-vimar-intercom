@@ -195,7 +195,7 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
             # che il riavvio successivo riprende.
             "stato_reale": self._real() if self._real() is not None else self._restored,
             "ultimo_esito": self._last_result,
-            "nota": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab.",
+            "nota": "sip_command_to_sga",
         }
 
     async def async_turn_on(self, **kwargs) -> None:

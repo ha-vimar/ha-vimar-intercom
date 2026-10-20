@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.requirements import async_process_requirements
 
@@ -55,6 +56,25 @@ _log_buffer.install()
 
 PLATFORMS = ["camera", "lock", "button", "event", "binary_sensor", "sensor", "switch", "select",
              "text"]
+
+REGISTRATION_ISSUE = "registration_refused"
+
+
+@callback
+def _update_registration_issue(hass: HomeAssistant, entry: ConfigEntry, hub) -> None:
+    """Show a repair while the intercom refuses the registration (403/404), drop it after.
+
+    The integration keeps retrying either way; without this the only sign was
+    entities going unavailable."""
+    issue_id = f"{REGISTRATION_ISSUE}_{entry.entry_id}"
+    code = hub.registration_refused
+    if code is None:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.ERROR,
+        translation_key=REGISTRATION_ISSUE,
+        translation_placeholders={"code": str(code), "title": entry.title})
 
 
 CARD_URL = "/vimar_intercom/vimar-intercom-card.js"
@@ -185,6 +205,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hub.async_stop()
         hass.data[DOMAIN].pop(entry.entry_id, None)
         raise ConfigEntryNotReady(f"Proxy SIP non raggiungibile: {e}") from e
+
+    # The hub notifies its state callbacks after every keepalive round, so a
+    # refusal shows up within one round and goes away at the first success.
+    # async_unload_entry unregisters it and drops the issue.
+    def _registration_issue() -> None:
+        _update_registration_issue(hass, entry, hub)
+
+    hub.register_state_callback(_registration_issue)
+    hass.data[DOMAIN][entry.entry_id]["registration_issue"] = _registration_issue
+    _registration_issue()
 
     # Closures locali: catturano audio_ws_clients (nessun global di modulo).
     # One small queue and one sender task per client: the audio and video loops only
@@ -348,6 +378,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for ws in list(data.get("audio_ws_clients", set())):
             await ws.close()
         await data["hub"].async_stop()
+        if cb := data.get("registration_issue"):
+            data["hub"].unregister_state_callback(cb)
+        # A disabled or removed entry has nothing left to repair.
+        ir.async_delete_issue(hass, DOMAIN, f"{REGISTRATION_ISSUE}_{entry.entry_id}")
         if not hass.data[DOMAIN]:
             await av_passive.stop()
             for svc in (SERVICE_SEND_COMMAND, SERVICE_CALL, SERVICE_ANSWER,

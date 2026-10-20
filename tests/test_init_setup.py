@@ -28,7 +28,15 @@ class FakeHub:
         self.calls: list = []
         self.rings = 0
         self.picg_result = {"ok": True, "picg": "55000", "probes": [1, 2]}
+        self.state_callbacks: list = []
+        self.registration_refused = None
         FakeHub.instances.append(self)
+
+    def register_state_callback(self, cb):
+        self.state_callbacks.append(cb)
+
+    def unregister_state_callback(self, cb):
+        self.state_callbacks.remove(cb)
 
     def set_persist_callback(self, cb):
         self.persist = cb
@@ -102,7 +110,7 @@ class FakeServices:
 
 class FakeEntry(types.SimpleNamespace):
     def __init__(self, data=None, options=None, entry_id="e1"):
-        super().__init__(entry_id=entry_id, data=dict(data or {}), options=dict(options or {}),
+        super().__init__(entry_id=entry_id, title="Vimar Intercom", data=dict(data or {}), options=dict(options or {}),
                          listeners=[], unloads=[])
 
     def add_update_listener(self, listener):
@@ -487,6 +495,25 @@ def test_unloading_the_last_entry_closes_clients_and_removes_services(init, tmp_
     assert ws.closed and hub.stopped and stopped == ["sender", True]
     assert hass.data[init.DOMAIN] == {} and hass.services.handlers == {}
     assert len(hass.services.removed) == 9
+
+
+def test_the_registration_repair_follows_the_hub_and_goes_with_the_entry(init, tmp_path, monkeypatch):
+    """Setup hangs the repair on the hub's state callbacks; unload takes it off the
+    hub (a reload must not leave it on the old one) and drops the issue."""
+    issues = {}
+    monkeypatch.setattr(init, "ir", types.SimpleNamespace(
+        IssueSeverity=types.SimpleNamespace(ERROR="error"),
+        async_create_issue=lambda hass, domain, issue_id, **kw: issues.__setitem__(issue_id, kw),
+        async_delete_issue=lambda hass, domain, issue_id: issues.pop(issue_id, None)))
+    hass = _hass(tmp_path)
+    hub = _setup(init, hass, _entry())
+    assert len(hub.state_callbacks) == 1 and issues == {}
+    hub.registration_refused = 403
+    hub.state_callbacks[0]()
+    assert issues["registration_refused_e1"]["translation_placeholders"]["code"] == "403"
+    monkeypatch.setattr(init.av_passive, "stop", lambda: asyncio.sleep(0))
+    assert asyncio.run(init.async_unload_entry(hass, FakeEntry())) is True
+    assert hub.state_callbacks == [] and issues == {}
 
 
 def test_unloading_one_of_two_entries_keeps_the_services(init, tmp_path, monkeypatch):

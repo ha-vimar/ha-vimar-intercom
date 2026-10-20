@@ -106,7 +106,7 @@ def _stub_ha() -> None:
     ha = _mod("homeassistant", _is_stub=True)
     for sub in [
         "core", "config_entries", "const", "exceptions", "helpers", "helpers.entity", "helpers.entity_platform",
-        "helpers.restore_state", "helpers.device_registry", "helpers.entity_registry", "helpers.storage", "helpers.event", "helpers.aiohttp_client",
+        "helpers.restore_state", "helpers.device_registry", "helpers.entity_registry", "helpers.issue_registry", "helpers.storage", "helpers.event", "helpers.aiohttp_client",
         "helpers.config_validation", "helpers.selector", "helpers.start", "requirements", "components", "components.http", "components.camera",
         "components.sensor", "components.binary_sensor", "components.switch", "components.button", "components.event",
         "components.lock", "components.select", "components.text", "components.number", "components.ffmpeg", "components.tts", "util", "util.dt",

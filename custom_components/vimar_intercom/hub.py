@@ -378,6 +378,17 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         return sip.registered
 
     @property
+    def registration_refused(self) -> int | None:
+        """403 or 404 to the last REGISTER while unregistered, else None.
+
+        The intercom refuses these credentials (the Vimar apps stop retrying on
+        them): a new pairing QR is needed. Other codes are transient."""
+        code = sip.last_register_code
+        if sip.registered or code not in (403, 404):
+            return None
+        return code
+
+    @property
     def in_call(self) -> bool:
         return sip.in_call
 

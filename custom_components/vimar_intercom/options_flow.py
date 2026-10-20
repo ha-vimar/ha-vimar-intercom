@@ -335,7 +335,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
         self._actuators_error: str | None = None
-        self._rubrica_error: str | None = None
+        self._rubrica_error: str | None = None  # an exception's detail, at the end of the description
+        self._rubrica_gid = ""      # placeholder of the "no actuators" error
+        self._cloud_missing = ""    # placeholder of the "cloud data missing" error
         self._imported: dict | None = None
         self._imported_gid: str = "101"
         # PICG dichiarato dal citofono stesso (get_info.php?action=nickname).
@@ -775,7 +777,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 if not result["actuators"]:
                     errors["base"] = "rubrica_no_actuators"
-                    self._rubrica_error = f"GID {gid}"
+                    self._rubrica_error, self._rubrica_gid = "", gid
                 else:
                     self._imported = result
                     self._imported_gid = gid
@@ -795,6 +797,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders={
                 "host": host or "—",
                 "rubrica_error": self._rubrica_error or "",
+                "rubrica_gid": self._rubrica_gid,
+                "cloud_missing": self._cloud_missing,
             },
         )
 
@@ -850,7 +854,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             errors["base"] = "no_cloud_token" if received else "no_cloud_status"
         elif cloud_phonebook.check_inputs(cdomain, cproxy, token, ver):
             errors["base"] = "cloud_missing_data"
-            self._rubrica_error = cloud_phonebook.check_inputs(cdomain, cproxy, token, ver)
+            self._rubrica_error, self._cloud_missing = "", cloud_phonebook.check_inputs(cdomain, cproxy, token, ver)
         elif user_input is not None:
             gid = (user_input.get("rubrica_gid") or default_gid).strip() or default_gid
 
@@ -880,7 +884,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 if not result["actuators"]:
                     errors["base"] = "rubrica_no_actuators"
-                    self._rubrica_error = f"GID {gid}"
+                    self._rubrica_error, self._rubrica_gid = "", gid
                 else:
                     self._imported = result
                     self._imported_gid = gid
@@ -898,6 +902,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders={
                 "cproxy": cproxy or "—",
                 "rubrica_error": self._rubrica_error or "",
+                "rubrica_gid": self._rubrica_gid,
+                "cloud_missing": self._cloud_missing,
             },
         )
 
@@ -930,7 +936,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 if not result["actuators"]:
                     errors["rubrica_file"] = "rubrica_no_actuators"
-                    self._rubrica_error = f"GID {gid}"
+                    self._rubrica_error, self._rubrica_gid = "", gid
                 else:
                     self._imported = result
                     self._imported_gid = gid
@@ -954,6 +960,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             errors=errors,
             description_placeholders={
                 "rubrica_error": self._rubrica_error or "",
+                "rubrica_gid": self._rubrica_gid,
+                "cloud_missing": self._cloud_missing,
             },
         )
 

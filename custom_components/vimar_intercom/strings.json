@@ -97,7 +97,7 @@
       },
       "settings": {
         "title": "Impostazioni Vimar Intercom",
-        "description": "Rete SIP e attuatori dinamici. Nel campo Attuatori incolla la lista JSON prodotta da tools/parse_rubrica.py, oppure torna al menu e usa \"Importa attuatori da rubrica.db\". {actuators_error}",
+        "description": "Rete SIP e attuatori dinamici. Nel campo Attuatori incolla la lista JSON prodotta da tools/parse_rubrica.py, oppure torna al menu e usa \"Importa attuatori da rubrica.db\".",
         "data": {
           "local_proxy": "IP del citofono",
           "use_local_udp": "Usa SIP UDP locale",
@@ -215,7 +215,7 @@
       "sip_registration_failed": "Registrazione SIP fallita.",
       "invalid_actuator_target": "Target attuatore non valido ({actuators_error}): usa solo cifre (es. 55001) oppure AUTO.",
       "rubrica_import_failed": "Importazione fallita. Vedi il dettaglio nella descrizione.",
-      "rubrica_no_actuators": "Nessun attuatore trovato per il GID specificato. Vedi la descrizione.",
+      "rubrica_no_actuators": "Nessun attuatore trovato per il GID {rubrica_gid}: controlla il GID dell'appartamento.",
       "internal_panel_not_found": "La risposta dei nickname non dichiara un PICG valido e univoco. Inserisci manualmente l’indirizzo noto di un posto interno.",
       "internal_panel_no_reply": "Non è arrivata una risposta dei nickname dal PICG configurato. Alcuni impianti cloud non rispondono a GET_NICKS anche a un indirizzo esistente. Questo non dimostra che l’indirizzo sia errato; inserisci manualmente l’indirizzo noto di un posto interno.",
       "internal_panel_unavailable": "La ricerca dei nickname non è disponibile: l’integrazione potrebbe essere disconnessa o un’altra ricerca potrebbe essere in corso. Riprova quando disponibile o inserisci manualmente l’indirizzo noto di un posto interno.",
@@ -241,7 +241,7 @@
       "actuators_not_object": "Lista attuatori non valida: l'elemento {actuators_error} non è un oggetto JSON",
       "actuators_missing_keys": "Lista attuatori non valida: chiavi mancanti nell'elemento {actuators_error} (servono name, msg, target, icon)",
       "actuators_bad_icon": "Lista attuatori non valida: icona non ammessa nell'elemento {actuators_error} (ammesse: door, light, switch)",
-      "cloud_missing_data": "Download della rubrica dal cloud non possibile: manca {rubrica_error} (dominio e proxy cloud vengono dal QR)."
+      "cloud_missing_data": "Download della rubrica dal cloud non possibile: manca {cloud_missing} (dominio e proxy cloud vengono dal QR)."
     }
   },
   "entity": {

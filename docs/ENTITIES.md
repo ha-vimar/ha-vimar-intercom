@@ -46,6 +46,8 @@ device's name, "Vimar Intercom": *Vimar Intercom Status* in English, *Vimar Inte
 Italian. The entity_ids do not depend on the language: a new install gets the ones listed in
 these pages and in the examples (for instance `sensor.vimar_intercom_intercom_stato`), and an
 existing install keeps its own. A name or entity_id you changed in Home Assistant stays as you set it.
+Home Assistant's "Recreate entity IDs" also gives back these entity_ids: it does not add
+the device or area name.
 Attributes are shown by a translated name too (*Caller* for `chiamante`), and some fixed values as well
 (the door opening `esito`, the `nota`); templates and automations keep using the keys and raw values
 listed in these pages. The plant's well-known addresses are named in the same language too, in the

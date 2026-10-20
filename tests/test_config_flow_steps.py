@@ -531,7 +531,7 @@ def test_a_phonebook_without_actuators_for_the_flat_is_explained(of, monkeypatch
     _fake_rest(of, monkeypatch, parsed={"actuators": [], "sga": None, "system": {}})
     result = asyncio.run(_options_flow(of).async_step_fetch_rubrica({"rubrica_gid": "9"}))
     assert result["errors"] == {"base": "rubrica_no_actuators"}
-    assert "GID 9" in result["description_placeholders"]["rubrica_error"]
+    assert result["description_placeholders"]["rubrica_gid"] == "9"
 
 
 # ─── Options: phonebook from the Vimar cloud ─────────────────────────────────
@@ -598,7 +598,8 @@ def test_missing_cloud_data_is_named(of):
     hub = _Hub({"init_status": {"token": "tok"}, "rubrica_ver": "abc"})
     result = asyncio.run(_cloud_flow(of, hub, data).async_step_fetch_rubrica_cloud())
     assert result["errors"] == {"base": "cloud_missing_data"}
-    assert result["description_placeholders"]["rubrica_error"] == "cproxy"
+    assert result["description_placeholders"]["cloud_missing"] == "cproxy"
+    assert result["description_placeholders"]["rubrica_error"] == ""  # no detail repeated in the description
 
 
 def test_a_cloud_download_error_is_shown(of, monkeypatch):
@@ -618,7 +619,7 @@ def test_a_cloud_phonebook_without_actuators_is_explained(of, monkeypatch):
     hub = _Hub({"init_status": {"token": "tok"}, "rubrica_ver": "abc"})
     result = asyncio.run(_cloud_flow(of, hub).async_step_fetch_rubrica_cloud({"rubrica_gid": "5"}))
     assert result["errors"] == {"base": "rubrica_no_actuators"}
-    assert "GID 5" in result["description_placeholders"]["rubrica_error"]
+    assert result["description_placeholders"]["rubrica_gid"] == "5"
 
 
 # ─── Options: phonebook from an uploaded file ────────────────────────────────
@@ -669,7 +670,8 @@ def test_an_upload_without_actuators_for_the_flat_is_refused(of, monkeypatch):
     _upload(of, monkeypatch, lambda path, gid: {"actuators": []})
     result = asyncio.run(_options_flow(of).async_step_import_rubrica({"rubrica_file": "up1", "rubrica_gid": "3"}))
     assert result["errors"] == {"rubrica_file": "rubrica_no_actuators"}
-    assert result["description_placeholders"]["rubrica_error"] == "GID 3"
+    assert result["description_placeholders"]["rubrica_gid"] == "3"
+    assert result["description_placeholders"]["rubrica_error"] == ""
 
 
 # ─── Options: import confirmation ────────────────────────────────────────────

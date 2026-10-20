@@ -899,7 +899,9 @@ def test_internal_panel_confirmation_refuses_invalid_targets(of):
 
 @pytest.mark.parametrize("sga", ["", "53011"])
 @pytest.mark.parametrize("configured", ["", "52044"])
-def test_picg_equal_to_effective_sga_keeps_the_current_monitor(of, monkeypatch, sga, configured):
+def test_the_declared_picg_is_proposed_even_when_it_is_the_sga(of, monkeypatch, sga, configured):
+    """On a 40507 the PICG is also the SGA (55001), and it is what rings the Tab: the
+    old 55002 kept here got 486 (20/10/2026). On a 40517 the PICG 60001 rings too."""
     declared = sga or of.SGA_TARGET
     hub = types.SimpleNamespace(stats={"nicknames": [{"role": "PICG", "ext": declared}]})
     flow = _options_flow(of, options={"sga_target": sga, "internal_panel_target": configured},
@@ -914,7 +916,7 @@ def test_picg_equal_to_effective_sga_keeps_the_current_monitor(of, monkeypatch, 
     result = asyncio.run(flow.async_step_internal_panel())
     assert result["errors"] == {}
     assert result["description_placeholders"]["detected"] == declared
-    assert defaults["internal_panel_target"] == (configured or of.INTERNAL_PANEL_TARGET)
+    assert defaults["internal_panel_target"] == declared
     assert flow._entry.options["internal_panel_target"] == configured
 
 

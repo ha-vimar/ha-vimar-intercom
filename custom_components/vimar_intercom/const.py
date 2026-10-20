@@ -103,12 +103,10 @@ SGA_TARGET              = "55001"
 # PICG (capogruppo appartamento) — destinatario di GET_INIT_STATUS / GET_NICKS.
 # Su questo impianto coincide con l'SGA (55001). [VERIFICATO 20/08/2026]
 PICG_TARGET             = SGA_TARGET
-# Targa interna — default del bottone "Chiama Casa (interno)" quando l'opzione
-# `internal_panel_target` è vuota. 55002 vale sull'impianto di sviluppo (è il
-# Tab stesso); su un 40515 visto in #3 il pannello interno è 60001. Non c'è una
-# chiave di rubrica.db da cui ricavarlo con certezza, quindi l'importer non lo
-# tocca: si imposta a mano nelle opzioni.
-INTERNAL_PANEL_TARGET   = "55002"
+# "Chiama Casa (interno)" senza l'opzione `internal_panel_target` chiama il PICG
+# (runtime.configure): sul 40507 55001 squilla il Tab mentre 55002 risponde 486,
+# sul 40517 squilla 60001 (20/10/2026: due impianti, non una regola, ADR-13; «Rileva il
+# posto interno» lo propone e l'utente conferma). Nessun indirizzo fisso qui.
 SEGRETERIA_ON           = "VOICEMAIL;ON"
 SEGRETERIA_OFF          = "VOICEMAIL;OFF"
 SEGRETERIA_HEADER_NAME  = "Panda"

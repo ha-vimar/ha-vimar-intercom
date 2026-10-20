@@ -728,7 +728,14 @@ def test_video_webcodecs_primo_fotogramma_subito(monkeypatch, engine):  # noqa: 
                 peer.pending_invite = None
                 peer.reply(inv, 200, "OK", body=peer.sdp())
                 tl["ok200"] = time.time()
-                rig.start_media(inv.body)                  # IDR subito dopo il 200 OK
+
+                # Like a real panel, the video starts once our ACK arrives (field, 20/10/2026 on
+                # a 40507: the first IDR 0.2-0.35 s after the 200). Sending it in the same instant
+                # as the 200, before we can even read it, lost the first IDR whatever we do (#130).
+                async def media_on_ack():
+                    await peer.wait_for(is_("ACK", cid=inv.cid))
+                    rig.start_media(inv.body)
+                asyncio.ensure_future(media_on_ack())
             rig.peer.on_invite = on_invite
 
             async with Card(rig, engine) as c:

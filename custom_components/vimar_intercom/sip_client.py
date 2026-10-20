@@ -487,8 +487,11 @@ def reset_state() -> None:
     """
     global _last_sweep
     global _state_change_callback, reader, writer, _udp_sock
-    global granted_expiry, registered_at
+    global granted_expiry, registered_at, last_register_code
     cancel_reconnect()
+    # A refusal from the previous session would raise the repair again before
+    # the new hub's first REGISTER (a reload after pairing with a new QR).
+    last_register_code = None
     _state_change_callback = None
     _set_in_call(False)
     _set_calling(False)
@@ -989,6 +992,9 @@ MIN_REGISTER_INTERVAL = 5
 # did not say), and when that was (time.monotonic(), 0.0: never).
 granted_expiry: int | None = None
 registered_at = 0.0
+# The final code of the last REGISTER (None: no final answer yet). A 403 or 404
+# means the intercom refuses these credentials: the hub shows it as a repair.
+last_register_code: int | None = None
 
 
 def _remember_granted_expiry(hdrs) -> int | None:
@@ -1040,7 +1046,7 @@ async def do_register():
     elif not writer or writer.is_closing():
         await connect()
 
-    global local_tag
+    global local_tag, last_register_code
     local_tag = _gen("")
     cid = _gen("reg-")
     uri = f"sip:{R.SIP_DOMAIN}"
@@ -1089,7 +1095,7 @@ async def do_register():
         if final is None:
             break
         code, hdrs = final
-        last_code = code
+        last_code = last_register_code = code
         if code == 200:
             granted = _remember_granted_expiry(hdrs)
             if granted is not None and granted < MIN_GRANTED_EXPIRES:

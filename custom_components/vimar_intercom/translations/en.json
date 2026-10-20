@@ -904,5 +904,11 @@
     "switch_failed": {
       "message": "{entity}: command failed ({error})"
     }
+  },
+  "issues": {
+    "registration_refused": {
+      "title": "The intercom refuses Home Assistant's registration",
+      "description": "The intercom answers **{code}** to every registration of “{title}”: the credentials from the pairing QR are no longer valid. This happens when Home Assistant's slot on the intercom was regenerated or removed, for example while pairing another phone. Until then the intercom does not ring in Home Assistant, and video, door and voicemail do not work.\n\nOn the intercom, create a new QR for Home Assistant and in Home Assistant open the Vimar Intercom integration and choose **⋮ → Reconfigure** to paste it (entities and automations stay). The integration keeps retrying meanwhile: this notice goes away by itself as soon as the registration succeeds."
+    }
   }
 }

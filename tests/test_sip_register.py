@@ -62,6 +62,22 @@ def test_a_rejection_that_is_not_a_challenge_stops_at_once(registrar):
     assert len(sent) == 1
 
 
+@pytest.mark.parametrize("code", [403, 404])
+def test_a_refused_register_keeps_its_code(registrar, monkeypatch, code):
+    """The hub turns a 403/404 into a repair: it needs to know which code came back."""
+    monkeypatch.setattr(sip, "last_register_code", None, raising=False)
+    registrar([response(code, "Forbidden")])
+    assert asyncio.run(sip.do_register()) is False
+    assert sip.last_register_code == code
+
+
+def test_a_successful_register_replaces_the_refused_code(registrar, monkeypatch):
+    monkeypatch.setattr(sip, "last_register_code", 403, raising=False)
+    registrar([challenge("n"), response(200)])
+    assert asyncio.run(sip.do_register()) is True
+    assert sip.last_register_code == 200
+
+
 def test_it_gives_up_after_three_distinct_challenges(registrar):
     sent = registrar([challenge("a"), challenge("b"), challenge("c"), response(200)])
     assert asyncio.run(sip.do_register()) is False

@@ -904,5 +904,11 @@
     "switch_failed": {
       "message": "{entity}: comando non riuscito ({error})"
     }
+  },
+  "issues": {
+    "registration_refused": {
+      "title": "Il citofono rifiuta la registrazione di Home Assistant",
+      "description": "Il citofono risponde **{code}** a ogni registrazione di «{title}»: le credenziali del QR di abbinamento non valgono più. Succede quando il posto di Home Assistant sul citofono è stato rigenerato o tolto, per esempio abbinando un altro telefono. Finché resta così il citofono non squilla in Home Assistant e video, porta e segreteria non funzionano.\n\nSul citofono genera un QR nuovo per Home Assistant e in Home Assistant apri l'integrazione Vimar Intercom e scegli **⋮ → Riconfigura** per incollare quel QR (entità e automazioni restano). L'integrazione intanto continua a riprovare: questo avviso sparisce da solo appena la registrazione riesce."
+    }
   }
 }

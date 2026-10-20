@@ -109,7 +109,7 @@
       },
       "settings": {
         "title": "Vimar Intercom settings",
-        "description": "SIP network and dynamic actuators. In the Actuators field paste the JSON list produced by tools/parse_rubrica.py, or go back to the menu and use \"Import actuators from rubrica.db\". {actuators_error}",
+        "description": "SIP network and dynamic actuators. In the Actuators field paste the JSON list produced by tools/parse_rubrica.py, or go back to the menu and use \"Import actuators from rubrica.db\".",
         "data": {
           "local_proxy": "Intercom IP address",
           "use_local_udp": "Use local SIP UDP",
@@ -121,7 +121,7 @@
           "sga_target": "SGA (voicemail/DND SIP id)",
           "picg_target": "PICG (GET_INIT_STATUS SIP id)",
           "camera_target": "Video entrance panel (SIP id to call)",
-          "internal_panel_target": "Internal panel (SIP id for “Chiama Casa”)",
+          "internal_panel_target": "Internal panel (SIP id for “Call the indoor monitor”)",
           "door_target": "Entrance panel that opens the door",
           "away_message_file": "Message if nobody answers (audio file)",
           "away_message_upload": "Or upload the audio file (mp3, wav, m4a)",
@@ -143,14 +143,14 @@
           "actuators": "JSON list of objects name, msg, target, icon. icon: door|light|switch. target \"AUTO\" uses the panel that opens the door. Empty = no buttons.",
           "sga_target": "Target for VOICEMAIL;/DND;, and for the door-open command when “Entrance panel that opens the door” is empty. Empty = historical default (55001). Change it only if your system uses a different SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
           "picg_target": "Target for GET_INIT_STATUS. On systems verified so far it matches the SGA. Empty = historical default (55001).",
-          "camera_target": "Panel called by the camera, by “Chiama” and by “Chiama Video (esterno)”: the PHONEBOOK row with TYPE='PE' in rubrica.db (the phonebook import fills it in). Empty = the panel learned from the last ring with video, else 55100. This is not the SGA.",
-          "internal_panel_target": "Target of the “Chiama Casa (interno)” button. The phonebook does not say which one it is: enter it by hand. Empty = historical default (55002).",
+          "camera_target": "Panel called by the camera, by “Call” and by “Call the entrance panel (video)”: the PHONEBOOK row with TYPE='PE' in rubrica.db (the phonebook import fills it in). Empty = the panel learned from the last ring with video, else 55100. This is not the SGA.",
+          "internal_panel_target": "Target of the “Call the indoor monitor” button. The phonebook does not say which one it is: enter it by hand. Empty = historical default (55002).",
           "door_target": "Where the door-open command goes: the GID_PE of the door actuator in the phonebook (on a 2FV2 it is not the SGA). Filled in by importing or downloading the phonebook. Empty = the door actuator's panel if actuators were imported, otherwise the SGA.",
           "away_message_file": "Audio file (mp3, wav...) played to the visitor when nobody answers, e.g. /config/media/citofono/messaggio.mp3 (or pick the file on the device page: upload it from Media > Local media > citofono/messaggi). Empty = off.",
           "away_message_upload": "The file goes to media folder/citofono/messaggi and becomes the away message right away. Max 5 MB; if a different file with the same name is already there, this one gets -2 added.",
           "away_message_text": "Text read to the visitor by Home Assistant's text-to-speech when the file field is empty (the file takes precedence). In HA's language, max 30 s of audio. Empty = off.",
           "away_message_tts": "TTS entity that reads the text (e.g. tts.google_translate_en_com, tts.piper). Empty = HA's default TTS engine. If synthesis fails the doorbell keeps ringing as usual.",
-          "away_message_delay": "If it is still ringing after this many seconds (nobody answered from the panel, phone or HA), the integration answers, plays the file and hangs up. If the Tab exposes the delay (Segreteria · ritardo) that one is used; this value only matters when the Tab does not expose it. 0 = 20 s.",
+          "away_message_delay": "If it is still ringing after this many seconds (nobody answered from the panel, phone or HA), the integration answers, plays the file and hangs up. If the Tab exposes the delay (Voicemail delay) that one is used; this value only matters when the Tab does not expose it. 0 = 20 s.",
           "snapshot_dir": "Folder where the visitor's snapshot (squillo_YYYYMMDD_HHMMSS_mmm.jpg and ultimo_squillo.jpg) and the ring clip (.mp4, up to 60 s) are saved, e.g. /config/media/citofono. Must be in allowlist_external_dirs or a media folder. Empty = do not save.",
           "snapshot_delay": "The first snapshot is saved as soon as the first frame arrives (~1 s after the ring); after this many seconds it is replaced by a frame with the exposure settled (the panel's first one is dark). 3 s suits the Tab 5S Up 40515; increase it if snapshots come out dark, 0 = keep the first.",
           "view_keepalive": "While viewing the outside the integration sends audio silence; without it, over the cloud the panel closes the view after ~10 s. It stops this many seconds after the view starts (the view then ends by itself). On the 2-wire plant in local mode the silence keeps the apartment busy: the default is 0 in local mode and 120 over the cloud; 0 = no silence (on the 2-wire use 0 or 30).",
@@ -225,10 +225,9 @@
     "error": {
       "invalid_ip": "Invalid IP address.",
       "sip_registration_failed": "SIP registration failed.",
-      "invalid_actuators": "Invalid actuators list: {actuators_error}",
       "invalid_actuator_target": "Invalid actuator target ({actuators_error}): digits only (e.g. 55001) or AUTO.",
       "rubrica_import_failed": "Import failed. See description above for details.",
-      "rubrica_no_actuators": "No actuators found for the specified GID. See description above.",
+      "rubrica_no_actuators": "No actuators found for GID {rubrica_gid}: check the apartment GID.",
       "internal_panel_not_found": "The nickname reply does not declare a unique valid PICG. Enter a known indoor monitor address manually.",
       "internal_panel_no_reply": "No nickname reply arrived from the configured PICG. Some cloud plants do not answer GET_NICKS even at an existing address. This does not prove the address is wrong; enter a known indoor monitor address manually.",
       "internal_panel_unavailable": "The nickname lookup could not run: the integration may be disconnected or another search may be in progress. Retry once it is available, or enter a known indoor monitor address manually.",
@@ -248,71 +247,142 @@
       "no_cloud_token": "The status reply did not include a phonebook token. Use the intercom download or import rubrica.db instead.",
       "no_cloud_status": "No status reply was received. Check that the integration is connected and that the PICG address is correct, then retry. This does not establish whether the system supports cloud phonebook downloads.",
       "cloud_auth_failed": "The Vimar cloud rejected the token.",
-      "cloud_failed": "Phonebook download from the cloud failed."
+      "cloud_failed": "Phonebook download from the cloud failed.",
+      "actuators_bad_json": "Invalid actuators list: not valid JSON ({actuators_error})",
+      "actuators_not_list": "Invalid actuators list: it must be a JSON list, [ ... ]",
+      "actuators_not_object": "Invalid actuators list: item {actuators_error} is not a JSON object",
+      "actuators_missing_keys": "Invalid actuators list: missing keys in item {actuators_error} (needed: name, msg, target, icon)",
+      "actuators_bad_icon": "Invalid actuators list: icon not allowed in item {actuators_error} (allowed: door, light, switch)",
+      "cloud_missing_data": "Phonebook download from the cloud not possible: missing {cloud_missing} (the cloud domain and proxy come from the QR code)."
     }
   },
   "entity": {
-    "camera": {
-      "videocitofono": {
-        "name": "Video Intercom"
-      }
-    },
-    "lock": {
-      "serratura": {
-        "name": "Door Lock"
+    "binary_sensor": {
+      "sip_registered": {
+        "name": "SIP registration"
+      },
+      "in_call": {
+        "name": "In call"
+      },
+      "ringing": {
+        "name": "Ringing"
+      },
+      "calling": {
+        "name": "Outgoing call"
+      },
+      "new_videomessage": {
+        "name": "New video message"
       }
     },
     "button": {
-      "chiama": {
+      "call": {
         "name": "Call"
       },
-      "riaggancia": {
-        "name": "Hang Up"
+      "call_ext": {
+        "name": "Call the entrance panel (video)"
+      },
+      "call_int": {
+        "name": "Call the indoor monitor"
+      },
+      "answer": {
+        "name": "Answer"
+      },
+      "decline": {
+        "name": "Decline"
+      },
+      "hangup": {
+        "name": "Hang up"
+      },
+      "door_street": {
+        "name": "Open door"
+      },
+      "test_ring": {
+        "name": "Test ring"
       }
     },
     "event": {
-      "campanello": {
+      "doorbell": {
         "name": "Doorbell"
       },
       "fuoriporta": {
-        "name": "Outdoor call"
+        "name": "Apartment door bell"
       }
     },
-    "binary_sensor": {
-      "registrazione_sip": {
-        "name": "SIP Registration"
-      },
-      "in_chiamata": {
-        "name": "In Call"
-      },
-      "nuovo_videomessaggio": {
-        "name": "New Video Message"
-      }
-    },
-    "sensor": {
-      "spazio_segreteria": {
-        "name": "Answering Machine Storage"
-      },
-      "versione_rubrica": {
-        "name": "Phonebook Version"
-      },
-      "ultima_chiamata_persa": {
-        "name": "Last Missed Call"
+    "lock": {
+      "lock": {
+        "name": "Door lock"
       }
     },
     "select": {
+      "vm_timeout": {
+        "name": "Voicemail delay"
+      },
       "away_file": {
+        "name": "Voicemail audio file",
         "state": {
           "none": "None (use the text)"
         }
       }
     },
+    "sensor": {
+      "devices": {
+        "name": "Devices"
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "offline": "Unreachable",
+          "idle": "Ready",
+          "ringing": "Ringing",
+          "in_call": "In call",
+          "calling": "Calling"
+        }
+      },
+      "last_caller": {
+        "name": "Last caller"
+      },
+      "last_ring": {
+        "name": "Last ring"
+      },
+      "ring_count": {
+        "name": "Rings"
+      },
+      "call_count": {
+        "name": "Calls"
+      },
+      "last_call_duration": {
+        "name": "Last call duration"
+      },
+      "last_door": {
+        "name": "Last door opening"
+      },
+      "last_command": {
+        "name": "Last command"
+      },
+      "last_message_in": {
+        "name": "Last message received"
+      },
+      "vm_level": {
+        "name": "Voicemail storage"
+      },
+      "rubrica_ver": {
+        "name": "Phonebook version"
+      },
+      "last_missed_call": {
+        "name": "Last missed call"
+      }
+    },
     "switch": {
       "segreteria": {
-        "name": "Answering machine"
+        "name": "Voicemail"
       },
       "dnd": {
         "name": "Do not disturb"
+      }
+    },
+    "text": {
+      "away_text": {
+        "name": "Voicemail message text"
       }
     }
   },
@@ -503,6 +573,36 @@
     },
     "command_queued": {
       "message": "Command not confirmed: the relay queued it (202) and no device confirmed it"
+    },
+    "proxy_unreachable": {
+      "message": "SIP proxy unreachable: {error}"
+    },
+    "call_failed": {
+      "message": "Call failed: {error}"
+    },
+    "call_target_failed": {
+      "message": "Call to {target} failed: {error}"
+    },
+    "answer_failed": {
+      "message": "Answer failed: {error}"
+    },
+    "decline_failed": {
+      "message": "Decline failed: {error}"
+    },
+    "test_ring_busy": {
+      "message": "Test ring not started: a call is already in progress"
+    },
+    "actuator_failed": {
+      "message": "{name} failed: {error}"
+    },
+    "vm_timeout_not_allowed": {
+      "message": "Value not allowed by the intercom: {option}"
+    },
+    "vm_timeout_failed": {
+      "message": "Voicemail delay not changed: {error}"
+    },
+    "switch_failed": {
+      "message": "{entity}: command failed ({error})"
     }
   }
 }

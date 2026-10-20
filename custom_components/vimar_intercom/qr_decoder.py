@@ -57,17 +57,17 @@ def decode(qr_text: str) -> dict[str, str]:
     """
     qr_text = qr_text.strip()
     if not qr_text:
-        raise QRDecodeError("Testo QR vuoto")
+        raise QRDecodeError("Empty QR text")
 
     # 1. Base64 decode
     try:
         data = base64.b64decode(qr_text)
     except Exception as exc:
-        raise QRDecodeError(f"Base64 non valido: {exc}") from exc
+        raise QRDecodeError(f"Invalid Base64: {exc}") from exc
 
     if len(data) < 32 + 16 + 1:
         raise QRDecodeError(
-            f"Payload troppo corto ({len(data)} byte), minimo 49 byte richiesti"
+            f"Payload too short ({len(data)} bytes), at least 49 bytes needed"
         )
 
     # 2. Estrai key (32 byte) | ciphertext | IV (ultimi 16 byte)
@@ -80,7 +80,7 @@ def decode(qr_text: str) -> dict[str, str]:
     try:
         plaintext = _aes_decrypt(key, ciphertext, iv)
     except Exception as exc:
-        raise QRDecodeError(f"Decriptazione AES fallita: {exc}") from exc
+        raise QRDecodeError(f"AES decryption failed: {exc}") from exc
 
     # Il payload decrittato contiene «PWD=<password SIP>»: non va loggato a
     # nessun livello. Il buffer di debug interno cattura i DEBUG comunque, e
@@ -99,15 +99,15 @@ def decode(qr_text: str) -> dict[str, str]:
             fields[k.strip().lower()] = v.strip()
 
     if not fields:
-        raise QRDecodeError("Nessun campo trovato nel payload decrittato")
+        raise QRDecodeError("No field found in the decrypted payload")
 
     _LOGGER.debug("QR decrittato: %d campi (%s)", len(fields), ", ".join(sorted(fields)))
 
     # Verifica minima: deve contenere almeno id e domain (SIP QR)
     if QR_ID not in fields or (QR_DOMAIN not in fields and QR_CDOMAIN not in fields):
         raise QRDecodeError(
-            "Il QR non contiene i campi SIP obbligatori (id, domain). "
-            "Assicurati di usare il QR di abbinamento SIP dal pannello del citofono."
+            "The QR code lacks the required SIP fields (id, domain). "
+            "Use the SIP pairing QR code from the intercom panel."
         )
 
     _LOGGER.info(
@@ -189,8 +189,8 @@ def _aes_decrypt(key: bytes, ciphertext: bytes, iv: bytes) -> str:
             plaintext = decryptor.update(ciphertext) + decryptor.finalize()
         except ImportError as exc:
             raise QRDecodeError(
-                "Nessuna libreria AES disponibile. "
-                "Installa pycryptodome: pip install pycryptodome"
+                "No AES library available. "
+                "Install pycryptodome: pip install pycryptodome"
             ) from exc
 
     # Rimuovi PKCS7 padding

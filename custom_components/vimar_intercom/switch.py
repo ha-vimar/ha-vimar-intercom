@@ -43,7 +43,7 @@ from .const import (
     SEGRETERIA_OFF,
     SEGRETERIA_ON,
 )
-from .device import device_info
+from .device import device_info, legacy_entity_id
 from .hub import QUEUED
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,13 +66,13 @@ async def async_setup_entry(
     # di avviare le piattaforme, quindi il valore qui è già quello corrente.
     async_add_entities([
         VimarVoicemailSwitch(
-            hub, entry.entry_id, key="segreteria", name="Segreteria",
+            hub, entry.entry_id, key="segreteria", object_id="segreteria",
             icon="mdi:voicemail", target=R.SGA_TARGET,
             cmd_on=SEGRETERIA_ON, cmd_off=SEGRETERIA_OFF,
             state_attr="voicemail",
             hname=SEGRETERIA_HEADER_NAME, hvalue=SEGRETERIA_HEADER_VALUE),
         VimarModeSwitch(
-            hub, entry.entry_id, key="dnd", name="Non disturbare",
+            hub, entry.entry_id, key="dnd", object_id="non_disturbare",
             icon="mdi:bell-off", target=R.SGA_TARGET,
             cmd_on=DND_ON, cmd_off=DND_OFF, state_attr="dnd",
             hname="Panda", hvalue="blue"),
@@ -83,9 +83,9 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
     """Switch per una modalità del Tab (segreteria / non disturbare)."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
-    def __init__(self, hub, entry_id: str, *, key: str, name: str, icon: str,
+    def __init__(self, hub, entry_id: str, *, key: str, object_id: str, icon: str,
                  target: str, cmd_on: str, cmd_off: str, state_attr: str,
                  hname: str | None, hvalue: str | None) -> None:
         self._hub = hub
@@ -96,9 +96,10 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
         self._state_attr = state_attr
         self._hname = hname
         self._hvalue = hvalue
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_icon = icon
         self._attr_unique_id = f"{entry_id}_{key}"
+        self.entity_id = legacy_entity_id("switch", object_id)
         self._attr_device_info = device_info(entry_id)
         self._last_result: str | None = None
         # Stato confermato dal Tab prima del riavvio (attributo stato_reale salvato).
@@ -146,7 +147,7 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
                         "usually means the wrong recipient: these commands go to the "
                         "apartment's SGA, which is not the entrance panel on every "
                         "plant. Check \"sga_target\" in the integration options.",
-                        self._attr_name, self._target,
+                        self.entity_id, self._target,
                         self._cmd_on if wanted else self._cmd_off,
                         "ON" if real else "OFF")
         self.async_write_ha_state()
@@ -157,7 +158,7 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
         if self._pending is not None:
             if self._real() is None:
                 _LOGGER.warning("%s: il citofono non ha confermato il comando in %.0f s, "
-                                "stato sconosciuto", self._attr_name, CONFIRM_S)
+                                "stato sconosciuto", self.entity_id, CONFIRM_S)
             self._pending = None
             self.async_write_ha_state()
 
@@ -221,13 +222,14 @@ class VimarModeSwitch(SwitchEntity, RestoreEntity):
             self._cancel_expire()
             self._expire_handle = asyncio.get_running_loop().call_later(CONFIRM_S, self._expire)
             self._on_state_change()  # annuncio già arrivato durante l'invio: niente attesa
-        _LOGGER.info("%s %s → ok=%s msg=%s", self._attr_name,
+        _LOGGER.info("%s %s → ok=%s msg=%s", self.entity_id,
                      "ON" if new_state else "OFF", ok, msg)
         self.async_write_ha_state()
         if msg == QUEUED:
             raise HomeAssistantError(translation_domain=DOMAIN, translation_key="command_queued")
         if not ok:
-            raise HomeAssistantError(f"{self._attr_name}: comando non riuscito ({msg})")
+            # The entity's own translated name ("Do not disturb"); its entity_id only if it has none.
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="switch_failed", translation_placeholders={"entity": str(getattr(self, "name", None) or self.entity_id), "error": str(msg)})
         # Il Tab di solito annuncia il cambio da solo; chi non lo fa può comunque
         # rispondere a GET_INIT_STATUS con dnd/voicemail.
         await self._hub.async_request_status()

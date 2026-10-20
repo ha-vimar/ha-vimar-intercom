@@ -136,7 +136,14 @@ const template = () => {
     <dialog class="set" aria-label="${t("settings")}"></dialog>`;
 };
 
-const SC = { lock: ["unlock", "mdi:door-open"], button: ["press", "mdi:gesture-tap-button"] };  // dominio → servizio, icona
+const SC = { lock: ["unlock", "mdi:door-open"], button: ["press", "mdi:gesture-tap-button"] };
+// A shortcut's label: the entity's own name. With has_entity_name the friendly name starts with
+// the device's ("Vimar Intercom Apri porta"), too long for a round button: that part goes.
+const ownName = (hass, id) => {
+  const fn = hass.states[id]?.attributes?.friendly_name || id, e = hass.entities?.[id];
+  const d = e?.device_id && hass.devices?.[e.device_id], dn = d && (d.name_by_user || d.name);
+  return dn && fn.startsWith(`${dn} `) ? fn.slice(dn.length + 1) : fn;
+};  // dominio → servizio, icona
 // The ring (last_ring state) whose popup was closed by hand on this page: it does not open by
 // itself again for that ring, whatever follows (answered elsewhere, call ended, card rebuilt).
 let dismissedRing = null;
@@ -534,7 +541,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     const st = (id) => this._hass.states[id], body = this._set.querySelector(".set-body");
     const key = Object.values(ids).join();
     const call = (dom, sv, data) => this._hass.callService(dom, sv, data).then(() => { this._set.querySelector(".set-e").textContent = ""; },
-      (e) => { this._set.querySelector(".set-e").textContent = t("failed", { error: e.message || e }); });
+      async (e) => { this._set.querySelector(".set-e").textContent = await this._errorText(e); });
     const row = (k, label, control, col) => {
       const r = document.createElement("div");
       r.className = "set-r" + (col ? " col" : "");
@@ -846,7 +853,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
   _shortcuts() {
     const list = this._list().map((s) => {
       const st = this._hass.states[s.entity], dom = s.entity.split(".")[0];
-      return { ...s, name: s.name || (dom === "lock" ? t("open") : st?.attributes?.friendly_name || s.entity),
+      return { ...s, name: s.name || (dom === "lock" ? t("open") : ownName(this._hass, s.entity)),
         icon: s.icon || st?.attributes?.icon || SC[dom][1], off: st?.state === "unavailable" };
     });
     const key = JSON.stringify(list);
@@ -882,16 +889,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       this._icon(b, "mdi:check");
       this._label(b, t("opened"));
     } catch (e) {
-      let m = e.translation_key ? e.message : t("open_failed", { error: e.message || e });
-      if (e.translation_key) {  // HA's message is in English: translate it as the frontend does (#128)
-        const k = `component.${e.translation_domain}.exceptions.${e.translation_key}.message`;
-        const late = new Promise((_, no) => setTimeout(no, 2000));  // a dropped WS must not keep the button spinning
-        try {
-          m = (await Promise.race([this._hass.loadBackendTranslation("exceptions", e.translation_domain), late]))(
-            k, e.translation_placeholders) || m;
-        } catch {}
-      }
-      this._err.textContent = m;
+      this._err.textContent = e.translation_key ? await this._errorText(e) : t("open_failed", { error: e.message || e });
       b.className = "bad";
       this._icon(b, "mdi:alert-circle-outline");
       this._label(b, t("error"));
@@ -908,6 +906,20 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
     b.className = "";
     this._icon(b, b.dataset.icon);
     this._label(b, b.dataset.label);
+  }
+
+  // A translated error (translation_key): HA's message is in English, so it is translated as the
+  // frontend does (#128). Its text already says what failed. Anything else: "Failed: <message>".
+  async _errorText(e) {
+    if (!e?.translation_key) return t("failed", { error: e?.message || e });
+    const k = `component.${e.translation_domain}.exceptions.${e.translation_key}.message`;
+    const late = new Promise((_, no) => setTimeout(no, 2000));  // a dropped WS must not keep a button spinning
+    try {
+      return (await Promise.race([this._hass.loadBackendTranslation("exceptions", e.translation_domain), late]))(
+        k, e.translation_placeholders) || e.message;
+    } catch {
+      return e.message;
+    }
   }
 
   async _call(service, button) {
@@ -927,7 +939,7 @@ class VimarIntercomCard extends CardAudio(HTMLElement) {
       const r = await this._hass.callService("vimar_intercom", service, {}, undefined, true, true);
       if (r?.response?.ok === false) throw new Error(r.response.result);
     } catch (e) {
-      this._err.textContent = t("failed", { error: e.message || e });
+      this._err.textContent = await this._errorText(e);
       this._pendingAt = 0;
       this._tickSetup();
       throw e;

@@ -20,7 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import plant_state as S
 from .const import DOMAIN
-from .device import device_info
+from .device import device_info, legacy_entity_id
 from .plant_messages import sip_id_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ class VimarSensorDescription(SensorEntityDescription):
     # "Ultimo ..." che l'hub riempie solo quando succede: senza, un riavvio di HA lo
     # riporta a "Sconosciuto" fino al prossimo evento (l'apertura di stamattina sparisce).
     restore: bool = False
+    # The entity_id a new install gets (device.legacy_entity_id), the name being translated.
+    object_id: str = ""
     # Called with the last saved attributes, to seed the hub before its first
     # update (the device list, which otherwise starts empty after a restart).
     restore_fn: Callable[[Any, dict], None] | None = None
@@ -70,7 +72,7 @@ def _status_attrs(hub) -> dict:
 SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
         key="devices",
-        name="Intercom Dispositivi",
+        object_id="intercom_dispositivi",
         icon="mdi:devices",
         # Every mobile device shares one SIP user: without this list there is
         # no way to tell which phones are paired, and generating a new QR
@@ -87,7 +89,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="status",
-        name="Intercom Stato",
+        object_id="intercom_stato",
         icon="mdi:doorbell-video",
         device_class=SensorDeviceClass.ENUM,
         options=["offline", "idle", "ringing", "in_call", "calling"],
@@ -97,7 +99,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
         key="last_caller",
         restore=True,
-        name="Intercom Ultimo Chiamante",
+        object_id="intercom_ultimo_chiamante",
         icon="mdi:account-voice",
         value_fn=lambda hub: sip_id_name(hub.stats.get("last_caller_id")),
         attrs_fn=lambda hub: {
@@ -109,7 +111,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
         key="last_ring",
         restore=True,
-        name="Intercom Ultimo Squillo",
+        object_id="intercom_ultimo_squillo",
         icon="mdi:bell-clock",
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda hub: hub.stats.get("last_ring_time"),
@@ -122,7 +124,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="ring_count",
-        name="Intercom Squilli",
+        object_id="intercom_squilli",
         icon="mdi:bell-plus",
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda hub: hub.stats.get("ring_count"),
@@ -133,7 +135,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="call_count",
-        name="Intercom Chiamate",
+        object_id="intercom_chiamate",
         icon="mdi:phone-log",
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda hub: hub.stats.get("call_count"),
@@ -147,7 +149,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
         key="last_call_duration",
         restore=True,
-        name="Intercom Durata Ultima Chiamata",
+        object_id="intercom_durata_ultima_chiamata",
         icon="mdi:timer-outline",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
@@ -157,7 +159,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
         key="last_door",
         restore=True,
-        name="Intercom Ultima Apertura",
+        object_id="intercom_ultima_apertura",
         icon="mdi:door-open",
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda hub: hub.stats.get("last_door_time"),
@@ -173,7 +175,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="last_command",
-        name="Intercom Ultimo Comando",
+        object_id="intercom_ultimo_comando",
         icon="mdi:console-line",
         value_fn=lambda hub: hub.stats.get("last_command_result"),
         attrs_fn=lambda hub: {
@@ -184,7 +186,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="last_message_in",
-        name="Intercom Ultimo Messaggio Ricevuto",
+        object_id="intercom_ultimo_messaggio_ricevuto",
         icon="mdi:message-text",
         value_fn=lambda hub: hub.stats.get("last_message_in"),
         attrs_fn=lambda hub: {
@@ -193,7 +195,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="vm_level",
-        name="Intercom Spazio Segreteria",
+        object_id="intercom_spazio_segreteria",
         icon="mdi:voicemail",
         value_fn=lambda hub: hub.stats.get("vm_level"),
         attrs_fn=lambda hub: {
@@ -202,7 +204,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     ),
     VimarSensorDescription(
         key="rubrica_ver",
-        name="Intercom Versione Rubrica",
+        object_id="intercom_versione_rubrica",
         icon="mdi:book-account",
         value_fn=lambda hub: hub.stats.get("rubrica_ver"),
         attrs_fn=lambda hub: {
@@ -213,7 +215,7 @@ SENSORS: tuple[VimarSensorDescription, ...] = (
     VimarSensorDescription(
         key="last_missed_call",
         restore=True,
-        name="Intercom Ultima Chiamata Persa",
+        object_id="intercom_ultima_chiamata_persa",
         icon="mdi:phone-missed",
         value_fn=lambda hub: (
             (hub.stats.get("last_missed_call") or {}).get("name")
@@ -265,14 +267,15 @@ class VimarStatSensor(RestoreSensor):
     valore suo (dopo un riavvio: fino al prossimo squillo, apertura, chiamata persa).
     """
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, hub, entry_id: str, description: VimarSensorDescription) -> None:
         self._hub = hub
         self.entity_description = description
-        self._attr_name = description.name
+        self._attr_translation_key = description.key
         self._attr_unique_id = f"{entry_id}_{description.key}"
+        self.entity_id = legacy_entity_id("sensor", description.object_id)
         self._attr_device_info = device_info(entry_id)
         self._restored = None
         self._restored_attrs: dict | None = None

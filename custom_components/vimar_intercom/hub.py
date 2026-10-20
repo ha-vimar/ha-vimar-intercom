@@ -69,7 +69,7 @@ def sip_uri(target) -> str:
     arriva mai nella request line."""
     t = validate.sip_target(target)
     if t is None:
-        raise ValueError(f"target SIP non valido: {target!r}")
+        raise ValueError(f"invalid SIP target: {target!r}")
     return f"sip:{t}@{R.SIP_DOMAIN}"
 
 

@@ -6,40 +6,48 @@
 
 | Entità | Piattaforma | Chiave | Descrizione |
 |---|---|---|---|
-| Intercom (Videocitofono) | `camera` | `camera` | Video **on‑demand** (stream): aprendolo parte la chiamata SIP (non a una riconnessione entro 5 s dall'uscita dell'ultimo spettatore, per 60 s dalla fine di una chiamata: `/av` risponde 503; `/av` risponde 503 subito anche quando la chiamata che aspettava viene rifiutata o finisce, salvo con il WebSocket dell'app iOS collegato: allora aspetta fino a 25 s la chiamata dell'app); durante uno squillo mostra l'anteprima senza rispondere. Le foto sono istantanee in chiamata o durante lo squillo (fotogrammi completi, puliti), assenti altrimenti: le miniature non fanno mai squillare la targa |
-| Doorbell (Campanello) | `event` | `doorbell` | Entità `event` (device_class DOORBELL), event_type `ring`, allo squillo (INVITE in arrivo) |
+| Vimar Intercom (il nome del dispositivo) | `camera` | `camera` | Video **on‑demand** (stream): aprendolo parte la chiamata SIP (non a una riconnessione entro 5 s dall'uscita dell'ultimo spettatore, per 60 s dalla fine di una chiamata: `/av` risponde 503; `/av` risponde 503 subito anche quando la chiamata che aspettava viene rifiutata o finisce, salvo con il WebSocket dell'app iOS collegato: allora aspetta fino a 25 s la chiamata dell'app); durante uno squillo mostra l'anteprima senza rispondere. Le foto sono istantanee in chiamata o durante lo squillo (fotogrammi completi, puliti), assenti altrimenti: le miniature non fanno mai squillare la targa |
+| Campanello | `event` | `doorbell` | Entità `event` (device_class DOORBELL), event_type `ring`, allo squillo (INVITE in arrivo) |
 | Fuoriporta | `event` | `fuoriporta` | Tipo di evento `fuoriporta`, al MESSAGE `FP` mandato dal Tab (il campanello alla porta dell'appartamento), con `sip_id` e `msg` di chi chiama. Noto dal codice dell'app, non ancora visto su un impianto vero |
 | Serratura | `lock` | `lock` | Apri porta: il comando dell'attuatore porta della rubrica (`OPEN_2F` se non c'è) → `door_target`; auto‑relock dopo 5 s (nessun feedback fisico) |
 | Chiama | `button` | `call` | Chiamata SIP verso la targa di default |
-| Chiama Video (esterno) / Chiama Casa (interno) | `button` | `call_ext` / `call_int` | Chiamata verso `camera_target` / `internal_panel_target` |
+| Chiama video (esterno) / Chiama casa (interno) | `button` | `call_ext` / `call_int` | Chiamata verso `camera_target` / `internal_panel_target` |
 | Rispondi / Riaggancia | `button` | `answer` / `hangup` | Rispondi (200 OK) / termina (BYE) |
 | Rifiuta | `button` | `decline` | Solo mentre suona: rifiuta con `603 Decline`, così smette di suonare tutta la casa, come nell'app. Anche il servizio `vimar_intercom.decline` |
-| Apri Porta | `button` | `door_street` | Come la serratura: il comando porta della rubrica (altrimenti `OPEN_2F`) verso `door_target` |
+| Apri porta | `button` | `door_street` | Come la serratura: il comando porta della rubrica (altrimenti `OPEN_2F`) verso `door_target` |
 | Squillo di prova | `button` (diagnostica) | `test_ring` | Uno squillo completo senza la targa, come `vimar_intercom.simulate_ring` con i 20 s predefiniti: per provare automazioni e notifiche. Non parte durante una chiamata o uno squillo veri |
 | *Attuatori dinamici* | `button` | `act_<name>_<command>` | Uno per voce in `options["actuators"]` (F1/F2, luci scala, relè…); invia `MSG` con `Panda: command` |
 | Segreteria | `switch` | `segreteria` | `VOICEMAIL;ON/OFF` (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab e da `GET_INIT_STATUS`, chiesto dopo ogni comando. Il valore comandato si vede per 10 s al massimo: senza conferma lo stato diventa *sconosciuto* ([#9](https://github.com/ha-vimar/ha-vimar-intercom/issues/9)) |
-| Non Disturbare | `switch` | `dnd` | `DND;ON/OFF` (Panda: blue) verso l'SGA; stesse regole della Segreteria |
+| Non disturbare | `switch` | `dnd` | `DND;ON/OFF` (Panda: blue) verso l'SGA; stesse regole della Segreteria |
 | Segreteria · ritardo | `select` | `vm_timeout` | Solo sugli impianti con la risposta lunga di `GET_INIT_STATUS`: `vm_timeout`, uno dei `vm_timeout_values` dichiarati dall'impianto, scritto con `SET_APT_PARAMS` ([#4](https://github.com/ha-vimar/ha-vimar-intercom/issues/4)). Sugli impianti con la risposta corta non compare |
 | Segreteria · file audio | `select` (configurazione) | `away_file` | File audio del messaggio d'assenza, fra quelli in `<media>/citofono/messaggi` (si caricano da Media → Media locali; l'elenco si rilegge ogni minuto), oppure *Nessuno (usa il testo)*. Solo amministratori |
 | Segreteria · testo del messaggio | `text` (configurazione) | `away_text` | Testo del messaggio d'assenza, letto dalla sintesi vocale quando non c'è un file audio (max 255 caratteri). Solo amministratori |
-| Intercom SIP | `binary_sensor` | `sip_registered` | Registrazione SIP attiva (connectivity) |
-| Intercom In Call | `binary_sensor` | `in_call` | Chiamata attiva |
-| Intercom Squillo | `binary_sensor` | `ringing` | ON mentre una targa chiama (attr: chiamante) |
-| Intercom Chiamata In Uscita | `binary_sensor` | `calling` | ON mentre HA chiama |
-| Intercom Nuovo Videomessaggio | `binary_sensor` | `new_videomessage` | ON quando il Tab annuncia un nuovo videomessaggio (`VM;VIDEO_MESSAGE_CHANGE;NEW`), OFF al cambio successivo che non è nuovo (attr: ultimo annuncio, spazio dei videomessaggi) |
-| Intercom Dispositivi | `sensor` | `devices` | numero di dispositivi visti sull'impianto (telefoni che condividono l'account SIP, targhe); l'attributo `dispositivi` li elenca con l'identificativo mascherato e senza indirizzo, e resta dopo un riavvio. Ogni utente di Home Assistant può leggerlo, nomi dei dispositivi compresi (il nome di un telefono è spesso quello di chi lo usa) |
-| Intercom Stato | `sensor` (enum) | `status` | offline / idle / ringing / in_call / calling (+ attributi rete; sugli impianti con la risposta lunga anche il `GID` dell'appartamento, `apt_names` e il `media_enc` dichiarato) |
-| Intercom Ultimo Chiamante | `sensor` | `last_caller` | targa/monitor dell'ultimo squillo |
-| Intercom Ultimo Squillo | `sensor` (timestamp) | `last_ring` | ora dell'ultimo squillo (attr: chiamante, foto/foto_url e clip/clip_url con `snapshot_dir`) |
-| Intercom Squilli | `sensor` (contatore) | `ring_count` | squilli dall'avvio |
-| Intercom Chiamate | `sensor` (contatore) | `call_count` | chiamate connesse |
-| Intercom Durata Ultima Chiamata | `sensor` (s) | `last_call_duration` | durata ultima chiamata |
-| Intercom Ultima Apertura | `sensor` (timestamp) | `last_door` | ultima apertura porta (attr: targa, esito come il `result` di `open_door`, codice SIP, contatore) |
-| Intercom Ultimo Comando | `sensor` | `last_command` | esito ultimo `send_command` |
-| Intercom Ultimo Messaggio Ricevuto | `sensor` | `last_message_in` | ultimo SIP MESSAGE di sistema (`Panda: blue`) dal citofono; gli altri vengono ignorati |
-| Intercom Spazio Segreteria | `sensor` | `vm_level` | spazio dei videomessaggi usato/totale, da `GET_INIT_STATUS` |
-| Intercom Versione Rubrica | `sensor` | `rubrica_ver` | versione della rubrica del Tab (attr `vm_ver`): quando cambia, reimportare gli attuatori |
-| Intercom Ultima Chiamata Persa | `sensor` | `last_missed_call` | nome (o id SIP) dell'ultima chiamata persa annunciata dal Tab, resta dopo un riavvio (attr: `sip_id`, `ts`, totale) |
+| Registrazione SIP | `binary_sensor` | `sip_registered` | Registrazione SIP attiva (connectivity) |
+| In chiamata | `binary_sensor` | `in_call` | Chiamata attiva |
+| Squillo | `binary_sensor` | `ringing` | ON mentre una targa chiama (attr: chiamante) |
+| Chiamata in uscita | `binary_sensor` | `calling` | ON mentre HA chiama |
+| Nuovo videomessaggio | `binary_sensor` | `new_videomessage` | ON quando il Tab annuncia un nuovo videomessaggio (`VM;VIDEO_MESSAGE_CHANGE;NEW`), OFF al cambio successivo che non è nuovo (attr: ultimo annuncio, spazio dei videomessaggi) |
+| Dispositivi | `sensor` | `devices` | numero di dispositivi visti sull'impianto (telefoni che condividono l'account SIP, targhe); l'attributo `dispositivi` li elenca con l'identificativo mascherato e senza indirizzo, e resta dopo un riavvio. Ogni utente di Home Assistant può leggerlo, nomi dei dispositivi compresi (il nome di un telefono è spesso quello di chi lo usa) |
+| Stato | `sensor` (enum) | `status` | offline / idle / ringing / in_call / calling (+ attributi rete; sugli impianti con la risposta lunga anche il `GID` dell'appartamento, `apt_names` e il `media_enc` dichiarato) |
+| Ultimo chiamante | `sensor` | `last_caller` | targa/monitor dell'ultimo squillo |
+| Ultimo squillo | `sensor` (timestamp) | `last_ring` | ora dell'ultimo squillo (attr: chiamante, foto/foto_url e clip/clip_url con `snapshot_dir`) |
+| Squilli | `sensor` (contatore) | `ring_count` | squilli dall'avvio |
+| Chiamate | `sensor` (contatore) | `call_count` | chiamate connesse |
+| Durata ultima chiamata | `sensor` (s) | `last_call_duration` | durata ultima chiamata |
+| Ultima apertura | `sensor` (timestamp) | `last_door` | ultima apertura porta (attr: targa, esito come il `result` di `open_door`, codice SIP, contatore) |
+| Ultimo comando | `sensor` | `last_command` | esito ultimo `send_command` |
+| Ultimo messaggio ricevuto | `sensor` | `last_message_in` | ultimo SIP MESSAGE di sistema (`Panda: blue`) dal citofono; gli altri vengono ignorati |
+| Spazio segreteria | `sensor` | `vm_level` | spazio dei videomessaggi usato/totale, da `GET_INIT_STATUS` |
+| Versione rubrica | `sensor` | `rubrica_ver` | versione della rubrica del Tab (attr `vm_ver`): quando cambia, reimportare gli attuatori |
+| Ultima chiamata persa | `sensor` | `last_missed_call` | nome (o id SIP) dell'ultima chiamata persa annunciata dal Tab, resta dopo un riavvio (attr: `sip_id`, `ts`, totale) |
+
+I nomi seguono la lingua di Home Assistant (Impostazioni → Sistema → Generale) e iniziano col
+nome del dispositivo, "Vimar Intercom": *Vimar Intercom Stato* in italiano, *Vimar Intercom
+Status* in inglese. Gli entity_id non dipendono dalla lingua: un'installazione nuova ha quelli
+di queste pagine e degli esempi (per esempio `sensor.vimar_intercom_intercom_stato`), una già
+esistente tiene i suoi. Un nome o un entity_id cambiato a mano in Home Assistant resta come l'hai messo.
+Anche "Ricrea gli ID delle entità" di Home Assistant restituisce questi entity_id: non aggiunge
+il nome del dispositivo o dell'area.
 
 
 ---

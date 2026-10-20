@@ -1136,6 +1136,21 @@ def test_layout_popup_card_compatta_stili(monkeypatch, engine, style):  # noqa: 
     run(s())
 
 
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_shortcut_label_drops_the_device_name(monkeypatch, engine):  # noqa: F811
+    """With has_entity_name the friendly name starts with the device's ("Vimar Intercom Apri porta"):
+    the round button shows the entity's own name; one from another device keeps its friendly name."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, layout="popup", shortcuts="button.vimar_intercom_apri_porta,button.garage") as c:
+                await c.until(IDLE)
+                labels = await c.page.evaluate("[...card.shadowRoot.querySelectorAll('.sc button .lbl')].map((b) => b.textContent)")
+                assert labels == ["Apri porta", "Garage"], labels
+                assert not (await c.T())["errors"]
+    run(s())
+
+
 @pytest.mark.parametrize("style", ["pillola", "tile"])
 @pytest.mark.parametrize("engine", ["chromium"], indirect=True)
 def test_layout_popup_feedback_immediato_al_tocco(monkeypatch, engine, style):  # noqa: F811
@@ -1189,6 +1204,25 @@ def test_impostazioni_citofono_righe_e_servizi(monkeypatch, engine):  # noqa: F8
                                ["switch", "turn_off", {"entity_id": "switch.vimar_intercom_segreteria"}],
                                ["select", "select_option", {"entity_id": "select.vimar_intercom_segreteria_ritardo", "option": "15"}],
                                ["text", "set_value", {"entity_id": "text.vimar_intercom_segreteria_testo_del_messaggio", "value": "Torniamo presto"}]], got
+                assert not (await c.T())["errors"]
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_settings_error_is_shown_in_the_user_language(monkeypatch, engine):  # noqa: F811
+    """A setting that fails with a translated error (#178): HA's message is English, the
+    dialog shows the integration's own text in the user's language, and nothing else."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, layout="popup", query="&setfail") as c:
+                await c.until(IDLE)
+                await c.until("!card.shadowRoot.querySelector('#cfgc').hidden")
+                await c.page.evaluate("card.shadowRoot.querySelector('#cfgc').click()")
+                await c.page.evaluate("card.shadowRoot.querySelector('[data-k=dnd] button').click()")
+                await c.until("card.shadowRoot.querySelector('dialog.set .set-e').textContent !== ''")
+                got = await c.page.evaluate("card.shadowRoot.querySelector('dialog.set .set-e').textContent")
+                assert got == "Non disturbare: comando non riuscito (Timeout)", got
                 assert not (await c.T())["errors"]
     run(s())
 

@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import frame_grabber, ring_log
 from . import runtime as R
 from .const import DOMAIN
-from .device import device_info
+from .device import device_info, legacy_entity_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,8 +54,8 @@ class VimarIntercomCamera(Camera):
     che è sempre None → camera sempre nera (issue #8).
     """
 
-    _attr_has_entity_name = False
-    _attr_name = "Intercom"
+    _attr_has_entity_name = True
+    _attr_name = None  # the device's main entity: named after the device
     _attr_icon = "mdi:doorbell-video"
     _attr_supported_features = CameraEntityFeature.STREAM
 
@@ -65,6 +65,7 @@ class VimarIntercomCamera(Camera):
         self._hass = hass
         self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_camera"
+        self.entity_id = legacy_entity_id("camera", "intercom")
         self._attr_device_info = device_info(entry_id)
 
     async def async_added_to_hass(self) -> None:

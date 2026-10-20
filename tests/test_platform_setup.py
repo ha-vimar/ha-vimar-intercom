@@ -3,13 +3,26 @@ and the entities stay hooked to the hub only while they are in Home Assistant.""
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import types
+from pathlib import Path
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError as _HAError
 
-from custom_components.vimar_intercom import button, camera, device, select, sensor, switch, text
+from custom_components.vimar_intercom import (
+    binary_sensor,
+    button,
+    camera,
+    device,
+    event,
+    lock,
+    select,
+    sensor,
+    switch,
+    text,
+)
 from custom_components.vimar_intercom import plant_state as S
 from custom_components.vimar_intercom import runtime as R
 from custom_components.vimar_intercom.const import DOMAIN, MODEL
@@ -411,11 +424,13 @@ def test_voicemail_delay_select_sets_the_panel_value(ha_error, monkeypatch):
     hub.state_cbs[0]()
     asyncio.run(s.async_select_option("10"))
     assert hub.pressed == [("apt", "vm_timeout", 10)] and writes == [True, True]
-    with pytest.raises(_HAError, match="non ammesso"):
+    with pytest.raises(_HAError) as err:
         asyncio.run(s.async_select_option("15"))
+    assert (err.value.translation_key, err.value.translation_placeholders) == ("vm_timeout_not_allowed", {"option": "15"})
     hub.ok = False
-    with pytest.raises(_HAError, match="Timeout"):
+    with pytest.raises(_HAError) as err:
         asyncio.run(s.async_select_option("20"))
+    assert (err.value.translation_key, err.value.translation_placeholders) == ("vm_timeout_failed", {"error": "Timeout"})
 
     async def queued(name, value):
         return False, select.QUEUED
@@ -482,3 +497,99 @@ def test_the_text_entity_is_added():
     added = []
     asyncio.run(text.async_setup_entry(None, _entry(), added.extend))
     assert _ids(added) == ["e1_away_text"]
+
+
+# ─── names and entity_ids (#178) ─────────────────────────────────────────────
+
+# The entity_id a new install gets, in every language: the one the Italian names gave
+# before they were translated. Docs, packages/vimar_intercom.yaml and the card use them.
+LEGACY_IDS = {
+    "e1_sip_registered": "binary_sensor.vimar_intercom_intercom_sip",
+    "e1_in_call": "binary_sensor.vimar_intercom_intercom_in_call",
+    "e1_ringing": "binary_sensor.vimar_intercom_intercom_squillo",
+    "e1_calling": "binary_sensor.vimar_intercom_intercom_chiamata_in_uscita",
+    "e1_new_videomessage": "binary_sensor.vimar_intercom_intercom_nuovo_videomessaggio",
+    "e1_call": "button.vimar_intercom_chiama",
+    "e1_call_ext": "button.vimar_intercom_chiama_video_esterno",
+    "e1_call_int": "button.vimar_intercom_chiama_casa_interno",
+    "e1_answer": "button.vimar_intercom_rispondi",
+    "e1_decline": "button.vimar_intercom_rifiuta",
+    "e1_hangup": "button.vimar_intercom_riaggancia",
+    "e1_door_street": "button.vimar_intercom_apri_porta",
+    "e1_test_ring": "button.vimar_intercom_squillo_di_prova",
+    "e1_camera": "camera.vimar_intercom_intercom",
+    "e1_doorbell": "event.vimar_intercom_doorbell",
+    "e1_fuoriporta": "event.vimar_intercom_fuoriporta",
+    "e1_lock": "lock.vimar_intercom_serratura",
+    "e1_vm_timeout": "select.vimar_intercom_segreteria_ritardo",
+    "e1_away_file": "select.vimar_intercom_segreteria_file_audio",
+    "e1_devices": "sensor.vimar_intercom_intercom_dispositivi",
+    "e1_status": "sensor.vimar_intercom_intercom_stato",
+    "e1_last_caller": "sensor.vimar_intercom_intercom_ultimo_chiamante",
+    "e1_last_ring": "sensor.vimar_intercom_intercom_ultimo_squillo",
+    "e1_ring_count": "sensor.vimar_intercom_intercom_squilli",
+    "e1_call_count": "sensor.vimar_intercom_intercom_chiamate",
+    "e1_last_call_duration": "sensor.vimar_intercom_intercom_durata_ultima_chiamata",
+    "e1_last_door": "sensor.vimar_intercom_intercom_ultima_apertura",
+    "e1_last_command": "sensor.vimar_intercom_intercom_ultimo_comando",
+    "e1_last_message_in": "sensor.vimar_intercom_intercom_ultimo_messaggio_ricevuto",
+    "e1_vm_level": "sensor.vimar_intercom_intercom_spazio_segreteria",
+    "e1_rubrica_ver": "sensor.vimar_intercom_intercom_versione_rubrica",
+    "e1_last_missed_call": "sensor.vimar_intercom_intercom_ultima_chiamata_persa",
+    "e1_segreteria": "switch.vimar_intercom_segreteria",
+    "e1_dnd": "switch.vimar_intercom_non_disturbare",
+    "e1_away_text": "text.vimar_intercom_segreteria_testo_del_messaggio",
+}
+BASE = Path(__file__).resolve().parents[1] / "custom_components" / "vimar_intercom"
+
+
+def _every_entity(tmp_path):
+    hub = _Hub(vm_timeout_values=[10, 20])
+    hass = _hass(hub, tmp_path)
+    entities = []
+    for module in (binary_sensor, button, camera, event, lock, sensor, switch):
+        entities += _setup(module, hub, hass=hass)
+    selects = _setup(select, hub, hass=hass)  # the delay select comes with the panel's values
+    for cb in list(hub.state_cbs):
+        cb()
+    entities += selects
+    asyncio.run(text.async_setup_entry(None, _entry(), entities.extend))
+    return {e._attr_unique_id: e for e in entities}
+
+
+def test_new_installs_get_the_same_entity_ids_in_every_language(tmp_path):
+    found = {uid: e.entity_id for uid, e in _every_entity(tmp_path).items()}
+    assert found == LEGACY_IDS
+
+
+def test_every_entity_is_named_by_a_translation(tmp_path):
+    tables = {name: json.loads((BASE / name).read_text(encoding="utf-8"))["entity"]
+              for name in ("strings.json", "translations/en.json", "translations/it.json")}
+    for uid, e in _every_entity(tmp_path).items():
+        assert e._attr_has_entity_name is True, uid
+        if uid == "e1_camera":  # the device's main entity: named after the device
+            assert e._attr_name is None
+            continue
+        # No fixed name to hide the translation (the stub base answers any hasattr).
+        assert "_attr_name" not in vars(e) and not any("_attr_name" in vars(c) for c in type(e).__mro__), uid
+        domain, key = e.entity_id.split(".")[0], e._attr_translation_key
+        for name, table in tables.items():
+            assert table[domain][key]["name"], (name, uid)
+    assert tables["strings.json"] == tables["translations/it.json"]
+
+
+def test_actuator_buttons_keep_the_name_from_the_options():
+    entry = _entry(options={"actuators": [{"name": "Cancello", "msg": "OPEN_1", "target": "AUTO", "icon": "door"}]})
+    act = _setup(button, _Hub(), entry)[-1]
+    assert act._attr_has_entity_name is True and act._attr_name == "Cancello"
+
+
+def test_enum_sensor_states_are_translated():
+    """An enum sensor shows its raw state ("in_call") unless every option has a translation."""
+    tables = {name: json.loads((BASE / name).read_text(encoding="utf-8"))["entity"]["sensor"]
+              for name in ("strings.json", "translations/en.json", "translations/it.json")}
+    enums = [d for d in sensor.SENSORS if d.options]
+    assert enums
+    for d in enums:
+        for name, table in tables.items():
+            assert set(table[d.key]["state"]) == set(d.options), (name, d.key)

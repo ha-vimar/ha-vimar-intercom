@@ -32,8 +32,8 @@ def test_due_forme_del_cdomain():
     ((CDOMAIN, CPROXY, "", VER), "token"),
     ((CDOMAIN, CPROXY, TOKEN, None), "rubrica_ver"),
     (("", CPROXY, TOKEN, VER), "cdomain"),
-    ((CDOMAIN, CPROXY, TOKEN, "../x"), "formato"),
-    ((CDOMAIN, "evil.com/x?", TOKEN, VER), "formato"),
+    ((CDOMAIN, CPROXY, TOKEN, "../x"), "format"),
+    ((CDOMAIN, "evil.com/x?", TOKEN, VER), "format"),
     ((CDOMAIN, CPROXY, TOKEN, VER), None),
 ])
 def test_dati_in_ingresso(args, manca):

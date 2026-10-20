@@ -697,7 +697,8 @@ async def _close_orphan_invite(code: int, hdrs: dict, ack: bool = True) -> None:
     frattempo risponde 486 a tutto (il «Stale response 200 … (known: [])» del
     log di campo). Un 2xx si chiude con ACK + BYE; il 2xx ritrasmesso della
     chiamata in corso (ACK perso) riceve solo un altro ACK. `ack=False`: l'ACK
-    del 2xx è già partito (annullata mentre si apriva il media), solo il BYE."""
+    del 2xx è già partito (annullata subito dopo l'ACK, che dal #130 parte dopo
+    l'avvio del media), solo il BYE."""
     cid = _call_id(hdrs)
     to_hdr, from_hdr = hdrs.get("to", ""), hdrs.get("from", "")
     num = hdrs.get("cseq", "1").split()[0]
@@ -1416,7 +1417,7 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
 
                 async def _annullata(acked: bool):
                     # do_hangup ha azzerato `calling` mentre si lavorava il 200 OK (già
-                    # in coda, o durante ACK/setup_media): ha chiuso media e stato
+                    # in coda, durante setup_media o subito dopo l'ACK): ha chiuso media e stato
                     # (call_ended), e la chiamata ripartiva lo stesso, senza nessuno
                     # che la chiudesse. Il dialogo aperto dal 200 si chiude con BYE.
                     # Awaited before the loop moves on, so code/hdrs are this response's.
@@ -1428,18 +1429,29 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
 
                 if not calling:
                     return await _annullata(acked=False)
-                await send(_ack(ttag, cur_seq))
-                if not calling:
-                    return await _annullata(acked=True)
 
+                # Media first, then the ACK (#130): the panel starts its video when the ACK
+                # arrives, and until setup_media sets remote_addr every packet is dropped, so
+                # the first IDR (with SPS/PPS) was lost and the picture waited for the next
+                # one, 3 s later. Sending media after the 200 and before the ACK is allowed.
                 if remote:
                     call_state["remote_sdp"] = remote
                     _LOGGER.info("SDP: audio=%s video=%s", _loggable(remote.get('audio')),
                                  _loggable(remote.get('video')))
-                    await media.setup_media(remote, SDP._local_crypto_key, SDP._local_video_crypto_key,
-                                            silence_limit=call_state["silence_limit"])
+                    try:
+                        await media.setup_media(remote, SDP._local_crypto_key, SDP._local_video_crypto_key,
+                                                silence_limit=call_state["silence_limit"])
+                    except Exception:
+                        # No ACK has left yet: close the dialog the 200 opened (ACK + BYE)
+                        # instead of leaving the panel to retransmit it.
+                        _LOGGER.exception("Media setup failed after the 200 OK: closing the call")
+                        await _annullata(acked=False)
+                        return False, "Media non avviato"
                     if not calling:
-                        return await _annullata(acked=True)
+                        return await _annullata(acked=False)
+                await send(_ack(ttag, cur_seq))
+                if not calling:
+                    return await _annullata(acked=True)
 
                 _set_in_call(True)
                 _set_calling(False)

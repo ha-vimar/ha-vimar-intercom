@@ -85,3 +85,21 @@ def test_le_targhe_da_chiamare_vengono_dalle_opzioni():
 def test_l_autoaccensione_segue_l_opzione():
     src = _codice("hub.py")
     assert "C.CAMERA_TARGET" not in src, "hub.py deve usare R.CAMERA_TARGET (configurabile)"
+
+
+# Values of the development plant that must never be in the public repository (rule 4):
+# Home Assistant's SIP slot on it, its SIP domain and the Tab's address. Tests use
+# anonymous ones (#49: 60901-60903, example.test, 192.0.2.x).
+_DEV_PLANT_VALUES = ("60992", "c8df843b9a4f", "192.168.0.149")
+
+
+def test_no_value_of_the_development_plant_in_the_repository():
+    root = Path(__file__).resolve().parents[1]
+    found = []
+    for path in root.rglob("*"):
+        if (not path.is_file() or path.suffix not in {".py", ".js", ".json", ".yaml", ".md"}
+                or {".git", ".venv", "node_modules"} & set(path.parts) or path.name == Path(__file__).name):
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        found += [f"{path.relative_to(root)}: {v}" for v in _DEV_PLANT_VALUES if v in text]
+    assert not found, found

@@ -52,7 +52,7 @@ def test_a_data_only_change_does_not_reload(init):
     assert reloads == []
 
 
-CONNECTION = {"sip_user": "60992", "sip_password": "old", "sip_domain": "plant.example.test",
+CONNECTION = {"sip_user": "60902", "sip_password": "old", "sip_domain": "plant.example.test",
               "local_proxy": "192.0.2.10", "use_local_udp": True}
 
 

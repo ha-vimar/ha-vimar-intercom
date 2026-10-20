@@ -23,11 +23,11 @@ async def _job(fn, *args):
 
 
 ENTRY_DATA = {
-    "sip_user": "60992", "sip_password": "old", "sip_domain": "plant.example.test",
+    "sip_user": "60902", "sip_password": "old", "sip_domain": "plant.example.test",
     "device_imei": "123456789012345", "device_uuid": "uuid-1", "device_name": "HA",
     "local_proxy": "192.0.2.10", "use_local_udp": True, "local_udp_port": 5070,
 }
-NEW_QR = {"id": "60994", "pwd": "new", "domain": "plant.example.test", "planttype": "2F"}
+NEW_QR = {"id": "60904", "pwd": "new", "domain": "plant.example.test", "planttype": "2F"}
 
 
 def _flow(cf, monkeypatch, probe_ok=True):
@@ -83,9 +83,9 @@ def test_a_new_qr_updates_only_the_credentials_of_the_same_entry(cf, monkeypatch
     assert result == {"type": "abort", "reason": "reconfigure_successful"}
     (updated, kw), = flow.updates
     assert updated is entry
-    assert kw["unique_id"] == "60994@plant.example.test"
+    assert kw["unique_id"] == "60904@plant.example.test"
     data = kw["data_updates"]
-    assert data["sip_user"] == "60994" and data["sip_password"] == "new"
+    assert data["sip_user"] == "60904" and data["sip_password"] == "new"
     # identity, network and options are not part of the update: they stay as they are
     for key in ("device_imei", "device_uuid", "device_name", "local_proxy", "local_udp_port"):
         assert key not in data
@@ -117,7 +117,7 @@ def test_a_qr_with_a_loopback_domain_keeps_the_local_domain_learned_at_setup(cf,
     flow, entry = _flow(cf, monkeypatch)
     entry.data["local_domain"] = "192.0.2.10"
     monkeypatch.setattr(cf.qr_decoder, "decode", lambda text: {
-        "id": "60994", "pwd": "new", "domain": "127.0.0.1", "cdomain": "plant.example.test",
+        "id": "60904", "pwd": "new", "domain": "127.0.0.1", "cdomain": "plant.example.test",
         "planttype": "2FV2"})
     asyncio.run(flow.async_step_reconfigure({"qr_text": "QR"}))
     (_, kw), = flow.probes
@@ -171,3 +171,14 @@ def test_an_entry_that_is_not_set_up_is_reloaded_by_reconfigure(cf, monkeypatch)
     entry.state = types.SimpleNamespace(value="setup_retry")
     asyncio.run(flow.async_step_reconfigure({"qr_text": "QR"}))
     assert flow.reloaded == [entry]
+
+
+def test_a_qr_already_used_by_another_entry_is_refused_before_any_registration(cf, monkeypatch):
+    """The new QR's user@domain is the unique id: if another entry has it, Reconfigure stops
+    before the probe (which would register on that entry's slot)."""
+    flow, _ = _flow(cf, monkeypatch)
+    other = types.SimpleNamespace(entry_id="e2", unique_id="60904@plant.example.test")
+    flow._async_current_entries = lambda include_ignore=True: [other]
+    result = asyncio.run(flow.async_step_reconfigure({"qr_text": "QR"}))
+    assert result == {"type": "abort", "reason": "already_configured"}
+    assert flow.probes == [] and flow.updates == []

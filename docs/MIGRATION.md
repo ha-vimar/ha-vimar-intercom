@@ -52,8 +52,7 @@ integration only knows version 1 and has no migration for it, so the old entry s
   [Entities, services and automations](ENTITIES.md#services-servicesyaml).
 - **Events:** the old `vimar_intercom_ring` bus event is gone. The doorbell is an `event` entity:
   trigger on its state, or on the ringing binary sensor. The old event said which panel rang; here
-  that is the ringing sensor's `chiamante` attribute and the *Intercom Ultimo Chiamante* (last
-  caller) sensor. `vimar_intercom_missed_call` exists but with a different payload, and the old
+  that is the ringing sensor's `chiamante` attribute and the *Last caller* sensor (`sensor.vimar_intercom_intercom_ultimo_chiamante`). `vimar_intercom_missed_call` exists but with a different payload, and the old
   `vimar_intercom_video_message` is now `vimar_intercom_videomessage`, also with a different
   payload. Details in [Events](ENTITIES.md#events).
 - **Not here (yet):** the video-message list and playback, the missed-calls counter (the last-missed-call

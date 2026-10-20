@@ -774,12 +774,12 @@ def test_the_av_key_page_is_translated(of):
 
 @pytest.mark.parametrize("data, options, expected", [
     ({}, {}, True),
-    ({"video_enabled": False}, {}, False),
-    ({"video_enabled": True}, {}, True),
-    ({"video_enabled": False}, {"video_enabled": True}, True),
-    ({"video_enabled": True}, {"video_enabled": False}, False),
+    ({"qr_video": False}, {}, True),      # the QR's VIDEO=0 is about the ring preview only
+    ({"qr_video": True}, {}, True),
+    ({"qr_video": False}, {"video_enabled": True}, True),
+    ({"qr_video": True}, {"video_enabled": False}, False),
 ])
-def test_video_settings_default_to_the_qr_unless_overridden(of, monkeypatch, data, options, expected):
+def test_video_settings_default_to_on_unless_overridden(of, monkeypatch, data, options, expected):
     flow = _options_flow(of, data={**ENTRY_DATA, **data}, options=options)
     defaults = {}
 

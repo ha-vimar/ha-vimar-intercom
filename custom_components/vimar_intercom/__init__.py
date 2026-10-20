@@ -112,6 +112,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.config_entries.async_update_entry(
             entry, data={**entry.data, **identity})
         _LOGGER.info("Identità dispositivo generata per questa installazione")
+    if (data := _migrated_qr_video(entry.data)) is not None:
+        hass.config_entries.async_update_entry(entry, data=data)
+        _LOGGER.info("Pairing QR's VIDEO kept for the ring preview only (was video_enabled)")
     # The /av key (#63), once per installation like the identity. Never logged.
     if (key := _missing_av_key(entry.data)) is not None:
         hass.config_entries.async_update_entry(entry, data={**entry.data, **key})
@@ -359,6 +362,20 @@ def _missing_identity(data) -> dict | None:
     if legacy:
         return {"device_imei": legacy, "device_uuid": legacy}
     return runtime.new_device_identity()
+
+
+def _migrated_qr_video(data) -> dict | None:
+    """The entry data with the QR's VIDEO moved from video_enabled to qr_video, or None.
+
+    Before 1.0.24 the pairing QR's VIDEO was stored as video_enabled, the key of the
+    "video in outgoing calls" option: a VIDEO=0 QR took video out of every call. For the
+    Vimar apps it only allows the preview while it rings. An option the user saved stays.
+    """
+    if "video_enabled" not in data or "qr_video" in data:
+        return None
+    migrated = {k: v for k, v in data.items() if k != "video_enabled"}
+    migrated["qr_video"] = bool(data["video_enabled"])
+    return migrated
 
 
 def _missing_av_key(data) -> dict | None:

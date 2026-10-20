@@ -124,7 +124,7 @@ def extract_sip_credentials(fields: dict[str, str]) -> dict[str, str]:
     Returns un dict con le chiavi:
         sip_user, sip_password, sip_domain, local_domain, cloud_domain,
         sip_ha1, cloud_proxy, gid, plant_type, product_code, mac,
-        video_enabled
+        qr_video (VIDEO del QR: solo anteprima dello squillo)
     """
     sip_user   = fields.get(QR_ID, "")
     sip_pass   = fields.get(QR_PWD, "")
@@ -166,7 +166,9 @@ def extract_sip_credentials(fields: dict[str, str]) -> dict[str, str]:
         "mac":          fields.get(QR_MAC, ""),
         # "video=0" on an entrance with no camera (microphone and speaker
         # only): our offers then leave video out.
-        "video_enabled": fields.get(QR_VIDEO, "1").strip() != "0",
+        # For the Vimar apps VIDEO only allows the preview while it rings (PROTOCOL §7); it
+        # used to be stored as video_enabled and took video out of every call we made.
+        "qr_video": fields.get(QR_VIDEO, "1").strip() != "0",
     }
 
 

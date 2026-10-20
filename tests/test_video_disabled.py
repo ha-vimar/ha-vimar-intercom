@@ -30,7 +30,9 @@ def test_the_qr_video_field_is_extracted(value, expected):
     fields = dict(FIELDS)
     if value is not None:
         fields[qr.QR_VIDEO] = value
-    assert qr.extract_sip_credentials(fields)["video_enabled"] is expected
+    creds = qr.extract_sip_credentials(fields)
+    # Stored as qr_video: for the Vimar apps it only allows the preview while it rings.
+    assert creds["qr_video"] is expected and "video_enabled" not in creds
 
 
 def test_an_entry_without_the_field_keeps_video():
@@ -38,8 +40,15 @@ def test_an_entry_without_the_field_keeps_video():
     assert R.VIDEO_ENABLED is True
 
 
-def test_an_entry_from_a_video_0_qr_disables_video():
-    R.configure({"sip_user": "1", "sip_domain": "d", "video_enabled": False})
+def test_a_video_0_qr_does_not_take_video_out_of_our_calls():
+    """For the apps VIDEO=0 only rules the preview while it rings; it took video out of
+    every call we made (08-collab, #175 only added a manual override)."""
+    R.configure({"sip_user": "1", "sip_domain": "d", "qr_video": False})
+    assert R.VIDEO_ENABLED is True
+
+
+def test_the_option_still_turns_video_off_in_our_calls():
+    R.configure({"sip_user": "1", "sip_domain": "d", "qr_video": True, "video_enabled": False})
     assert R.VIDEO_ENABLED is False
 
 

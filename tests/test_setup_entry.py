@@ -112,3 +112,19 @@ def test_entry_data_skips_keys_that_are_not_entries(init):
 def test_entry_data_without_an_entry_is_empty(init):
     hass = types.SimpleNamespace(data={init.DOMAIN: {"cache": {"x": 1}}})
     assert init._entry_data(hass) == {}
+
+
+@pytest.mark.parametrize("data, migrated", [
+    ({"video_enabled": False}, {"qr_video": False}),
+    ({"video_enabled": True}, {"qr_video": True}),
+    ({"qr_video": False}, None),
+    ({}, None),
+])
+def test_the_qr_video_field_moves_out_of_video_enabled(init, data, migrated):
+    """Entries made before 1.0.24 kept the QR's VIDEO as video_enabled, which turned video
+    off in every call: it moves to qr_video, and video_enabled stays for the option."""
+    got = init._migrated_qr_video({"sip_user": "1", **data})
+    if migrated is None:
+        assert got is None
+    else:
+        assert got == {"sip_user": "1", **migrated}

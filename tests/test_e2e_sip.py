@@ -186,6 +186,84 @@ def test_chiamata_200_keyframe_e_riaggancio(monkeypatch):
     run(s())
 
 
+def test_il_video_mandato_appena_arriva_l_ack_non_si_perde(monkeypatch):
+    """#130: the panel starts its video when our ACK arrives. We used to send the ACK and
+    only then set up the media: until setup_media the video is dropped (no remote_addr),
+    so the first IDR (with SPS/PPS) was lost and the card waited for the next one, 3 s
+    later. setup_media is slowed down here so the race is certain, not timing luck."""
+    original = media.setup_media
+
+    async def slow_setup(*args, **kwargs):
+        await asyncio.sleep(0.3)
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(media, "setup_media", slow_setup)
+
+    async def s():
+        async with Rig(monkeypatch) as rig:
+            await rig.register()
+            rig.peer.on_invite = answer_200
+            call = asyncio.ensure_future(rig.hub.async_call())
+            await rig.peer.wait_for(is_("ACK"))
+            # The panel's first video packet (an SPS), sent the moment the ACK arrives.
+            inv = rig.peer.got(is_("INVITE"))[-1]
+            video_port = sip.parse_sdp(inv.body)["video"]["port"]
+            rtp = bytes([0x80, 96, 0, 1, 0, 0, 0, 0, 0, 0, 0x12, 0x34]) + bytes([0x67, 0x42, 0x00, 0x0C])
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+                udp.sendto(rtp, ("127.0.0.1", video_port))
+            ok, msg = await call
+            assert ok, msg
+            await asyncio.sleep(0.2)
+            assert media.video_proto.pkt_count >= 1, "the first video packet after the ACK was dropped"
+            await rig.hub.async_hangup()
+    run(s())
+
+
+def test_riaggancio_mentre_si_apre_il_media_chiude_con_ack_e_bye(monkeypatch):
+    """#130 moved setup_media before the ACK: a hang-up meanwhile must still close the
+    dialog the 200 opened (one ACK, one BYE) and leave no media running."""
+    original = media.setup_media
+    started = asyncio.Event()
+
+    async def slow_setup(*args, **kwargs):
+        started.set()
+        await asyncio.sleep(0.3)
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(media, "setup_media", slow_setup)
+
+    async def s():
+        async with Rig(monkeypatch) as rig:
+            await rig.register()
+            rig.peer.on_invite = answer_200
+            call = asyncio.ensure_future(rig.hub.async_call())
+            await asyncio.wait_for(started.wait(), 5)    # the 200 is in, setup_media running
+            await rig.hub.async_hangup()
+            ok, _ = await call
+            assert not ok
+            await rig.peer.wait_for(is_("BYE"))
+            assert len(rig.peer.got(is_("ACK"))) == 1 and len(rig.peer.got(is_("BYE"))) == 1
+            assert media.video_proto.remote_addr is None and not sip.in_call
+    run(s())
+
+
+def test_un_errore_del_media_chiude_la_chiamata_con_ack_e_bye(monkeypatch):
+    async def broken_setup(*args, **kwargs):
+        raise OSError("port in use")
+
+    monkeypatch.setattr(media, "setup_media", broken_setup)
+
+    async def s():
+        async with Rig(monkeypatch) as rig:
+            await rig.register()
+            rig.peer.on_invite = answer_200
+            ok, msg = await rig.hub.async_call()
+            assert not ok
+            await rig.peer.wait_for(is_("BYE"))
+            assert len(rig.peer.got(is_("ACK"))) == 1 and not sip.in_call and not sip.calling
+    run(s())
+
+
 @pytest.mark.parametrize("code, reason", [(486, "Busy Here"), (603, "Decline")])
 def test_chiamata_rifiutata(monkeypatch, code, reason):
     async def s():

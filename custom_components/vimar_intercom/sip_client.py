@@ -228,6 +228,15 @@ def _route_set(hdrs: dict, reverse: bool = False) -> list[str]:
     return rs[::-1] if reverse else rs
 
 
+def _record_route_lines(route_set: list[str] | None) -> str:
+    """The INVITE's Record-Route for our 1xx/2xx to it, one header per URI, in order
+    (RFC 3261 §12.1.1). Behind the cloud relay the proxies route the ACK, INFO and BYE
+    of the dialog with it; the VIEW app copies them too (#186). A value with a bare CR
+    or LF is dropped: it comes from the network and would start a header of its own."""
+    return "".join(f"Record-Route: {r}\r\n" for r in route_set or ()
+                   if "\r" not in r and "\n" not in r)
+
+
 def _dialog_target(contact: str | None, aor: str | None, route_set: list[str] | None) -> tuple[str, str]:
     """(Request-URI, riga Route) di una richiesta nel dialogo: ACK del 2xx, INFO, BYE.
 
@@ -1875,7 +1884,8 @@ async def handle_incoming_invite(raw):
         contact=_contact_uri(hdrs) or caller_uri, route_set=_route_set(hdrs),
     )
 
-    head = (f"{via_block}To: {to_hdr};tag={my_tag}\r\nFrom: {from_hdr}\r\n"
+    head = (f"{via_block}{_record_route_lines(pending_incoming['route_set'])}"
+            f"To: {to_hdr};tag={my_tag}\r\nFrom: {from_hdr}\r\n"
             f"Call-ID: {cid}\r\nCSeq: {cseq}\r\n"
             f"Contact: {_simple_contact()}\r\n")
     if body and not (in_call or calling):
@@ -2004,7 +2014,8 @@ async def do_answer_incoming():
     sdp = p["sdp"] or build_sdp(parse_sdp(p["body"]) if p.get("body") else None)
     resp = (
         f"SIP/2.0 200 OK\r\n"
-        f"{p['via_block']}To: {p['to_hdr']};tag={p['my_tag']}\r\nFrom: {p['from_hdr']}\r\n"
+        f"{p['via_block']}{_record_route_lines(p.get('route_set'))}"
+        f"To: {p['to_hdr']};tag={p['my_tag']}\r\nFrom: {p['from_hdr']}\r\n"
         f"Call-ID: {p['cid']}\r\nCSeq: {p['cseq']}\r\n"
         f"Contact: {_simple_contact()}\r\n"
         f"Content-Type: application/sdp\r\n"
@@ -2012,8 +2023,9 @@ async def do_answer_incoming():
     pending_incoming["resp"] = resp  # per le ritrasmissioni dell'INVITE
 
     # Il 200 parte una volta e la chiamata non dipende dall'ACK: sul relay cloud
-    # Vimar l'ACK del nostro 200 non arriva MAI, anche a chiamata perfetta (m4r1k,
-    # 40517, 28/09). Un «niente ACK → BYE» (Timer H) chiuderebbe ogni chiamata
+    # Vimar l'ACK del nostro 200 non arrivava MAI, anche a chiamata perfetta (m4r1k,
+    # 40517, 28/09), quando il 200 non riportava il Record-Route dell'INVITE (#186):
+    # da riverificare sul campo. Un «niente ACK → BYE» (Timer H) chiuderebbe ogni chiamata
     # cloud dopo ~32 s; su UDP l'INVITE ritrasmesso riceve di nuovo `resp`.
     try:
         await send(resp)

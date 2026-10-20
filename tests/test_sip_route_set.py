@@ -195,3 +195,86 @@ def test_riaggancia_va_idle_subito_anche_se_il_bye_resta_senza_risposta(monkeypa
             assert (await rig.hub.async_call())[0]
             await rig.hub.async_hangup()
     run(s())
+
+
+# ─── UAS: the answers carry the INVITE's Record-Route (#186) ───────────────
+
+def test_the_record_route_header_keeps_every_uri_in_order():
+    """RFC 3261 §12.1.1: the UAS copies the INVITE's Record-Route into its 1xx/2xx, in order."""
+    assert sip._record_route_lines([RR1, RR2, "<sip:p3;lr>"]) == (
+        f"Record-Route: {RR1}\r\nRecord-Route: {RR2}\r\nRecord-Route: <sip:p3;lr>\r\n")
+    assert sip._record_route_lines([]) == "" and sip._record_route_lines(None) == ""
+
+
+def test_cloud_ring_answers_copy_the_record_route(monkeypatch):
+    """The VIEW app copies the six Record-Route of a cloud ring into its 180 (40515, #186);
+    without them the proxies cannot route the ACK, INFO and BYE of the dialog back to us."""
+    async def s():
+        async with Rig(monkeypatch, "tls") as rig:
+            await rig.register()
+            rig.ring("ring-rr-copy")
+            early = await rig.peer.wait_for(is_(code=183))
+            assert early.h("record-route") == rig.peer.record_route, early.raw
+            assert (await rig.hub.async_answer())[0]
+            ok = await rig.peer.wait_for(is_(code=200, cid="ring-rr-copy"))
+            assert ok.h("record-route") == rig.peer.record_route, ok.raw
+            await rig.hub.async_hangup()
+    run(s())
+
+
+def test_a_ring_without_sdp_gets_a_180_with_the_record_route(monkeypatch):
+    async def s():
+        async with Rig(monkeypatch, "tls") as rig:
+            await rig.register()
+            rig.ring("ring-rr-180", sdp=False)
+            ringing = await rig.peer.wait_for(is_(code=180))
+            assert ringing.h("record-route") == rig.peer.record_route, ringing.raw
+            await rig.hub.async_decline()
+    run(s())
+
+
+def test_several_record_routes_are_copied_one_per_header_in_order(monkeypatch):
+    """A comma list in one header becomes one header per URI, in the INVITE's order,
+    and our own BYE still follows them (the strict fake proxy drops it otherwise)."""
+    async def s():
+        async with Rig(monkeypatch, "tls") as rig:
+            await rig.register()
+            first = rig.peer.record_route
+            rig.peer.record_route = f"{first}, <sip:p2.test;lr>"
+            rig.ring("ring-rr-two")
+            await rig.peer.wait_for(is_(code=183))
+            assert (await rig.hub.async_answer())[0]
+            ok = await rig.peer.wait_for(is_(code=200, cid="ring-rr-two"))
+            rr = [line for line in ok.raw.split("\r\n") if line.lower().startswith("record-route:")]
+            assert rr == [f"Record-Route: {first}", "Record-Route: <sip:p2.test;lr>"], ok.raw
+            n = len(rig.peer.log)
+            await rig.hub.async_hangup()
+            await rig.peer.wait_for(is_("BYE", cid="ring-rr-two"), start=n)
+            assert rig.peer.dropped == []
+    run(s())
+
+
+def test_local_udp_ring_with_a_record_route_copies_it_and_hangs_up(monkeypatch):
+    """On local UDP the Tab's proxy may record-route too (2F, ADR-19 local case)."""
+    async def s():
+        async with Rig(monkeypatch, "udp") as rig:
+            await rig.register()
+            rig.peer.record_route = f"<sip:127.0.0.1:{rig.peer.port};lr>"
+            rig.ring("ring-rr-udp")
+            early = await rig.peer.wait_for(is_(code=183))
+            assert early.h("record-route") == rig.peer.record_route, early.raw
+            assert (await rig.hub.async_answer())[0]
+            ok = await rig.peer.wait_for(is_(code=200, cid="ring-rr-udp"))
+            assert ok.h("record-route") == rig.peer.record_route
+            n = len(rig.peer.log)
+            await rig.hub.async_hangup()
+            bye = await rig.peer.wait_for(is_("BYE", cid="ring-rr-udp"), start=n)
+            assert bye.h("route") == rig.peer.record_route
+            await wait_until(lambda: rig.hub.status == "idle", 2, "call closed")
+    run(s())
+
+
+def test_a_record_route_with_a_line_break_is_not_echoed():
+    """It comes from the network: a bare CR or LF would split our answer into a new header."""
+    assert sip._record_route_lines(["<sip:a;lr>", "<sip:b;lr>\nX-Evil: 1", "<sip:c;lr>\r"]) == (
+        "Record-Route: <sip:a;lr>\r\n")

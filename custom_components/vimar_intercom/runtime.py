@@ -37,6 +37,7 @@ SIP_PROXY:    str = "ipvdes.vimar.cloud"   # cloud proxy (da QR cproxy)
 LOCAL_PROXY:  str = ""                      # IP citofono locale
 GID:          str = ""
 PLANT_TYPE:   str = ""
+PRODUCT_CODE: str = ""   # the QR's `pc`, the paired Tab (e.g. 40515)
 MAC_CITOFONO: str = ""
 
 # ─── Impostazioni di rete (da config entry / options flow) ───────────────────
@@ -267,7 +268,7 @@ def configure(data: dict) -> None:
     global SIP_USER, SIP_PASSWORD, SIP_DOMAIN, SIP_HA1
     global LOCAL_DOMAIN, CLOUD_DOMAIN
     global SIP_PROXY, LOCAL_PROXY
-    global GID, PLANT_TYPE, MAC_CITOFONO
+    global GID, PLANT_TYPE, PRODUCT_CODE, MAC_CITOFONO
     global USE_LOCAL_UDP, LOCAL_UDP_PORT, MEDIA_ENC_OPTION, VIDEO_ENABLED
     global INTERCOM, DOOR_ESTERNO, VOICE_ANSWER
     global ACTUATORS
@@ -287,6 +288,7 @@ def configure(data: dict) -> None:
     LOCAL_PROXY  = data.get("local_proxy", "")
     GID          = data.get("gid", "")
     PLANT_TYPE   = data.get("plant_type", "")
+    PRODUCT_CODE = str(data.get("product_code") or "").strip()
     MAC_CITOFONO = data.get("mac", "")
 
     USE_LOCAL_UDP  = bool(data.get("use_local_udp", True))

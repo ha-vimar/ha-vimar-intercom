@@ -11,9 +11,10 @@ DOMAIN = "vimar_intercom"
 
 # ─── Device Info ──────────────────────────────────────────────────────────────
 MANUFACTURER = "Vimar"
-# Fallback generico: il modello reale viene rilevato dagli header SIP del
-# citofono (vedi model_detect.py) e scritto nel device registry di HA.
-MODEL        = "Elvox Tab 7S 2F+ WiFi"   # 40507 — dal QR: planttype=2F (Due Fili Plus), non IP
+# Generic fallback for the device page: the model comes from the QR's product code
+# (profiles.KNOWN_MODELS) or the SIP User-Agent (model_detect.py). It used to be the
+# development Tab's name, shown on every plant SIP could not name (#211).
+MODEL        = "Vimar Elvox video intercom"
 
 # ─── SIP — valori di default per cloud (override da config entry) ─────────────
 SIP_PORT = 7042                          # porta TLS cloud

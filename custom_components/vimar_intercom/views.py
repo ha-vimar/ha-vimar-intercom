@@ -133,7 +133,9 @@ class VimarAudioWSView(HomeAssistantView):
         clients.difference_update(dead)
 
     async def get(self, request: web.Request) -> web.WebSocketResponse:
-        ws = web.WebSocketResponse()
+        # Pings close a phone gone without a FIN (suspended, 5G dropped) in ~45 s, not
+        # minutes later by TCP; its sender queue and task in __init__ go with it.
+        ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
         hub = self._hub
         if hub is None:
@@ -151,6 +153,9 @@ class VimarAudioWSView(HomeAssistantView):
         wants = _entry_data(self._hass).get("ws_wants", {})
         if want:
             wants[ws] = want
+        ts = _entry_data(self._hass).get("ws_ts", set())
+        if request.query.get("ts") == "1":
+            ts.add(ws)
         clients = self._ws_clients
         clients.add(ws)
         _LOGGER.info("Audio WS client connected (%d total)", len(clients))
@@ -201,6 +206,7 @@ class VimarAudioWSView(HomeAssistantView):
         finally:
             clients.discard(ws)
             wants.pop(ws, None)
+            ts.discard(ws)
             _LOGGER.info("Audio WS client disconnected (%d remaining)", len(clients))
 
         return ws

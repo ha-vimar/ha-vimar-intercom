@@ -529,6 +529,54 @@ def test_foreign_answers_are_put_back_until_the_queue_is_full(net, monkeypatch):
     assert asyncio.run(_run()) == [bye_ok.format(1)]
 
 
+def test_no_keyframe_info_in_the_ring_preview(net, monkeypatch):
+    """In the early dialog of our 183 the 40515 answers every INFO 491 or 501."""
+    monkeypatch.setattr(sip, "in_call", False)
+    sip.pending_incoming.update(active=True, early=True, cid="ring-1", caller_uri="sip:55001@plant.example",
+                                caller_tag="abc", my_tag="me", contact="<sip:55001@192.0.2.50>",
+                                route_set=[])
+    assert sip.early_media()
+    asyncio.run(_KEYFRAME())
+    assert net.sent == []
+
+
+def test_one_keyframe_info_in_flight_at_a_time(net, monkeypatch):
+    """Concurrent INFO read the same dialog queue and took each other's 407. A request
+    made while one waits for its answer is dropped; the next one goes out."""
+    _in_call(monkeypatch)
+
+    async def _run():
+        loop = asyncio.get_running_loop()
+
+        def _late_ok(m):
+            loop.call_later(0.05, sip.pending_responses["dlg-1"].put_nowait, _reply(m, 200))
+            return []
+
+        net.script.append(_late_ok)
+        await asyncio.gather(_KEYFRAME(), _KEYFRAME(), _KEYFRAME())
+        assert len([m for m in net.sent if m.startswith("INFO ")]) == 1
+        net.script.append([lambda m: _reply(m, 200)])
+        await _KEYFRAME()
+
+    asyncio.run(_run())
+    assert len([m for m in net.sent if m.startswith("INFO ")]) == 2
+    assert not sip._keyframe_lock.locked()
+
+
+def test_the_cached_challenge_counts_its_uses():
+    """Every keyframe INFO is signed with the cached challenge: with nc fixed at 1 a
+    proxy checking it sees a replay. A full table drops its oldest nonce only."""
+    ch = 'Digest realm="r", nonce="n9", qop="auth"'
+    assert "nc=00000001" in sip._make_auth("INFO", "sip:a", ch)
+    assert "nc=00000002" in sip._make_auth("INFO", "sip:a", ch)
+    assert "nc=00000001" in sip._make_auth("INFO", "sip:a", ch.replace("n9", "n10"))
+    for i in range(14):                             # 16 nonces with n9 and n10
+        sip._make_auth("INFO", "sip:a", ch.replace("n9", f"old{i}"))
+    sip._make_auth("INFO", "sip:a", ch.replace("n9", "new"))   # evicts n9, the oldest
+    assert len(sip.SM._nonce_count) == 16 and "n9" not in sip.SM._nonce_count
+    assert "nc=00000002" in sip._make_auth("INFO", "sip:a", ch.replace("n9", "n10"))
+
+
 # ─── Incoming ring corners ───────────────────────────────────────────────────
 
 INVITE = (

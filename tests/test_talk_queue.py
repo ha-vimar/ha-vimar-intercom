@@ -1,7 +1,6 @@
 """The voice queued for the panel is capped, so the delay cannot build up."""
-import pytest
 
-media = pytest.importorskip("custom_components.vimar_intercom.media_handler")
+from custom_components.vimar_intercom import media_handler as media
 
 
 def test_a_burst_keeps_only_the_newest_80_ms(monkeypatch):

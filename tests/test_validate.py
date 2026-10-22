@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-v = pytest.importorskip("custom_components.vimar_intercom.validate")
-
+from custom_components.vimar_intercom import validate as v
 
 # ─── sip_target: finisce nella request line di un INVITE ─────────────────────
 

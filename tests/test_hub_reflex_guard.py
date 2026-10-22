@@ -6,9 +6,7 @@ person, so it passes ``reflex_guard=False``. Pure hub test: no pyhap needed.
 """
 import asyncio
 
-import pytest
-
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+from custom_components.vimar_intercom import hub as hub_mod
 
 
 def test_a_person_reopening_a_view_is_not_taken_for_a_reflex(monkeypatch):

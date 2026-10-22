@@ -6,8 +6,8 @@ firmware can contradict it, which is why setup probes rather than trusts.
 """
 import pytest
 
-profiles = pytest.importorskip("custom_components.vimar_intercom.profiles")
-qr = pytest.importorskip("custom_components.vimar_intercom.qr_decoder")
+from custom_components.vimar_intercom import profiles
+from custom_components.vimar_intercom import qr_decoder as qr
 
 
 class TestKnownFamilies:

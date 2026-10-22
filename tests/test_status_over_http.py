@@ -12,7 +12,8 @@ import asyncio
 
 import pytest
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+from custom_components.vimar_intercom import hub as hub_mod
+
 sip = hub_mod.sip
 R = hub_mod.R
 rest = hub_mod.rest_client

@@ -4,9 +4,11 @@ A 2F panel offers plain RTP and ignores SRTP; a 2FV2 relay offers RTP/SAVP
 with a=crypto. Answering with the other profile claims to accept something we
 will not use, so the plant setting only decides when we make the offer.
 """
+import importlib
+
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+from custom_components.vimar_intercom import sip_client as sip
 
 SRTP_OFFER = (
     "v=0\r\nc=IN IP4 192.168.1.20\r\n"
@@ -146,7 +148,7 @@ def test_a_parsed_offer_keeps_no_master_key_in_the_crypto_list():
 
 
 def test_a_parsed_offer_logged_through_redact_shows_no_key():
-    lr = pytest.importorskip("custom_components.vimar_intercom.log_redact")
+    lr = importlib.import_module("custom_components.vimar_intercom.log_redact")
     offer = (
         "v=0\r\nc=IN IP4 192.168.1.20\r\n"
         "m=audio 7078 RTP/SAVP 0\r\n"

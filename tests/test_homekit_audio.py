@@ -14,10 +14,10 @@ import time
 import types
 
 import pytest
-
-audio = pytest.importorskip("custom_components.vimar_intercom.homekit_audio")
-srtp = pytest.importorskip("custom_components.vimar_intercom.srtp")
 from harness.homekit import FakeVoiceFfmpeg  # noqa: E402
+
+from custom_components.vimar_intercom import homekit_audio as audio
+from custom_components.vimar_intercom import srtp
 
 KEY = base64.b64encode(bytes(range(30))).decode()
 

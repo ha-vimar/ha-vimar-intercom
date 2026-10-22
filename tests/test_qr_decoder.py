@@ -8,7 +8,7 @@ Crypto = pytest.importorskip("Crypto")
 from Crypto.Cipher import AES  # noqa: E402
 from Crypto.Util.Padding import pad  # noqa: E402
 
-qr = pytest.importorskip("custom_components.vimar_intercom.qr_decoder")
+from custom_components.vimar_intercom import qr_decoder as qr  # noqa: E402
 
 PAYLOAD = (
     "ID=12345\nPWD=secret\nPROXY=192.168.1.50\nDOMAIN=abc.ipvdes.vimar.cloud\n"

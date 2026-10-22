@@ -1,7 +1,6 @@
 """Test del parser SIP di sip_client (funzione pura _parse) e del digest."""
-import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+from custom_components.vimar_intercom import sip_client as sip
 
 RESP_200 = (
     "SIP/2.0 200 OK\r\n"

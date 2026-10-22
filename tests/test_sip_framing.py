@@ -5,7 +5,7 @@ in front of the next message, which then lost its first line and was dropped.
 """
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+from custom_components.vimar_intercom import sip_client as sip
 
 OPTIONS = b"OPTIONS sip:a SIP/2.0\r\nCall-ID: x\r\nContent-Length: 0\r\n\r\n"
 

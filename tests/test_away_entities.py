@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-ac = pytest.importorskip("custom_components.vimar_intercom.away_config")
+from custom_components.vimar_intercom import away_config as ac
 from custom_components.vimar_intercom import runtime as R  # noqa: E402
 from custom_components.vimar_intercom.const import DOMAIN  # noqa: E402
 from custom_components.vimar_intercom.select import VimarAwayFileSelect  # noqa: E402

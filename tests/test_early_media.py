@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
 from custom_components.vimar_intercom import media_handler as mh  # noqa: E402
+from custom_components.vimar_intercom import sip_client as sip
 
 INVITE = (
     "INVITE sip:60902@x SIP/2.0\r\n"

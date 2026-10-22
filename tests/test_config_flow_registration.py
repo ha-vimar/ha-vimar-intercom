@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import importlib
 import socket
 import ssl
 import threading
@@ -15,7 +16,7 @@ import pytest
 @pytest.fixture(scope="module")
 def cf():
     # conftest stubs the HA modules config_flow imports.
-    return pytest.importorskip("custom_components.vimar_intercom.config_flow")
+    return importlib.import_module("custom_components.vimar_intercom.config_flow")
 
 
 CHALLENGE = ('SIP/2.0 401 Unauthorized\r\n'

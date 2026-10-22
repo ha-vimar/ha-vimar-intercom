@@ -7,14 +7,14 @@ sono inventati, gli interni sono quelli di default.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 
 import pytest
-
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
 from homeassistant.exceptions import HomeAssistantError as _HAError  # noqa: E402
 
 from custom_components.vimar_intercom import const as C  # noqa: E402
+from custom_components.vimar_intercom import hub as hub_mod
 from custom_components.vimar_intercom import log_buffer, log_redact  # noqa: E402
 from custom_components.vimar_intercom import sip_client as sip  # noqa: E402
 
@@ -121,7 +121,7 @@ def _import_switch():
 
         sw_stub.SwitchEntity = SwitchEntity
         rs_stub.RestoreEntity = RestoreEntity
-    return pytest.importorskip("custom_components.vimar_intercom.switch")
+    return importlib.import_module("custom_components.vimar_intercom.switch")
 
 
 switch_mod = _import_switch()

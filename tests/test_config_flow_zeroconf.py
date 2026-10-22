@@ -6,7 +6,7 @@ Record come quelli osservati: 40507 (4 chiavi, `domain` = dominio cloud) e
 from __future__ import annotations
 
 import asyncio
-import sys
+import importlib
 import types
 
 import pytest
@@ -18,25 +18,10 @@ TXT_40515 = {b"dev": b"40515", b"mac": b"11:22:33:44:55:66", b"fver": b"2.1.0203
              b"proxy": b"192.0.2.20", b"domain": b"192.0.2.20", b"sta": b"2"}
 
 
-def _stub(name: str, **attrs) -> None:
-    module = sys.modules.get(name) or types.ModuleType(name)
-    for key, value in attrs.items():
-        setattr(module, key, value)
-    sys.modules[name] = module
-
-
 @pytest.fixture(scope="module")
 def cf():
-    _stub("homeassistant.components.file_upload", process_uploaded_file=None)
-    _stub("homeassistant.data_entry_flow", FlowResult=dict)
-
-    class _ConfigFlow:
-        def __init_subclass__(cls, **kwargs):
-            super().__init_subclass__()
-
-    if getattr(sys.modules["homeassistant"], "_is_stub", False):
-        sys.modules["homeassistant.config_entries"].ConfigFlow = _ConfigFlow
-    return pytest.importorskip("custom_components.vimar_intercom.config_flow")
+    # conftest stubs the HA modules it imports, ConfigFlow included.
+    return importlib.import_module("custom_components.vimar_intercom.config_flow")
 
 
 class _Entry:

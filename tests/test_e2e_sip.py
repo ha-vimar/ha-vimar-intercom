@@ -7,6 +7,7 @@ la connessione cloud cade, go2rtc riapre /av subito e lo stream worker di HA dop
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 import os
 import socket
@@ -18,7 +19,7 @@ import types
 
 import pytest
 from harness.peer import DOMAIN, PASSWORD, USER, Msg, answer_200, check_digest, is_, response
-from harness.rig import Rig, run, wait_until
+from harness.rig import Rig, free_udp_ports, run, udp_port_is_free, wait_until
 from harness.web import Request, load_views, make_hass, open_av
 
 from custom_components.vimar_intercom import av_stream
@@ -124,12 +125,7 @@ def test_cloud_irraggiungibile_all_avvio_si_riprova(monkeypatch):
     for k, v in vars(R).items():  # configure() riscrive il modulo: ripristino a fine test
         if k.isupper():
             monkeypatch.setattr(R, k, v)
-    ports = []
-    for _ in range(2):
-        s_ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s_.bind(("127.0.0.1", 0))
-        ports.append(s_.getsockname()[1])
-        s_.close()
+    ports = free_udp_ports(2)
     for mod in (C, media):
         monkeypatch.setattr(mod, "RTP_AUDIO_PORT", ports[0])
         monkeypatch.setattr(mod, "RTP_VIDEO_PORT", ports[1])
@@ -155,11 +151,9 @@ def test_cloud_irraggiungibile_all_avvio_si_riprova(monkeypatch):
         with pytest.raises(_NotReady):
             await views.async_setup_entry(hass, entry)
         assert not hass.data.get(C.DOMAIN), "hub morto lasciato in hass.data"
-        await asyncio.sleep(0.1)  # transport.close() chiude al giro successivo del loop
-        for port in ports:        # libere per il prossimo tentativo
-            s_ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s_.bind(("0.0.0.0", port))
-            s_.close()
+        # Libere per il prossimo tentativo. transport.close() chiude a un giro
+        # successivo del loop: un'attesa fissa, su una CI carica, era troppo corta.
+        await wait_until(lambda: all(udp_port_is_free(p) for p in ports), what="porte RTP libere")
     try:
         run(s(), 60)
     finally:
@@ -1088,7 +1082,6 @@ def test_le_view_seguono_l_entry_attiva(monkeypatch):
 def test_miniatura_della_camera_a_riposo_non_chiama(monkeypatch):
     """Requisito: la dashboard a citofono fermo non chiama mai la targa. La miniatura
     (camera_proxy, ogni 10 s) è None e nessun INVITE, per quante volte la si chieda."""
-    import importlib
     cam_mod = sys.modules["homeassistant.components.camera"]
     monkeypatch.setattr(cam_mod, "Camera", type("Camera", (), {"__init__": lambda self: None}),
                         raising=False)

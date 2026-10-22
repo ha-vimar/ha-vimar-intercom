@@ -5,6 +5,7 @@ is refused with 503 while the cloud relay works; on 2F it is the other way
 round. Whichever answers is what gets stored.
 """
 import asyncio
+import importlib
 
 import pytest
 
@@ -13,7 +14,7 @@ import pytest
 def cf():
     # conftest stubs the HA modules config_flow imports, and a ConfigFlow that
     # takes the class argument.
-    return pytest.importorskip("custom_components.vimar_intercom.config_flow")
+    return importlib.import_module("custom_components.vimar_intercom.config_flow")
 
 
 CREDENTIALS = {

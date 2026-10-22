@@ -12,8 +12,8 @@ import asyncio
 import pytest
 
 from custom_components.vimar_intercom import const, runtime
+from custom_components.vimar_intercom import hub as hub_mod
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
 sip = hub_mod.sip
 
 BASE = {"sip_user": "u", "sip_password": "p", "sip_domain": "d", "sga_target": "61000",

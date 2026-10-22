@@ -8,9 +8,10 @@ import types
 
 import pytest
 
-hk = pytest.importorskip("custom_components.vimar_intercom.homekit_accessory")
+from custom_components.vimar_intercom import const
+from custom_components.vimar_intercom import homekit_accessory as hk
+
 loader = pytest.importorskip("pyhap.loader")
-const = pytest.importorskip("custom_components.vimar_intercom.const")
 
 
 def build(**kwargs):

@@ -42,12 +42,30 @@ async def wait_until(cond, timeout=5.0, what="condizione"):
         await asyncio.sleep(0.02)
 
 
-def _free_udp_port() -> int:
+def free_udp_ports(n: int) -> list[int]:
+    """n porte UDP libere e tutte diverse: i socket restano aperti finché non
+    sono state scelte tutte (presa una alla volta, la seconda può essere la prima)."""
+    socks = []
+    try:
+        for _ in range(n):
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socks.append(s)
+            s.bind(("127.0.0.1", 0))
+        return [s.getsockname()[1] for s in socks]
+    finally:
+        for s in socks:
+            s.close()
+
+
+def udp_port_is_free(port: int) -> bool:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
+    try:
+        s.bind(("0.0.0.0", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
 
 
 def our_media_addrs(sdp_text: str):
@@ -95,7 +113,7 @@ class Rig:
         mp.setattr(away_tts, "_cache", None)
         mp.setattr(C, "LOCAL_SIP_PORT", peer.port)
         mp.setattr(C, "PN_TOKEN", "", raising=False)
-        a, v = _free_udp_port(), _free_udp_port()
+        a, v = free_udp_ports(2)
         for mod in (C, media):
             mp.setattr(mod, "RTP_AUDIO_PORT", a)
             mp.setattr(mod, "RTP_VIDEO_PORT", v)

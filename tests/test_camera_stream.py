@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import importlib
 import re
 import shutil
 import subprocess
@@ -129,8 +130,8 @@ def test_camera_disponibile_e_stream_fermato_a_fine_chiamata():
         ha_camera.Camera = object  # lo stub di conftest non ha la classe vera
         ha_camera.CameraEntityFeature = SimpleNamespace(STREAM=2)
         sys.modules.pop("custom_components.vimar_intercom.camera", None)
-    camera_mod = pytest.importorskip("custom_components.vimar_intercom.camera")
-    hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+    camera_mod = importlib.import_module("custom_components.vimar_intercom.camera")
+    hub_mod = importlib.import_module("custom_components.vimar_intercom.hub")
 
     fermati = []
 
@@ -171,7 +172,7 @@ def test_stream_source_is_loopback_on_the_real_http_port(http, expected):
         ha_camera.Camera = object
         ha_camera.CameraEntityFeature = SimpleNamespace(STREAM=2)
         sys.modules.pop("custom_components.vimar_intercom.camera", None)
-    camera_mod = pytest.importorskip("custom_components.vimar_intercom.camera")
+    camera_mod = importlib.import_module("custom_components.vimar_intercom.camera")
 
     cam = camera_mod.VimarIntercomCamera.__new__(camera_mod.VimarIntercomCamera)
     cam._hass = SimpleNamespace(

@@ -6,9 +6,11 @@ new pairing QR rotates the shared credential and unpairs the others.
 
 The header shapes below are taken from real traffic captured on a Tab 7S Up.
 """
+import importlib
+
 import pytest
 
-inv = pytest.importorskip("custom_components.vimar_intercom.inventory")
+from custom_components.vimar_intercom import inventory as inv
 
 OWN = "0123456789abcdef"
 
@@ -202,14 +204,14 @@ class TestFromTheRegistrar:
     )
 
     def test_every_contact_line_and_comma_separated_binding_is_kept(self):
-        sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+        sip = importlib.import_module("custom_components.vimar_intercom.sip_client")
         _, hdrs, _, _ = sip._parse(self.RESPONSE)
         contacts = sip._split_contacts(hdrs)
         assert len(contacts) == 3, "a comma inside quotes does not split a binding"
         assert contacts[1].endswith("expires=600")
 
     def test_our_binding_is_recognised_by_its_instance_uuid(self, monkeypatch):
-        sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+        sip = importlib.import_module("custom_components.vimar_intercom.sip_client")
         monkeypatch.setattr(sip, "DEVICES", inv.DeviceInventory())
         monkeypatch.setattr(sip.R, "DEVICE_UUID", "ours")
         monkeypatch.setattr(sip.R, "DEVICE_IMEI", "351234567890123")

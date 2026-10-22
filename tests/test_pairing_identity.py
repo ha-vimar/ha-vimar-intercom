@@ -5,12 +5,13 @@ other pair with 503. Entries saved by the m4r1k fork keep the cloud domain
 under "sip_cloud_domain": without it cloud mode registers on the wrong domain.
 """
 import asyncio
+import importlib
 import socket
 import threading
 
 import pytest
 
-R = pytest.importorskip("custom_components.vimar_intercom.runtime")
+from custom_components.vimar_intercom import runtime as R
 
 BASE = {"sip_user": "60999", "sip_password": "pw", "sip_domain": "127.0.0.1"}
 
@@ -43,12 +44,12 @@ def test_the_paired_name_is_kept():
 def cf():
     # conftest stubs the HA modules config_flow imports, and a ConfigFlow that
     # takes the class argument.
-    return pytest.importorskip("custom_components.vimar_intercom.config_flow")
+    return importlib.import_module("custom_components.vimar_intercom.config_flow")
 
 
 @pytest.fixture(scope="module")
 def of(cf):
-    return pytest.importorskip("custom_components.vimar_intercom.options_flow")
+    return importlib.import_module("custom_components.vimar_intercom.options_flow")
 
 
 def test_a_challenge_with_commas_in_quotes_keeps_its_realm(cf):

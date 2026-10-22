@@ -6,10 +6,9 @@ keyframe, the phone has nothing to decode.
 """
 import struct
 
-import pytest
-
-tc = pytest.importorskip("custom_components.vimar_intercom.homekit_transcode")
 from harness.homekit import FakeSdpFfmpeg  # noqa: E402
+
+from custom_components.vimar_intercom import homekit_transcode as tc
 
 
 def rtp(payload: bytes, seq: int = 1) -> bytes:

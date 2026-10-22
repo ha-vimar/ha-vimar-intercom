@@ -8,36 +8,17 @@ diventava `55001`. Il file non dice nulla sul PICG, quindi non deve toccarlo.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import sys
 import types
 
 import pytest
 
 
-def _stub(name: str, **attrs) -> None:
-    module = sys.modules.get(name) or types.ModuleType(name)
-    for key, value in attrs.items():
-        setattr(module, key, value)
-    sys.modules[name] = module
-
-
 @pytest.fixture(scope="module")
 def of():
-    # Moduli di HA che config_flow importa e che conftest.py non fornisce.
-    _stub("homeassistant.components.file_upload", process_uploaded_file=None)
-    _stub("homeassistant.data_entry_flow", FlowResult=dict)
-    _stub("homeassistant.helpers.selector")
-
-    # `class VimarIntercomConfigFlow(ConfigFlow, domain=DOMAIN)`: la base deve
-    # accettare l'argomento di classe, cosa che lo stub generico non fa.
-    class _ConfigFlow:
-        def __init_subclass__(cls, **kwargs):
-            super().__init_subclass__()
-
-    ce = sys.modules["homeassistant.config_entries"]
-    if getattr(sys.modules["homeassistant"], "_is_stub", False):
-        ce.ConfigFlow = _ConfigFlow
-    return pytest.importorskip("custom_components.vimar_intercom.options_flow")
+    # conftest stubs the HA modules it imports, ConfigFlow included.
+    return importlib.import_module("custom_components.vimar_intercom.options_flow")
 
 
 class _Entry:

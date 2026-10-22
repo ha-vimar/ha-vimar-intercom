@@ -10,8 +10,8 @@ import types
 
 import pytest
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
 from custom_components.vimar_intercom import away_tts  # noqa: E402
+from custom_components.vimar_intercom import hub as hub_mod
 from custom_components.vimar_intercom import media_handler as mh  # noqa: E402
 from custom_components.vimar_intercom import runtime as R  # noqa: E402
 

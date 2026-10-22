@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+from custom_components.vimar_intercom import sip_client as sip
 
 
 def message(cid):

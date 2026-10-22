@@ -13,8 +13,7 @@ from pathlib import Path
 import pytest
 
 from custom_components.vimar_intercom import const, runtime
-
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+from custom_components.vimar_intercom import hub as hub_mod
 
 BASE = {"sip_user": "u", "sip_password": "p", "sip_domain": "d", "sga_target": "55001"}
 DOOR_OPEN = {"name": "Portone", "msg": "OPEN", "target": "55001", "icon": "door"}

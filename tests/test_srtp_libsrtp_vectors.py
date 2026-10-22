@@ -6,9 +6,8 @@ produced once by libsrtp 2 (via pylibsrtp 1.0.0) with the key below and the
 AES_CM_128_HMAC_SHA1_80 profile, and are pinned here. They cross a sequence
 wrap, so the rollover counter is exercised too.
 """
-import pytest
 
-srtp = pytest.importorskip("custom_components.vimar_intercom.srtp")
+from custom_components.vimar_intercom import srtp
 
 KEY_B64 = "AQIDBAUGBwgJCgsMDQ4PEEBBQkNERUZHSElKS0xN"
 

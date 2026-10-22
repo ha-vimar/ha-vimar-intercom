@@ -13,9 +13,9 @@ import struct
 
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
-media = pytest.importorskip("custom_components.vimar_intercom.media_handler")
 from custom_components.vimar_intercom import log_buffer, rtcp  # noqa: E402
+from custom_components.vimar_intercom import media_handler as media
+from custom_components.vimar_intercom import sip_client as sip
 
 OFFER = (
     "v=0\r\no=- 1 1 IN IP4 10.0.0.1\r\nc=IN IP4 10.0.0.1\r\nt=0 0\r\n"

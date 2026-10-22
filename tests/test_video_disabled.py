@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
-qr = pytest.importorskip("custom_components.vimar_intercom.qr_decoder")
+from custom_components.vimar_intercom import qr_decoder as qr
+from custom_components.vimar_intercom import sip_client as sip
+
 R = sip.R
 
 FIELDS = {"id": "12345", "pwd": "secret", "domain": "192.168.1.50",

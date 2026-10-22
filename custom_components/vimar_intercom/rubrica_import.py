@@ -28,10 +28,13 @@ def _connect_ro(path: str) -> sqlite3.Connection:
     p = Path(path)
     if not p.exists():
         raise RubricaImportError(f"File not found: {path}")
+    con = None
     try:
         con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
         con.execute("SELECT 1")  # verifica che sia davvero un database SQLite leggibile
     except sqlite3.Error as exc:
+        if con is not None:
+            con.close()  # altrimenti resta al GC, e su Windows il file resta bloccato
         raise RubricaImportError(f"Not a valid SQLite database: {exc}") from exc
     con.row_factory = sqlite3.Row
     return con

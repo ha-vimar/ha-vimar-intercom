@@ -3,33 +3,16 @@ SIP numerici (validate.sip_target), vuoto ammesso."""
 from __future__ import annotations
 
 import asyncio
-import sys
+import importlib
 import types
 
 import pytest
 
 
-def _stub(name: str, **attrs) -> None:
-    module = sys.modules.get(name) or types.ModuleType(name)
-    for key, value in attrs.items():
-        setattr(module, key, value)
-    sys.modules[name] = module
-
-
 @pytest.fixture(scope="module")
 def of():
-    _stub("homeassistant.components.file_upload", process_uploaded_file=None)
-    _stub("homeassistant.data_entry_flow", FlowResult=dict)
-    _stub("homeassistant.helpers.selector")
-
-    class _ConfigFlow:
-        def __init_subclass__(cls, **kwargs):
-            super().__init_subclass__()
-
-    ce = sys.modules["homeassistant.config_entries"]
-    if getattr(sys.modules["homeassistant"], "_is_stub", False):
-        ce.ConfigFlow = _ConfigFlow
-    return pytest.importorskip("custom_components.vimar_intercom.options_flow")
+    # conftest stubs the HA modules it imports, ConfigFlow included.
+    return importlib.import_module("custom_components.vimar_intercom.options_flow")
 
 
 class _Entry:
@@ -193,7 +176,6 @@ def test_options_sip_test_uses_the_local_domain(of, monkeypatch, extra, expected
         "local_proxy": "192.0.2.9", "use_local_udp": True}))
     assert result["type"] == "create_entry"
     assert seen["sip_domain"] == expected
-
 
 
 @pytest.mark.parametrize("test_ok, registered", [(True, 1), (False, 0)])

@@ -8,9 +8,7 @@ Alle nostre offerte con il solo mode 1 la stessa targa risponde `m=video 0`.
 """
 from __future__ import annotations
 
-import pytest
-
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+from custom_components.vimar_intercom import sip_client as sip
 
 OFFERTA_2F = (
     "v=0\r\no=- 1 1 IN IP4 192.168.1.20\r\ns=-\r\nc=IN IP4 192.168.1.20\r\nt=0 0\r\n"

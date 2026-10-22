@@ -7,9 +7,9 @@ import types
 
 import pytest
 
-sensor = pytest.importorskip("custom_components.vimar_intercom.sensor")
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
-inventory = pytest.importorskip("custom_components.vimar_intercom.inventory")
+from custom_components.vimar_intercom import hub as hub_mod
+from custom_components.vimar_intercom import inventory, sensor
+
 sip = hub_mod.sip
 
 PHONE_ID = "C0FFEE00-1111-2222-3333-444455556666"

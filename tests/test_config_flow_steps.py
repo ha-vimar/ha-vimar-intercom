@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import importlib
 import json
 import os
 import types
@@ -14,12 +15,12 @@ import pytest
 @pytest.fixture(scope="module")
 def cf():
     # conftest stubs the HA modules config_flow imports.
-    return pytest.importorskip("custom_components.vimar_intercom.config_flow")
+    return importlib.import_module("custom_components.vimar_intercom.config_flow")
 
 
 @pytest.fixture(scope="module")
 def of(cf):
-    return pytest.importorskip("custom_components.vimar_intercom.options_flow")
+    return importlib.import_module("custom_components.vimar_intercom.options_flow")
 
 
 def _form(**kw):

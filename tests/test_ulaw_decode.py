@@ -4,9 +4,7 @@ from __future__ import annotations
 import random
 import struct
 
-import pytest
-
-media = pytest.importorskip("custom_components.vimar_intercom.media_handler")
+from custom_components.vimar_intercom import media_handler as media
 
 
 def _reference(data: bytes) -> bytes:

@@ -12,8 +12,9 @@ import types
 
 import pytest
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
-ring_log = pytest.importorskip("custom_components.vimar_intercom.ring_log")
+from custom_components.vimar_intercom import hub as hub_mod
+from custom_components.vimar_intercom import ring_log
+
 R = hub_mod.R
 sip = hub_mod.sip
 

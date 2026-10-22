@@ -6,7 +6,7 @@ COMPLETO nel Digest e SENZA ".<cproxy>" nel percorso.
 from __future__ import annotations
 
 import asyncio
-import sys
+import importlib
 import types
 
 import pytest
@@ -89,25 +89,10 @@ def test_il_token_non_finisce_nel_sensore_ultimo_messaggio(hub):
 
 # --- options flow ------------------------------------------------------------------------
 
-def _stub(name, **attrs):
-    module = sys.modules.get(name) or types.ModuleType(name)
-    for k, v in attrs.items():
-        setattr(module, k, v)
-    sys.modules[name] = module
-
-
 @pytest.fixture(scope="module")
 def of():
-    _stub("homeassistant.components.file_upload", process_uploaded_file=None)
-    _stub("homeassistant.data_entry_flow", FlowResult=dict)
-
-    class _ConfigFlow:
-        def __init_subclass__(cls, **kwargs):
-            super().__init_subclass__()
-
-    if getattr(sys.modules["homeassistant"], "_is_stub", False):
-        sys.modules["homeassistant.config_entries"].ConfigFlow = _ConfigFlow
-    return pytest.importorskip("custom_components.vimar_intercom.options_flow")
+    # conftest stubs the HA modules it imports, ConfigFlow included.
+    return importlib.import_module("custom_components.vimar_intercom.options_flow")
 
 
 class _Hub:

@@ -4,9 +4,7 @@ from __future__ import annotations
 import array
 import struct
 
-import pytest
-
-mh = pytest.importorskip("custom_components.vimar_intercom.media_handler")
+from custom_components.vimar_intercom import media_handler as mh
 
 
 def _pkt(seq: int, level: int, ssrc: int = 7) -> bytes:

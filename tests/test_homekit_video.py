@@ -14,8 +14,8 @@ import struct
 
 import pytest
 
-video = pytest.importorskip("custom_components.vimar_intercom.homekit_video")
-srtp = pytest.importorskip("custom_components.vimar_intercom.srtp")
+from custom_components.vimar_intercom import homekit_video as video
+from custom_components.vimar_intercom import srtp
 
 KEY = base64.b64encode(bytes(range(1, 31))).decode()
 SSRC, PT = 0xABCDEF, 99

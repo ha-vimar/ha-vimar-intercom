@@ -3,7 +3,7 @@ import struct
 
 import pytest
 
-media = pytest.importorskip("custom_components.vimar_intercom.media_handler")
+from custom_components.vimar_intercom import media_handler as media
 
 
 def pcmu(seq=1):

@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+from custom_components.vimar_intercom import hub as hub_mod
 from custom_components.vimar_intercom import rest_client, runtime, validate  # noqa: E402
 from custom_components.vimar_intercom import sip_client as sip  # noqa: E402
 

@@ -12,8 +12,7 @@ import json
 
 import pytest
 
-rc = pytest.importorskip("custom_components.vimar_intercom.rest_client")
-
+from custom_components.vimar_intercom import rest_client as rc
 
 # ─── parse_status ────────────────────────────────────────────────────────────
 

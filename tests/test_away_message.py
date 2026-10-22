@@ -9,7 +9,7 @@ import tempfile
 
 import pytest
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+from custom_components.vimar_intercom import hub as hub_mod
 from custom_components.vimar_intercom import media_handler as mh  # noqa: E402
 
 sip = hub_mod.sip

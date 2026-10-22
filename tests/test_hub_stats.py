@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+from custom_components.vimar_intercom import hub as hub_mod
 
 
 @pytest.fixture

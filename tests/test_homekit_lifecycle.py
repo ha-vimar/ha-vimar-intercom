@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-hk = pytest.importorskip("custom_components.vimar_intercom.homekit_accessory")
+from custom_components.vimar_intercom import homekit_accessory as hk
 from custom_components.vimar_intercom import homekit_files as hkf  # noqa: E402
 
 media = hk.media

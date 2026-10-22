@@ -7,7 +7,8 @@ import time
 
 import pytest
 
-hkm = pytest.importorskip("custom_components.vimar_intercom.homekit_media")
+from custom_components.vimar_intercom import homekit_media as hkm
+
 media = hkm.media
 from harness.homekit import PPS, SPS, FakeVideoProto, Recorder  # noqa: E402
 

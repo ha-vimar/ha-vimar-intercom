@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
-
 from custom_components.vimar_intercom import runtime  # noqa: E402
+from custom_components.vimar_intercom import sip_client as sip
 
 
 class _FakeSock:

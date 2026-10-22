@@ -11,7 +11,7 @@ import sqlite3
 
 import pytest
 
-rubrica_import = pytest.importorskip("custom_components.vimar_intercom.rubrica_import")
+from custom_components.vimar_intercom import rubrica_import
 
 
 def _make_db(path, *, with_rules=True, with_icons=True, with_system=True):
@@ -91,6 +91,26 @@ def test_non_sqlite_file_raises_rubrica_import_error(tmp_path):
     bogus.write_text("questo non è un database SQLite")
     with pytest.raises(rubrica_import.RubricaImportError):
         rubrica_import.parse_rubrica_file(str(bogus))
+
+
+def test_a_file_that_is_not_sqlite_leaves_no_connection_open(tmp_path, monkeypatch):
+    # The connection opened before the check used to be left to the garbage
+    # collector (ResourceWarning), and on Windows it keeps the file locked.
+    opened = []
+    connect = sqlite3.connect
+
+    def _connect(*a, **k):
+        opened.append(connect(*a, **k))
+        return opened[-1]
+
+    monkeypatch.setattr(sqlite3, "connect", _connect)
+    bogus = tmp_path / "non_e_un_db.db"
+    bogus.write_text("questo non è un database SQLite")
+    with pytest.raises(rubrica_import.RubricaImportError):
+        rubrica_import.parse_rubrica_file(str(bogus))
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        opened[0].execute("SELECT 1")
 
 
 def test_never_writes_to_the_database(tmp_path):

@@ -8,6 +8,7 @@ credentials and keeps the entry, its identity, network settings and options.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import types
 
 import pytest
@@ -15,7 +16,7 @@ import pytest
 
 @pytest.fixture(scope="module")
 def cf():
-    return pytest.importorskip("custom_components.vimar_intercom.config_flow")
+    return importlib.import_module("custom_components.vimar_intercom.config_flow")
 
 
 async def _job(fn, *args):

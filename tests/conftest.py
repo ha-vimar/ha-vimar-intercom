@@ -205,12 +205,10 @@ def _fresh_sip_state(monkeypatch):
     globals: each test gets a fresh device list and the module is put back to
     its starting state afterwards, so nothing a test leaves behind (a call
     "in progress", an SRTP key, a seen request) leaks into the next one."""
-    try:
-        from custom_components.vimar_intercom import sip_client as sip
-        from custom_components.vimar_intercom.inventory import DeviceInventory
-    except Exception:  # noqa: BLE001 - a module that does not import skips its own tests
-        yield
-        return
+    # Imported, not guarded: a sip_client that no longer imports must fail the run.
+    from custom_components.vimar_intercom import sip_client as sip
+    from custom_components.vimar_intercom.inventory import DeviceInventory
+
     monkeypatch.setattr(sip, "DEVICES", DeviceInventory())
     for name in ("reader", "writer", "_udp_sock", "_state_change_callback", "MY_IP"):
         monkeypatch.setattr(sip, name, getattr(sip, name))

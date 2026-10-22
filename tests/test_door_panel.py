@@ -13,10 +13,9 @@ GET_INIT_STATUS) restano all'SGA/PICG, le chiamate alla targa video.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import re
 import sqlite3
-import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -202,27 +201,11 @@ def test_rubrica_senza_attuatore_porta(tmp_path):
 
 # ─── Conferma dell'import: salva door_target e lo mostra ─────────────────────
 
-def _stub(name: str, **attrs) -> None:
-    module = sys.modules.get(name) or types.ModuleType(name)
-    for key, value in attrs.items():
-        setattr(module, key, value)
-    sys.modules[name] = module
-
 
 @pytest.fixture(scope="module")
 def of():
-    _stub("homeassistant.components.file_upload", process_uploaded_file=None)
-    _stub("homeassistant.data_entry_flow", FlowResult=dict)
-    _stub("homeassistant.helpers.selector")
-
-    class _ConfigFlow:
-        def __init_subclass__(cls, **kwargs):
-            super().__init_subclass__()
-
-    ce = sys.modules["homeassistant.config_entries"]
-    if getattr(sys.modules["homeassistant"], "_is_stub", False):
-        ce.ConfigFlow = _ConfigFlow
-    return pytest.importorskip("custom_components.vimar_intercom.options_flow")
+    # conftest stubs the HA modules it imports, ConfigFlow included.
+    return importlib.import_module("custom_components.vimar_intercom.options_flow")
 
 
 class _Entry:
@@ -283,7 +266,7 @@ def test_conferma_senza_porta_ne_opzione_dice_sga(of):
 # ─── hub.async_door, serratura, servizio open_door, pulsanti AUTO ────────────
 
 def test_async_door_senza_target_usa_la_targa_della_porta(monkeypatch):
-    hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
+    hub_mod = importlib.import_module("custom_components.vimar_intercom.hub")
     runtime.configure({**BASE, "sga_target": "61000", "door_target": "55001"})
     inviati = []
 

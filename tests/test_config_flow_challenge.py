@@ -13,8 +13,9 @@ import sys
 
 import pytest
 
-cf = pytest.importorskip("custom_components.vimar_intercom.config_flow")
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
+from custom_components.vimar_intercom import config_flow as cf
+from custom_components.vimar_intercom import sip_client as sip
+
 R = sip.R
 
 RFC = dict(realm="testrealm@host.com", nonce="dcd98b7102dd2f0e8b11d0f600bfb0c093",

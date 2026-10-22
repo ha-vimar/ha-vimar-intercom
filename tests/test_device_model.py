@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.vimar_intercom import const, runtime
+from custom_components.vimar_intercom import const, device, runtime
 from custom_components.vimar_intercom import plant_state as S
-
-device = pytest.importorskip("custom_components.vimar_intercom.device")
 
 BASE = {"sip_user": "u", "sip_password": "p", "sip_domain": "d"}
 

@@ -6,10 +6,8 @@ import asyncio
 import os
 import tempfile
 
-import pytest
-
-hub_mod = pytest.importorskip("custom_components.vimar_intercom.hub")
 from custom_components.vimar_intercom import frame_grabber  # noqa: E402
+from custom_components.vimar_intercom import hub as hub_mod
 
 R = hub_mod.R
 NAME = "squillo_20260927_101500.jpg"

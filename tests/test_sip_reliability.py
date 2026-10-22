@@ -17,8 +17,8 @@ import time
 
 import pytest
 
-sip = pytest.importorskip("custom_components.vimar_intercom.sip_client")
-runtime = pytest.importorskip("custom_components.vimar_intercom.runtime")
+from custom_components.vimar_intercom import runtime
+from custom_components.vimar_intercom import sip_client as sip
 
 
 def _ok(cid: str) -> str:

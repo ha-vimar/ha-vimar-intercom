@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-lr = pytest.importorskip("custom_components.vimar_intercom.log_redact")
-
+from custom_components.vimar_intercom import log_redact as lr
 
 # ─── la forma del payload del QR di abbinamento ──────────────────────────
 

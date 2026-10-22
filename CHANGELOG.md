@@ -6,6 +6,22 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
+## [1.0.25] - 2026-10-22
+
+### Enhancements
+
+- On local UDP the intercom's state is read over its local HTTP API, so the Vimar app no longer shows "Apartment configuration changed" on the phones at every Home Assistant start or DND/voicemail change ([#209](https://github.com/ha-vimar/ha-vimar-intercom/pull/209)).
+- New option to open the calling entrance during a call (OPEN_CURRENT), for 2FV2 buildings behind a gateway where the door opens only during a call ([#186](https://github.com/ha-vimar/ha-vimar-intercom/pull/186)) ([#210](https://github.com/ha-vimar/ha-vimar-intercom/pull/210)).
+
+### Bug fixes
+
+- "View outside" and outgoing calls no longer lose the panel's first video frame, which could leave the picture black for about 3 seconds ([#207](https://github.com/ha-vimar/ha-vimar-intercom/pull/207)).
+- The device page shows the paired Tab's model from the pairing QR, instead of the name of another model when the intercom does not tell it over SIP ([#211](https://github.com/ha-vimar/ha-vimar-intercom/pull/211)) ([#213](https://github.com/ha-vimar/ha-vimar-intercom/pull/213)).
+
+### Other changes
+
+- Start an isolated, automatically onboarded Home Assistant development instance from the current checkout with Docker Compose ([#183](https://github.com/ha-vimar/ha-vimar-intercom/pull/183)).
+
 ## [1.0.24] - 2026-10-20
 
 > **⚠ Before you update**

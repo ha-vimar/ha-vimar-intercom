@@ -211,6 +211,7 @@ class RTPAudioProtocol(asyncio.DatagramProtocol):
         self.rtp_ts = random.randint(0, 2**32 - 1)
         self.rtp_ssrc = random.randint(0, 2**32 - 1)
         self.pkt_count = 0
+        self._srtp_fail = 0
         self.srtp_rx: SRTPContext | None = None
         self.srtp_tx: SRTPContext | None = None
         # Voce in uscita: μ-law in attesa del pacer (_tx_loop, 160 B ogni 20 ms).
@@ -248,7 +249,10 @@ class RTPAudioProtocol(asyncio.DatagramProtocol):
                     _replay_dropped(self, "audio")
                     return
                 if self.pkt_count == 0:
-                    _LOGGER.warning("SRTP audio auth failed from %s (%dB)", addr, len(data))
+                    # Wrong keys fail every packet: rate-limited as for video.
+                    self._srtp_fail += 1
+                    if self._srtp_fail <= 5 or self._srtp_fail % 100 == 0:
+                        _LOGGER.warning("SRTP audio auth failed from %s (%dB)", addr, len(data))
                 return
         elif _from_the_call(self, addr):
             rtp = data
@@ -1069,7 +1073,7 @@ async def setup_media(remote_sdp, local_crypto_key=None, local_video_crypto_key=
     if audio.get("port") and not audio.get("refused") and audio_proto:
         aip = audio.get("ip", remote_ip)
         audio_proto.remote_addr = (aip, audio["port"])
-        audio_proto.pkt_count = 0
+        audio_proto.pkt_count = audio_proto._srtp_fail = 0
         audio_proto._a_ssrc = audio_proto._a_next = audio_proto._a_last = None
         audio_proto._a_buf.clear()
         audio_proto._a_late = 0
@@ -1229,6 +1233,7 @@ def close_transports():
     _close_rtcp_probes()
     if audio_proto and audio_proto.transport:
         audio_proto.transport.close()
+        audio_proto.ffmpeg_av_sock.close()  # the /av forwarding socket, not the transport's
         audio_proto = None
     if video_proto and video_proto.transport:
         # Its sender task would otherwise be destroyed pending on reload.
@@ -1236,6 +1241,7 @@ def close_transports():
         if task and not task.done():
             task.cancel()
         video_proto.transport.close()
+        video_proto.ffmpeg_av_sock.close()
         video_proto = None
 
 

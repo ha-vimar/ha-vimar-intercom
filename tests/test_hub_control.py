@@ -581,10 +581,33 @@ def test_a_keyframe_request_is_sent_for_a_lost_packet(hub, monkeypatch):
 
     async def run():
         hub._request_keyframe()
-        await hub._keyframe_now
+        await asyncio.gather(*hub._background)
 
     asyncio.run(run())
     assert asked == [1]
+
+
+def test_keyframe_requests_are_held_until_done(hub, monkeypatch):
+    # Each lost packet starts one: a task kept only in an attribute that the
+    # next request overwrites could be garbage-collected before the INFO left.
+    release = None
+
+    async def send_keyframe_request():
+        await release.wait()
+
+    monkeypatch.setattr(sip, "send_keyframe_request", send_keyframe_request)
+
+    async def run():
+        nonlocal release
+        release = asyncio.Event()
+        hub._request_keyframe()
+        hub._request_keyframe()
+        held = [t for t in hub._background if not t.done()]
+        release.set()
+        await asyncio.gather(*held)
+        return held
+
+    assert len(asyncio.run(run())) == 2
 
 
 

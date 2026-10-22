@@ -26,6 +26,7 @@ _grabber: asyncio.Task | None = None
 _proto = None
 _clip_q: asyncio.Queue | None = None    # NAL per il clip in corso
 _clip_req = None                        # (path, max_s, on_done) in attesa che il video parta
+_clip_tasks: set[asyncio.Task] = set()  # clips recording: the loop alone holds only a weak ref
 
 _SC = b"\x00\x00\x00\x01"
 _AR = 8000  # PCM della targa (PCMU decodificato): 8 kHz, 16 bit, mono — come in av_passive
@@ -107,7 +108,9 @@ def _start_clip() -> None:
     _clip_q = asyncio.Queue(maxsize=600)
     # Solo gli SPS/PPS di questa targa: quelli di un'altra (risoluzione diversa) resterebbero
     # nell'avcC per tutto il clip. Senza, _record aspetta quelli in banda prima di partire.
-    asyncio.create_task(_record(_clip_q, _proto.sps_pps(own_only=True), path, max_s, on_done))
+    task = asyncio.create_task(_record(_clip_q, _proto.sps_pps(own_only=True), path, max_s, on_done))
+    _clip_tasks.add(task)
+    task.add_done_callback(_clip_tasks.discard)
 
 
 def _end_clip() -> None:

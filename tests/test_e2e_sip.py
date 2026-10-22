@@ -288,8 +288,9 @@ def test_chiamata_rifiutata(monkeypatch, code, reason):
 
 
 def test_chiamata_timeout_manda_cancel(monkeypatch):
-    fast = types.SimpleNamespace(time=lambda t0=time.time(): t0 + (time.time() - t0) * 20,  # noqa: B008 (t0 on purpose)
-                                 monotonic=time.monotonic)
+    fast = types.SimpleNamespace(
+        monotonic=lambda t0=time.monotonic(): t0 + (time.monotonic() - t0) * 20,  # noqa: B008 (t0 on purpose)
+        time=time.time)
     monkeypatch.setattr(sip, "time", fast)
 
     async def s():

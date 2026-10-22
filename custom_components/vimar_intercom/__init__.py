@@ -128,7 +128,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info(
         "Runtime configurato: user=%s domain=%s local_proxy=%s udp=%s",
         runtime.SIP_USER, runtime.SIP_DOMAIN,
-        runtime.LOCAL_PROXY, entry.data.get("use_local_udp", True),
+        runtime.LOCAL_PROXY, runtime.USE_LOCAL_UDP,  # options included, as configured
     )
 
     away_tts.setup(hass)  # sintetizza il messaggio di assenza da testo, se configurato

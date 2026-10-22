@@ -63,7 +63,7 @@ def test_a_lost_video_packet_still_asks_for_a_keyframe(monkeypatch, infos):
         vp = media.RTPVideoProtocol()
         vp._lost("seq 42 persa")
         vp._lost("seq 43 persa")  # at most one a second
-        await hub._keyframe_now
+        await asyncio.gather(*hub._background)
 
     asyncio.run(_run())
     assert infos == [True]

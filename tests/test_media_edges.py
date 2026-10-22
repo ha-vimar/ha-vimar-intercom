@@ -499,6 +499,25 @@ def test_an_encrypted_panel_without_our_key_is_a_warning(monkeypatch, caplog):
     assert "non ha accettato PCMU (m=audio 8)" in caplog.text
 
 
+def test_a_new_call_counts_the_srtp_audio_failures_from_zero(monkeypatch):
+    # A call with wrong keys leaves the limiter at 200: without the reset in
+    # setup_media the next call would stay silent until its 300th failure.
+    warned = []
+    ap = mh.RTPAudioProtocol()
+    _setup_env(monkeypatch, ap)
+    ap._srtp_fail = 200
+
+    async def go():
+        await mh.setup_media({"conn": "192.0.2.1", "audio": {"port": 4000, "fmts": ["0"]}, "video": {}})
+        monkeypatch.setattr(mh._LOGGER, "warning", lambda msg, *a: warned.append(msg))
+        ap.srtp_rx = _Srtp()
+        ap.datagram_received(_rtp(), REMOTE)
+        await mh.stop_media()
+
+    asyncio.run(go())
+    assert warned == ["SRTP audio auth failed from %s (%dB)"]
+
+
 def test_closing_the_transports_cancels_the_video_sender(monkeypatch):
     closed = []
     tr = type("T", (), {"close": lambda self: closed.append(1)})

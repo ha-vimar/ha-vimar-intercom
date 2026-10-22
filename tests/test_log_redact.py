@@ -187,13 +187,10 @@ def test_the_header_is_still_hidden_with_spaces_or_tabs_before_it():
 @pytest.fixture
 def plant():
     """The identity runtime.configure registers, forgotten after the test."""
-    lr.forget_plant_values()
-    lr.remember_plant_value("id", "7712345")
-    lr.remember_plant_value("imei", "358240051111110")
-    lr.remember_plant_value("uuid", "0f8fad5b-d9cb-469f-a165-70867728950e")
-    lr.remember_plant_value("name", "Casa Rossi HA")
+    lr.set_plant_values([("id", "7712345"), ("imei", "358240051111110"),
+                         ("uuid", "0f8fad5b-d9cb-469f-a165-70867728950e"), ("name", "Casa Rossi HA")])
     yield
-    lr.forget_plant_values()
+    lr.set_plant_values([])
 
 
 def test_the_account_values_are_masked_wherever_they_appear(plant):
@@ -216,14 +213,11 @@ def test_a_registered_number_inside_a_longer_one_is_left_alone(plant):
 
 
 def test_short_values_and_the_default_name_are_not_registered():
-    lr.forget_plant_values()
-    lr.remember_plant_value("id", "101")
-    lr.remember_plant_value("name", "Home Assistant")
-    lr.remember_plant_value("name", "")
+    lr.set_plant_values([("id", "101"), ("name", "Home Assistant"), ("name", "")])
     try:
         assert lr.redact_plant("101 Home Assistant") == "101 Home Assistant"
     finally:
-        lr.forget_plant_values()
+        lr.set_plant_values([])
 
 
 @pytest.mark.parametrize("ip, masked", [("192.168.1.23", "192.x.x.23"), ("10.0.0.5", "10.x.x.5"),
@@ -238,7 +232,7 @@ def test_loopback_public_addresses_and_versions_stay(text):
 
 
 def test_the_identity_headers_are_masked_without_registration():
-    lr.forget_plant_values()
+    lr.set_plant_values([])
     raw = "MESSAGE sip:55001@d SIP/2.0\r\nMobile-IMEI: 123456789012345\r\nMyName: Telefono di Anna\r\n"
     out = lr.redact_plant(raw)
     assert "123456789012345" not in out and "Anna" not in out
@@ -335,7 +329,7 @@ def test_a_header_followed_by_a_long_run_of_spaces_stays_fast():
     ("INVITE sip:880011@d.invalid SIP/2.0", "880011"),
 ])
 def test_another_phones_id_in_a_uri_is_masked(text, hidden):
-    lr.forget_plant_values()
+    lr.set_plant_values([])
     out = lr.redact_plant(text)
     assert hidden not in out and f"…{hidden[-2:]}#" in out
 
@@ -422,7 +416,7 @@ def test_our_own_id_and_a_public_host_in_one_uri_keep_their_masks(plant):
 def test_another_phones_five_digit_id_is_masked(text, hidden):
     """On cloud 2FV2 plants the phones have 5-digit ids, the length of a panel's
     extension: they stayed readable in an INVITE or a MESSAGE from another phone (#163)."""
-    lr.forget_plant_values()
+    lr.set_plant_values([])
     assert hidden not in lr.redact_plant(text)
 
 
@@ -434,5 +428,5 @@ def test_another_phones_five_digit_id_is_masked(text, hidden):
 def test_service_addresses_and_panels_stay_readable(text):
     """60000-60002 and 61000 are the protocol's own addresses (default PICG, OPEN_CURRENT,
     the 2FV2 SGA): reading the log needs them. A 5-digit id outside 6xxxx is a panel's."""
-    lr.forget_plant_values()
+    lr.set_plant_values([])
     assert lr.redact_plant(text) == text

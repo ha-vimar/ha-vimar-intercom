@@ -26,7 +26,6 @@ from .sip_message import (
     _challenge_params,
     _clen,
     _contact_uri,
-    _digest_resp,  # noqa: F401  (tests import it from here)
     _host_of,
     _make_auth,
     _parse,
@@ -190,27 +189,15 @@ def _via_line(branch):
             f"branch={branch};rport\r\n")
 
 
-def _contact_hdr(include_pn=True):
-    """Return the full Contact header value (no 'Contact:' prefix)."""
-    port = _my_port()
-    if R.USE_LOCAL_UDP:
-        contact = f"<sip:{R.SIP_USER}@{MY_IP}:{port}>"
-        contact += f';+sip.instance="<urn:uuid:{R.DEVICE_UUID}>"'
-        contact += ";expires=3600"
-        return contact
-    # TLS/cloud mode
-    contact_uri = f"sip:{R.SIP_USER}@{MY_IP}:{port};transport=tls"
-    if include_pn and C.PN_TOKEN:
-        contact_uri += (f";app-id={C.PN_APP_ID}"
-                        f";pn-type={C.PN_TYPE}"
-                        f";pn-tok={C.PN_TOKEN}"
-                        f";pn-msg-str=IM_MSG;pn-msg-snd=msg.caf"
-                        f";pn-call-str=IC_MSG;pn-call-snd=notes_of_the_optimistic.caf"
-                        f";q=0.00;domain-name={R.SIP_DOMAIN}")
-    contact = f"<{contact_uri}>"
-    contact += f';+sip.instance="<urn:uuid:{R.DEVICE_UUID}>"'
-    contact += f";expires={'5184000' if C.PN_TOKEN else '3600'}"
-    return contact
+def _contact_hdr():
+    """Return the full Contact header value (no 'Contact:' prefix).
+
+    No push parameters (app-id, pn-tok, ...): HA gets its calls on its own SIP
+    connection; a push profile would need a phone's FCM token, which HA has not."""
+    uri = f"sip:{R.SIP_USER}@{MY_IP}:{_my_port()}"
+    if not R.USE_LOCAL_UDP:
+        uri += ";transport=tls"
+    return f'<{uri}>;+sip.instance="<urn:uuid:{R.DEVICE_UUID}>";expires=3600'
 
 
 def _route_line():
@@ -539,11 +526,6 @@ async def _reconnect():
                 await connect()
                 _LOGGER.info("SIP reconnected, re-registering...")
                 ok = await do_register()
-                if ok:
-                    try:
-                        await do_connect_profiles()
-                    except Exception:
-                        pass
             if ok:
                 return True
         except Exception as e:
@@ -1737,41 +1719,6 @@ async def do_options(target=None):
         if code and code >= 300:
             return False, f"Errore: {code}"
     return False, "Timeout"
-
-
-async def do_connect_profiles():
-    """Register push profile on Vimar cloud. Uses Digest auth (not Basic)."""
-    username = f"{R.SIP_USER}@{R.SIP_DOMAIN}"
-    body = [{"sipid": R.SIP_USER, "domain": R.SIP_DOMAIN, "pntok": C.PN_TOKEN}]
-    if not C.PN_TOKEN:
-        return False, "No FCM token"
-
-    import requests as req_lib
-    loop = asyncio.get_running_loop()
-
-    def _call(endpoint):
-        return req_lib.post(
-            f"https://ipvdes.vimar.cloud/eipvdesUtils/{endpoint}",
-            json=body,
-            auth=req_lib.auth.HTTPDigestAuth(username, C.PN_TOKEN),
-            headers={"Accept": "application/json"}, timeout=15)
-
-    try:
-        resp = await loop.run_in_executor(None, _call, "connectProfiles")
-        _LOGGER.info("connectProfiles: %d", resp.status_code)
-        if resp.status_code == 200:
-            return True, "Profilo connesso"
-        if resp.status_code == 403:
-            await loop.run_in_executor(None, _call, "disconnectProfiles")
-            resp3 = await loop.run_in_executor(None, _call, "connectProfiles")
-            _LOGGER.info("connectProfiles retry: %d", resp3.status_code)
-            if resp3.status_code == 200:
-                return True, "Profilo connesso"
-            return False, f"connectProfiles: {resp3.status_code}"
-        return False, f"connectProfiles: {resp.status_code}"
-    except Exception as e:
-        _LOGGER.error("connectProfiles error: %s", e)
-        return False, str(e)
 
 
 # ─── Incoming SIP ───────────────────────────────────────────────────

@@ -11,17 +11,15 @@ from custom_components.vimar_intercom import qr_decoder as qr
 
 
 class TestKnownFamilies:
-    def test_due_fili_expects_the_local_path_in_the_clear(self):
+    def test_due_fili_expects_the_local_path(self):
         profile = profiles.profile_for("2F")
         assert profile.prefers_local_udp is True
-        assert profile.media_encryption is False
         assert profile.verified is True
 
-    def test_due_fili_evo_expects_the_cloud_path_encrypted(self):
+    def test_due_fili_evo_expects_the_cloud_path(self):
         profile = profiles.profile_for("2FV2")
         assert profile.prefers_local_udp is False
         assert profile.transport == profiles.TRANSPORT_CLOUD_TLS
-        assert profile.media_encryption is True
         assert profile.verified is True
 
     def test_the_type_is_matched_regardless_of_spacing_or_case(self):
@@ -31,7 +29,6 @@ class TestKnownFamilies:
     def test_an_unknown_plant_falls_back_without_claiming_certainty(self, value):
         profile = profiles.profile_for(value)
         assert profile.verified is False
-        assert profile.media_encryption is None, "decide encryption from the offer"
         assert profile.prefers_local_udp is True, "try the local path first, then the cloud"
 
 

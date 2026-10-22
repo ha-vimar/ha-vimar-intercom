@@ -102,7 +102,7 @@ def test_configure_hands_the_identity_to_the_log_masking():
         runtime.configure({"sip_user": "7799999", "sip_domain": "d"})
         assert "7712345" in log_redact.redact_plant("7712345"), "a reconfigure forgets the old identity"
     finally:
-        log_redact.forget_plant_values()
+        log_redact.set_plant_values([])
 
 
 def test_configure_masks_the_sip_domain_in_its_three_forms():
@@ -139,7 +139,6 @@ def test_a_reconfigure_swaps_the_values_in_one_go(monkeypatch):
     seen = []
     real = log_redact.set_plant_values
     monkeypatch.setattr(log_redact, "set_plant_values", lambda *a, **k: (seen.append(a), real(*a, **k)))
-    monkeypatch.setattr(log_redact, "forget_plant_values", lambda: seen.append("forget"))
     runtime.configure({"sip_user": "7799999", "sip_domain": "d"})
-    assert len(seen) == 1 and "forget" not in seen
+    assert len(seen) == 1
     assert "7799999" not in log_redact.redact_plant("7799999")

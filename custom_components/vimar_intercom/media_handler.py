@@ -68,23 +68,6 @@ def ulaw_decode(data: bytes) -> bytes:
     return bytes(out)
 
 
-def _ulaw_encode_sample(sample: int) -> int:
-    """One 16-bit signed sample → its μ-law code (the reference algorithm)."""
-    BIAS = 0x84
-    CLIP = 32635
-    sign = 0x80 if sample < 0 else 0
-    if sample < 0:
-        sample = -sample
-    sample = min(sample, CLIP) + BIAS
-    exp = 7
-    mask = 0x4000
-    while exp > 0 and not (sample & mask):
-        exp -= 1
-        mask >>= 1
-    mantissa = (sample >> (exp + 3)) & 0x0F
-    return (~(sign | (exp << 4) | mantissa)) & 0xFF
-
-
 def _build_ulaw_encode_table() -> bytes:
     """The μ-law code of every 16-bit sample, indexed by its unsigned value.
 

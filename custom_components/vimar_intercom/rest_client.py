@@ -134,26 +134,6 @@ def _body(resp: requests.Response) -> bytes:
         return resp.content
 
 
-def probe(host: str, timeout: float = 3.0) -> bool:
-    """`True` se a quell'indirizzo c'è l'API del citofono.
-
-    Non servono credenziali: basta la sfida Digest. Un impianto raggiungibile
-    solo dal cloud, o con la porta 80 chiusa, restituisce `False` — e in quel
-    caso l'integrazione deve usare la via SIP.
-    """
-    try:
-        resp = requests.get(
-            f"{base_url(host)}/get_info.php",
-            params={"action": ACTION_STATUS},
-            timeout=timeout,
-        )
-    except requests.exceptions.RequestException:
-        return False
-    if resp.status_code != 401:
-        return False
-    return "digest" in resp.headers.get("WWW-Authenticate", "").lower()
-
-
 def get_status(
     host: str, user: str, password: str, timeout: tuple[float, float] = DEFAULT_TIMEOUT
 ) -> dict[str, Any]:
@@ -318,19 +298,3 @@ def find_picg(nicknames: list[dict[str, str]]) -> str | None:
             ext = nick.get("ext", "")
             return ext or None
     return None
-
-
-def vm_level(status: dict[str, Any]) -> tuple[int, int] | None:
-    """`vm_level` come `(usati, capienza)`.
-
-    Il citofono lo manda nella forma `"0/100"`: è il numero di videomessaggi
-    registrati sul totale, non lo spazio libero.
-    """
-    raw = status.get("vm_level")
-    if not isinstance(raw, str) or "/" not in raw:
-        return None
-    used, _, total = raw.partition("/")
-    try:
-        return int(used.strip()), int(total.strip())
-    except ValueError:
-        return None

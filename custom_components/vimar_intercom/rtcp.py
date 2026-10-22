@@ -75,10 +75,9 @@ class RTCPProbe(asyncio.DatagramProtocol):
         self.remote_ssrc = 0
         self.remote_addr = None
         self.srtcp_rx = None
-        decoder = getattr(srtp, "SRTCPContext", None)
-        if encrypted and key and decoder:
+        if encrypted and key:
             with contextlib.suppress(Exception):
-                self.srtcp_rx = decoder(key)
+                self.srtcp_rx = srtp.SRTCPContext(key)
         self._auth_ok = 0
         self._auth_fail = 0
 

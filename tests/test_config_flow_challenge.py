@@ -15,6 +15,7 @@ import pytest
 
 from custom_components.vimar_intercom import config_flow as cf
 from custom_components.vimar_intercom import sip_client as sip
+from custom_components.vimar_intercom import sip_message
 
 R = sip.R
 
@@ -124,7 +125,7 @@ def test_the_sip_client_matches_the_rfc_2617_vector(mufasa):
 def test_the_sip_client_signs_with_a_realm_holding_a_comma(mufasa):
     header = sip._make_auth("REGISTER", "sip:d", 'Digest realm="a, b", nonce="n"')
     assert 'realm="a, b"' in header
-    assert f'response="{sip._digest_resp("REGISTER", "sip:d", "n", "a, b")}"' in header
+    assert f'response="{sip_message._digest_resp("REGISTER", "sip:d", "n", "a, b")}"' in header
 
 
 def test_the_sip_client_does_not_claim_auth_for_auth_int_only(mufasa):
@@ -135,7 +136,7 @@ def test_the_sip_client_does_not_claim_auth_for_auth_int_only(mufasa):
 def test_the_sip_client_uses_the_rfc_2069_form_without_qop(mufasa):
     header = sip._make_auth("REGISTER", "sip:d", 'Digest realm="r", nonce="n"')
     assert "qop" not in header
-    assert f'response="{sip._digest_resp("REGISTER", "sip:d", "n", "r")}"' in header
+    assert f'response="{sip_message._digest_resp("REGISTER", "sip:d", "n", "r")}"' in header
 
 
 # ─── Cloud relays when SRV fails ─────────────────────────────────────────────

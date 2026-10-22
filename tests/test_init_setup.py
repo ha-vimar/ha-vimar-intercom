@@ -279,6 +279,18 @@ def test_an_entry_with_the_old_qr_video_gets_video_in_its_calls(init, tmp_path):
     assert data is not None and data["qr_video"] is False and "video_enabled" not in data
 
 
+def test_the_setup_log_shows_the_transport_chosen_in_the_options(init, tmp_path, caplog):
+    # The options override the entry data: the line read the data only, so a
+    # plant moved to the cloud in the options was still logged as udp=True.
+    hass = _hass(tmp_path)
+    entry = _entry(use_local_udp=True)
+    entry.options = {"use_local_udp": False}
+    with caplog.at_level("INFO"):
+        _setup(init, hass, entry)
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("Runtime configurato"))
+    assert line.endswith("udp=False")
+
+
 def test_an_entry_with_identity_is_not_rewritten_at_setup(init, tmp_path):
     hass = _hass(tmp_path)
     _setup(init, hass, _entry())

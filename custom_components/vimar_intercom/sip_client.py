@@ -724,7 +724,7 @@ async def _udp_reader_task():
     """Loop di lettura per modalità UDP locale."""
     loop = asyncio.get_running_loop()
     _LOGGER.info("SIP UDP reader started")
-    last_ping = time.time()
+    last_ping = time.monotonic()
     # Solo il citofono: su 0.0.0.0 chiunque in LAN potrebbe fingere uno squillo
     # (e con l'anteprima farsi mandare media, foto e messaggio di assenza).
     try:
@@ -745,12 +745,12 @@ async def _udp_reader_task():
                 continue
             raw = data.decode(errors="replace")
             await _dispatch_message(raw)
-            last_ping = time.time()
+            last_ping = time.monotonic()
         except TimeoutError:
             # Keepalive: OPTIONS ogni 20 s se registrato
-            if registered and (time.time() - last_ping) >= 20:
+            if registered and (time.monotonic() - last_ping) >= 20:
                 await _send_options_ping()
-                last_ping = time.time()
+                last_ping = time.monotonic()
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -942,9 +942,9 @@ async def _send_request(msg: str, cid: str, timeout: float = 15,
 async def _wait_final(cid, timeout=15):
     q = pending_responses.setdefault(cid, asyncio.Queue())
     results = []
-    deadline = time.time() + timeout
+    deadline = time.monotonic() + timeout
     while True:
-        rem = deadline - time.time()
+        rem = deadline - time.monotonic()
         if rem <= 0:
             break
         try:
@@ -1112,8 +1112,7 @@ async def do_register():
             _set_registered(False)
             return False
         ch = hdrs.get("www-authenticate" if code == 401 else "proxy-authenticate", "")
-        nonce = re.search(r'nonce\s*=\s*"([^"]*)"', ch)
-        nonce = nonce.group(1) if nonce else ""
+        nonce = _challenge_params(ch).get("nonce", "")
         if not ch or nonce in seen_nonces:
             _LOGGER.warning("REGISTER: %s", "credentials refused" if ch else
                             f"{code} without a challenge")
@@ -1333,14 +1332,14 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
         # UDP: l'INVITE si ritrasmette finché arriva una risposta qualsiasi (Timer A,
         # RFC 3261 §17.1.1.2). Perso il primo, "Vedi esterno" aspettava 45 s.
         retx, retx_iv = bool(R.USE_LOCAL_UDP), _T1
-        retx_at = time.time() + retx_iv
+        retx_at = time.monotonic() + retx_iv
 
     await _invite()
     await broadcast("log", "INVITE inviato...")
 
     q = pending_responses.setdefault(cid, asyncio.Queue())
     _LOGGER.debug("do_call: cid=%s, q id=%s, pending_keys=%s", cid[:24], id(q), list(pending_responses.keys())[:3])
-    deadline = time.time() + (answer_timeout or 45)
+    deadline = time.monotonic() + (answer_timeout or 45)
     auth_tries, last_ch = 0, None
 
     try:
@@ -1348,20 +1347,20 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
             limit = deadline
             if ring_timeout and trying_at is not None and not rang:
                 limit = min(limit, trying_at + ring_timeout)
-            if time.time() >= limit:
+            if time.monotonic() >= limit:
                 break
             _LOGGER.debug("do_call: waiting q.get (qsize=%d, cid_in_pending=%s, q_is_same=%s)",
                            q.qsize(), cid in pending_responses, pending_responses.get(cid) is q)
             try:
-                wait = min(3, max(0.01, retx_at - time.time())) if retx else 3
+                wait = min(3, max(0.01, retx_at - time.monotonic())) if retx else 3
                 if answer_timeout or ring_timeout:  # to the deadline, not up to 3 s past it
-                    wait = min(wait, max(0.01, limit - time.time()))
+                    wait = min(wait, max(0.01, limit - time.monotonic()))
                 raw = await asyncio.wait_for(q.get(), timeout=wait)
             except TimeoutError:
-                if retx and time.time() >= retx_at:
+                if retx and time.monotonic() >= retx_at:
                     await send(inv_msg)
                     retx_iv *= 2
-                    retx_at = time.time() + retx_iv
+                    retx_at = time.monotonic() + retx_iv
                 continue
 
             if raw is _CANCEL:  # do_hangup durante lo squillo della targa
@@ -1377,7 +1376,7 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
 
             if code in (100, 180, 183):
                 if code == 100 and trying_at is None:
-                    trying_at = time.time()
+                    trying_at = time.monotonic()
                 elif code != 100:
                     rang = True
                 if code == 183 and body:
@@ -1472,7 +1471,7 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
         pending_responses.pop(cid, None)
         _set_calling(False)
         stalled = bool(ring_timeout and trying_at is not None and not rang
-                       and time.time() < deadline)
+                       and time.monotonic() < deadline)
         if stalled:
             _LOGGER.warning("INVITE: 100 Trying and no 180 from %s after %.0fs", target_uri, ring_timeout)
         elif answer_timeout:
@@ -1497,13 +1496,14 @@ async def do_call(target=None, silence_limit=None, answer_timeout=None, ring_tim
 _background: set[asyncio.Task] = set()
 
 
-def _spawn(coro) -> asyncio.Task:
-    """A task nobody awaits, kept referenced until it is done."""
+def _spawn(coro, failed: str = "Background SIP task failed") -> asyncio.Task:
+    """A task nobody awaits, kept referenced until it is done. `failed` starts
+    the error line logged if it raises."""
     t = asyncio.create_task(coro)
     _background.add(t)
     t.add_done_callback(_background.discard)
     t.add_done_callback(
-        lambda t: _LOGGER.error("Background SIP task failed: %s", t.exception())
+        lambda t: _LOGGER.error("%s: %s", failed, t.exception())
         if not t.cancelled() and t.exception() else None)
     return t
 
@@ -1908,7 +1908,7 @@ async def handle_incoming_invite(raw):
 
     # CANCEL perso (UDP, riavvio del PBX): l'anteprima non deve restare accesa per sempre.
     pending_incoming["timer"] = asyncio.get_running_loop().call_later(
-        RING_MAX_S, lambda: asyncio.ensure_future(_ring_timeout(cid)))
+        RING_MAX_S, lambda: _spawn(_ring_timeout(cid), "Ring timeout failed"))
     await broadcast("ring", f"Chiamata da: {caller_uri}")
 
 
@@ -2174,12 +2174,8 @@ async def handle_incoming_cancel(raw):
 
 async def request_processor():
     def _fire(coro, name: str):
-        """Lancia un task e loga le eccezioni non gestite (evita eccezioni silenziate)."""
-        t = asyncio.create_task(coro)
-        t.add_done_callback(
-            lambda t, n=name: _LOGGER.error("%s handler error: %s", n, t.exception())
-            if not t.cancelled() and t.exception() else None
-        )
+        # Kept referenced by _spawn: the loop alone would let the GC drop it.
+        _spawn(coro, f"{name} handler error")
 
     while True:
         raw = await incoming_requests.get()

@@ -102,6 +102,20 @@ def test_audio_that_is_not_pcmu_voice_is_ignored(packet):
     assert ap.audio_buffer.empty() and ap.pkt_count == 0
 
 
+def test_srtp_audio_with_wrong_keys_does_not_flood_the_log(monkeypatch):
+    # Wrong keys: no packet ever authenticates, so pkt_count stays 0 and the
+    # warning used to fire for every packet, 50 a second for the whole call.
+    # Same limiter as video: the first five, then one every hundred. Calls are
+    # counted, not caplog records: the integration's log buffer can repeat one.
+    warned = []
+    monkeypatch.setattr(mh._LOGGER, "warning", lambda msg, *a: warned.append(msg))
+    ap = _audio()
+    ap.srtp_rx = _Srtp()
+    for _ in range(200):
+        ap.datagram_received(_rtp(), REMOTE)
+    assert warned.count("SRTP audio auth failed from %s (%dB)") == 7
+
+
 def test_srtp_audio_that_fails_authentication_is_dropped_and_logged_once(caplog):
     ap = _audio()
     ap.srtp_rx = _Srtp()
@@ -501,6 +515,20 @@ def test_closing_the_transports_cancels_the_video_sender(monkeypatch):
 
     task = asyncio.run(run())
     assert task.cancelled() and closed == [1] and mh.video_proto is None
+
+
+def test_closing_the_transports_closes_the_av_forwarding_sockets(monkeypatch):
+    # Each protocol opens a UDP socket to forward RTP to the /av ffmpeg: left
+    # to the GC (ResourceWarning) before, two more open sockets per reload.
+    tr = type("T", (), {"close": lambda self: None})
+    ap, vp = mh.RTPAudioProtocol(), mh.RTPVideoProtocol()
+    ap.transport, vp.transport = tr(), tr()
+    socks = (ap.ffmpeg_av_sock, vp.ffmpeg_av_sock)
+    monkeypatch.setattr(mh, "audio_proto", ap)
+    monkeypatch.setattr(mh, "video_proto", vp)
+    monkeypatch.setattr(mh, "_close_rtcp_probes", lambda: None)
+    mh.close_transports()
+    assert [s.fileno() for s in socks] == [-1, -1]
 
 
 def test_closing_the_transports_leaves_a_finished_sender_alone(monkeypatch):

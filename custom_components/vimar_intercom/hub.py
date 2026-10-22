@@ -184,7 +184,6 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         self._ring_time: str | None = None  # chiave dell'ultimo squillo nel registro
         self._call_timeout_task: asyncio.Task | None = None
         self._keyframe_task: asyncio.Task | None = None
-        self._keyframe_now: asyncio.Task | None = None
         media.request_keyframe = self._request_keyframe  # pacchetto video perso
         self._auto_called = False
         self._auto_gen = 0  # which auto-call is the current one (_do_auto_call)
@@ -879,7 +878,9 @@ class VimarIntercomHub(PlantMessages, RingMedia):
 
     def _request_keyframe(self):
         """Pacchetto video perso (media_handler): keyframe subito, non al prossimo IDR."""
-        self._keyframe_now = asyncio.create_task(sip.send_keyframe_request())
+        # _spawn holds it until done (a new request used to overwrite the only
+        # reference) and async_stop cancels it with the rest of _background.
+        self._spawn(sip.send_keyframe_request(), "Keyframe request")
 
     def _start_keyframe_loop(self):
         """Ask for a keyframe at call start (a short burst, see _keyframe_loop)."""

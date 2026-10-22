@@ -339,16 +339,16 @@ def test_options_reports_the_final_answer(net, script, expected):
 
 
 class _Clock:
-    """time.time() that jumps 20 s per call: every wait is over at once."""
+    """time.monotonic() that jumps 20 s per call: every wait is over at once."""
 
     def __init__(self):
         self.now = 0.0
 
     def time(self):
-        self.now += 20
         return self.now
 
     def monotonic(self):
+        self.now += 20
         return self.now
 
 
@@ -572,6 +572,32 @@ def test_a_cancel_while_the_preview_starts_closes_the_preview(ring, monkeypatch)
     asyncio.run(sip.handle_incoming_invite(INVITE))
     assert ring.media == ["stop"]
     assert "timer" not in sip.pending_incoming, "no ring timer for a cancelled ring"
+
+
+def test_the_ring_timeout_task_is_kept_referenced(ring, monkeypatch):
+    # A task only the loop knows about can be garbage-collected before it ends
+    # (asyncio docs, create_task): the timeout that declines a forgotten ring
+    # goes through _spawn like the other background SIP tasks.
+    release = None
+
+    async def _timeout(cid):
+        await release.wait()
+
+    monkeypatch.setattr(sip, "RING_MAX_S", 0)
+    monkeypatch.setattr(sip, "_ring_timeout", _timeout)
+    monkeypatch.setattr(sip, "_background", set())
+
+    async def _run():
+        nonlocal release
+        release = asyncio.Event()
+        await sip.handle_incoming_invite(INVITE)
+        await asyncio.sleep(0.01)
+        held = [t for t in sip._background if not t.done() and t.get_coro().__name__ == "_timeout"]
+        release.set()
+        await asyncio.gather(*held)
+        return held
+
+    assert len(asyncio.run(_run())) == 1
 
 
 def test_answering_or_timing_out_without_a_ring_does_nothing(ring):
@@ -1144,12 +1170,48 @@ def test_the_ring_hosts_are_its_via_hosts_when_it_has_no_contact(monkeypatch):
     assert sip._dialog_hosts() == {"192.0.2.60"}
 
 
+class _NtpStep:
+    """The wall clock steps an hour ahead at every read (an NTP sync at boot);
+    the monotonic clock goes on as it is."""
+
+    def __init__(self):
+        import time as _t
+        self._t, self.steps = _t, 0
+
+    def time(self):
+        self.steps += 1
+        return self._t.time() + 3600 * self.steps
+
+    def monotonic(self):
+        return self._t.monotonic()
+
+
+def test_a_wall_clock_step_does_not_cut_the_wait_for_an_answer(monkeypatch):
+    monkeypatch.setattr(sip, "time", _NtpStep())
+    monkeypatch.setattr(sip, "pending_responses", {})
+
+    async def _run():
+        q = sip.pending_responses.setdefault("cid-ntp", asyncio.Queue())
+        asyncio.get_running_loop().call_later(
+            0.02, q.put_nowait, "SIP/2.0 200 OK\r\nCall-ID: cid-ntp\r\nCSeq: 1 OPTIONS\r\n\r\n")
+        return await sip._wait_final("cid-ntp", timeout=2)
+
+    assert len(asyncio.run(_run())) == 1
+
+
+def test_a_wall_clock_step_does_not_cut_an_invite_short(net, monkeypatch):
+    monkeypatch.setattr(sip, "time", _NtpStep())
+    net.script.append([lambda m: _reply(m, 180), lambda m: _reply(m, 200)])
+    assert asyncio.run(sip.do_call()) == (True, "Connesso!")
+    sip._set_in_call(False)
+
+
 def test_waiting_for_a_final_answer_gives_up_at_the_deadline(monkeypatch):
     class _Slow:
         def __init__(self):
             self.now = 0.0
 
-        def time(self):
+        def monotonic(self):
             self.now += 5
             return self.now
 

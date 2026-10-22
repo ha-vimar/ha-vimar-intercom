@@ -309,6 +309,33 @@ def _run_record(nals, tmp_path, proc, *, ps=None, max_s=5.0, pcm=None, after=Non
     return done[0], proc
 
 
+def test_the_clip_task_is_kept_referenced_until_it_ends(monkeypatch):
+    # The loop holds only a weak reference to a task: a clip nobody references
+    # can be garbage-collected mid-recording (asyncio docs, create_task).
+    monkeypatch.setattr(fg, "_clip_tasks", set())
+    monkeypatch.setattr(fg, "_proto", SimpleNamespace(sps_pps=lambda own_only=False: None))
+    release = None
+
+    async def _record(*_a):
+        await release.wait()
+
+    monkeypatch.setattr(fg, "_record", _record)
+
+    async def run():
+        nonlocal release
+        release = asyncio.Event()
+        fg._clip_req = ("clip.mp4", 5.0, None)
+        fg._start_clip()
+        held = list(fg._clip_tasks)
+        release.set()
+        await asyncio.gather(*held)
+        await asyncio.sleep(0)
+        return held
+
+    assert len(asyncio.run(run())) == 1
+    assert fg._clip_tasks == set(), "dropped once done"
+
+
 def test_the_clip_starts_at_the_first_idr_and_keeps_sps_pps_once(monkeypatch, tmp_path):
     proc = _Proc(on_wait=_writes_part)
     _spawner(monkeypatch, proc)

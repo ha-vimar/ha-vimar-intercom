@@ -56,6 +56,17 @@ def test_the_same_nonce_twice_means_refused_credentials(registrar):
     assert len(sent) == 2
 
 
+def test_an_unquoted_nonce_is_told_apart_from_the_next(registrar):
+    # The nonce is read like every other challenge parameter (_challenge_params),
+    # quoted or not: an unquoted one used to read as "" both times, so a rotated
+    # nonce looked like the same one and the REGISTER ended as refused.
+    def bare(nonce):
+        return response(401, "Unauthorized", WWW_Authenticate=f"Digest realm=plant, nonce={nonce}")
+    sent = registrar([bare("first"), bare("second"), response(200)])
+    assert asyncio.run(sip.do_register()) is True
+    assert len(sent) == 3
+
+
 def test_a_rejection_that_is_not_a_challenge_stops_at_once(registrar):
     sent = registrar([response(503, "Service Unavailable")])
     assert asyncio.run(sip.do_register()) is False

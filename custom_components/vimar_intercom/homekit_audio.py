@@ -412,9 +412,7 @@ class AudioBridge:
     async def _pump_pcm(self) -> None:
         """Decoded PCM, in 20 ms packets, to the outdoor station."""
         proc = self._talk_proc
-        if proc is None:
-            return
-        if not proc or not proc.stdout:
+        if proc is None or not proc.stdout:
             return
         buf = b""
         try:

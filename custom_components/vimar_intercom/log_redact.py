@@ -204,12 +204,12 @@ def _tag(kind: str, value: str, *, keep_tail: bool = True) -> str:
 _plant: tuple[dict[str, str], re.Pattern | None] = ({}, None)
 
 
-def set_plant_values(pairs, *, keep: bool = False) -> None:
+def set_plant_values(pairs) -> None:
     """Mask these `(kind, value)` pairs in every later log line, in place of the ones
-    before (or on top of them with `keep`), swapped in one go: no line in between goes
-    out with nothing masked. Short values and the default MyName are left out."""
+    before, swapped in one go: no line in between goes out with nothing masked.
+    Short values and the default MyName are left out; no pairs masks nothing."""
     global _plant
-    tags = dict(_plant[0]) if keep else {}
+    tags = {}
     for kind, value in pairs:
         value = str(value or "").strip()
         if len(value) >= _MIN_PLANT_VALUE and value != MY_NAME:
@@ -219,16 +219,6 @@ def set_plant_values(pairs, *, keep: bool = False) -> None:
         return
     alts = "|".join(re.escape(v) for v in sorted(tags, key=len, reverse=True))
     _plant = (tags, re.compile(rf"(?<![0-9A-Za-z])(?:{alts})(?![0-9A-Za-z])"))
-
-
-def remember_plant_value(kind: str, value: str | None) -> None:
-    """Mask `value` too, keeping what is registered."""
-    set_plant_values([(kind, value)], keep=True)
-
-
-def forget_plant_values() -> None:
-    global _plant
-    _plant = ({}, None)
 
 
 _IPV4 = r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"

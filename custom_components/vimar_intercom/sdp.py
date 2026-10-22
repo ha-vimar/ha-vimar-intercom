@@ -78,7 +78,7 @@ def _offered_kinds(offer: dict | None) -> list[str]:
              if _offered_line(offer, k) is not None]
     if kinds:
         return kinds
-    return ["audio", "video"] if getattr(R, "VIDEO_ENABLED", True) else ["audio"]
+    return ["audio", "video"] if R.VIDEO_ENABLED else ["audio"]
 
 
 def _line_security(offer: dict | None, kind: str) -> tuple[bool, dict | None]:
@@ -97,7 +97,7 @@ def _line_security(offer: dict | None, kind: str) -> tuple[bool, dict | None]:
     """
     offered = [m for m in (_offered_line(offer, "audio"), _offered_line(offer, "video")) if m]
     if not offered:
-        return True, (dict(_DEFAULT_CRYPTO) if getattr(S, "MEDIA_ENC", False) else None)
+        return True, (dict(_DEFAULT_CRYPTO) if S.MEDIA_ENC else None)
     line = _offered_line(offer, kind)
     if line is None or not line.get("port"):
         return False, None

@@ -35,8 +35,6 @@ CLOUD_DOMAIN: str = ""   # dominio SIP cloud Vimar (QR «cdomain»)
 SIP_HA1:      str = ""
 SIP_PROXY:    str = "ipvdes.vimar.cloud"   # cloud proxy (da QR cproxy)
 LOCAL_PROXY:  str = ""                      # IP citofono locale
-GID:          str = ""
-PLANT_TYPE:   str = ""
 PRODUCT_CODE: str = ""   # the QR's `pc`, the paired Tab (e.g. 40515)
 MAC_CITOFONO: str = ""
 
@@ -183,7 +181,6 @@ DEVICE_UUID: str = ""
 # or this key in the `auth` query parameter. Generated once, stored in the entry,
 # never expires (the stream worker reuses its URL on every reconnect). `auth` is
 # the name HA's stream component masks in its own logs; log_redact masks it in ours.
-AV_KEY: str = ""
 AV_KEY_PARAM = "auth"
 # The MyName header. A local pairing binds (identifier, name) to the credential
 # and refuses any change with a 503, so it is stored rather than hard-coded.
@@ -210,7 +207,7 @@ def new_av_key() -> str:
 
 
 # Never empty, even before configure() runs: an empty key would match an empty `auth=`.
-AV_KEY = new_av_key()
+AV_KEY: str = new_av_key()
 
 
 def av_key_valid(given) -> bool:
@@ -268,7 +265,7 @@ def configure(data: dict) -> None:
     global SIP_USER, SIP_PASSWORD, SIP_DOMAIN, SIP_HA1
     global LOCAL_DOMAIN, CLOUD_DOMAIN
     global SIP_PROXY, LOCAL_PROXY
-    global GID, PLANT_TYPE, PRODUCT_CODE, MAC_CITOFONO
+    global PRODUCT_CODE, MAC_CITOFONO
     global USE_LOCAL_UDP, LOCAL_UDP_PORT, MEDIA_ENC_OPTION, VIDEO_ENABLED
     global INTERCOM, DOOR_ESTERNO, VOICE_ANSWER
     global ACTUATORS
@@ -286,8 +283,6 @@ def configure(data: dict) -> None:
     SIP_HA1      = data.get("sip_ha1", "")
     SIP_PROXY    = data.get("cloud_proxy", "ipvdes.vimar.cloud")
     LOCAL_PROXY  = data.get("local_proxy", "")
-    GID          = data.get("gid", "")
-    PLANT_TYPE   = data.get("plant_type", "")
     PRODUCT_CODE = str(data.get("product_code") or "").strip()
     MAC_CITOFONO = data.get("mac", "")
 

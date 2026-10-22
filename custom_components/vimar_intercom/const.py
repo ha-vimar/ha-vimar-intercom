@@ -25,11 +25,6 @@ SIP_PORT = 7042                          # porta TLS cloud
 # ─── Porta SIP locale (Flexisip sul citofono) ─────────────────────────────────
 LOCAL_SIP_PORT = 5060
 
-# ─── Transport mode — default, può essere sovrascritto da config entry ─────────
-# Modificabile via Options Flow in HA: Impostazioni → Integrazioni → Vimar Intercom
-USE_LOCAL_UDP  = True    # True = UDP locale; False = TLS/TCP cloud
-LOCAL_UDP_PORT = 5060    # porta UDP locale su HA
-
 # ─── Door targets ──────────────────────────────────────────────────────────────
 # Costruiti a runtime da hub.py usando le credenziali del config entry.
 # Il comando ATT_ID 8 = modulo 2F (Serratura)
@@ -67,10 +62,6 @@ SDP_BANDWIDTH = {VIDEO_BANDWIDTH_LOW: (256, 512), VIDEO_BANDWIDTH_HIGH: (2048, 2
 FFMPEG_AV_VIDEO_PORT = 19210  # AV ffmpeg video (RTCP 19211)
 FFMPEG_AV_AUDIO_PORT = 19212  # AV ffmpeg audio (RTCP 19213)
 
-# ─── Push Notifications — opzionale, non necessario per UDP locale ────────────
-PN_APP_ID = "toga-prod"
-PN_TYPE   = "firebase"
-
 # ─── User-Agent — stesso dell'app originale per compatibilità Flexisip ─────────
 USER_AGENT = "TOGA_Googlesdk_gphone64_arm64_Android34/1.0|AppVer:2.4.0|ProtVer:1.0|"
 
@@ -81,11 +72,6 @@ USER_AGENT = "TOGA_Googlesdk_gphone64_arm64_Android34/1.0|AppVer:2.4.0|ProtVer:1
 # con lo stesso Mobile-IMEI / +sip.instance si contendono la stessa registrazione.
 MY_NAME = "Home Assistant"
 DEVICE_ID_DIGITS = 15   # cifre del finto IMEI usato nell'header Mobile-IMEI
-
-# ─── Push notifications (opzionale — lascia vuoto per disabilitare) ───────────
-# Riempi solo se vuoi ricevere push Firebase/FCM su dispositivi Android.
-# In modalità UDP locale non è necessario.
-PN_TOKEN = ""
 
 # ─── Certificato CA Vimar (per modalità TLS cloud) ───────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -121,16 +107,6 @@ SEGRETERIA_HEADER_VALUE = "blue"   # dall'app VIEW: i messaggi di stato usano Pa
 # Non disturbare — "DND;ON" / "DND;OFF" verso l'SGA (Panda: blue).
 DND_ON                  = "DND;ON"
 DND_OFF                 = "DND;OFF"
-
-# ─── Attuatori aggiuntivi (visti nell'app VIEW → Videocitofonia) ─────────────
-# Stessa famiglia di OPEN_2F (header Panda: command). I token OPEN_F1/OPEN_F2
-# sono quelli standard dei relè aux della targa; LUCE SCALA / Attuatore 02 /
-# TIRO sono IPOTESI da confermare col test o con la cattura del MESSAGE.
-# Formato: (key, nome, target, comando, icona)
-ACTUATORS = []  # RIMOSSI 18/08/2026: i token ipotizzati (OPEN_F1/OPEN_2/OPEN_2F)
-# aprivano la PORTA anziché comandare F1/F2/Luce Scala/Attuatore 02.
-# Luce Scala e Attuatore 02 sono oggetti By-me (solo cloud, non SIP).
-# Ripristinare solo con i comandi reali ricavati dall'APK decifrata.
 
 # ─── Targa video (autoaccensione camera on-demand) ───────────────────────────
 # Default di `camera_target` quando l'opzione è vuota. È la targa che la camera,

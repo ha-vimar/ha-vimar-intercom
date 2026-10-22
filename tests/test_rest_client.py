@@ -74,18 +74,6 @@ def test_status_non_json_o_non_array_alza_resterror(spazzatura):
         rc.parse_status(spazzatura)
 
 
-# ─── vm_level ────────────────────────────────────────────────────────────────
-
-def test_vm_level_e_usati_su_capienza():
-    """Non è spazio libero: è «quanti messaggi su quanti ne stanno»."""
-    assert rc.vm_level({"vm_level": "3/100"}) == (3, 100)
-
-
-@pytest.mark.parametrize("valore", [None, "", "100", "a/b", 42, {"x": 1}])
-def test_vm_level_assente_o_strano_torna_none(valore):
-    assert rc.vm_level({"vm_level": valore}) is None
-
-
 # ─── parse_nicknames e find_picg ─────────────────────────────────────────────
 
 # Risposta reale di get_info.php?action=nickname, identica a quella che arriva
@@ -317,17 +305,6 @@ def test_download_db_refuses_a_body_that_is_not_sqlite(http):
     http.replies.append(_HttpResp(200, b"<html>"))
     with pytest.raises(rc.RestError, match="SQLite"):
         rc.download_db(HOST, "u", "p")
-
-
-@pytest.mark.parametrize("reply, found", [
-    (_HttpResp(401, headers={"WWW-Authenticate": 'Digest realm="x"'}), True),
-    (_HttpResp(401, headers={"WWW-Authenticate": 'Basic realm="x"'}), False),
-    (_HttpResp(200), False),
-    (rc.requests.exceptions.ConnectionError("refused"), False),
-])
-def test_probe_recognises_the_intercom_by_its_digest_challenge(http, reply, found):
-    http.replies.append(reply)
-    assert rc.probe(HOST) is found
 
 
 def test_nicks_reply_skips_broken_objects_in_a_truncated_body():

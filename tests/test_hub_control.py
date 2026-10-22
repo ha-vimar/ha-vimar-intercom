@@ -124,7 +124,7 @@ def test_stop_survives_a_failed_hang_up_and_broken_sockets(hub, monkeypatch):
 
 # ─── startup registration and model probe ────────────────────────────────────
 
-def _startup(monkeypatch, h, register, local_udp=False, profiles=None):
+def _startup(monkeypatch, h, register, local_udp=False):
     sent = []
 
     async def do_register():
@@ -136,18 +136,11 @@ def _startup(monkeypatch, h, register, local_udp=False, profiles=None):
         sent.append(body)
         return True, "200 OK"
 
-    async def connect_profiles():
-        if isinstance(profiles, Exception):
-            raise profiles
-        sent.append("connectProfiles")
-        return True, "200 OK"
-
     async def probe():
         sent.append("probe")
 
     monkeypatch.setattr(sip, "do_register", do_register)
     monkeypatch.setattr(sip, "do_system_message", do_system_message)
-    monkeypatch.setattr(sip, "do_connect_profiles", connect_profiles)
     monkeypatch.setattr(h, "_probe_model", probe)
     monkeypatch.setattr(R, "USE_LOCAL_UDP", local_udp)
     monkeypatch.setattr(R, "PICG_TARGET", "55002")
@@ -160,25 +153,16 @@ def _startup(monkeypatch, h, register, local_udp=False, profiles=None):
     return sent
 
 
-def test_startup_on_the_cloud_asks_the_status_and_connects_profiles(hub, monkeypatch, no_sleep):
-    sent = _startup(monkeypatch, hub, True)
-    assert sent == [hub_mod.C.GET_INIT_STATUS, "connectProfiles", "probe"]
+@pytest.mark.parametrize("local_udp", [False, True])
+def test_startup_asks_the_status_and_probes_the_model(hub, monkeypatch, no_sleep, local_udp):
+    sent = _startup(monkeypatch, hub, True, local_udp=local_udp)
+    assert sent == [hub_mod.C.GET_INIT_STATUS, "probe"]
     assert hub.stats["last_register_time"] is not None and hub._init_status_sent
-
-
-def test_startup_on_local_udp_skips_connect_profiles(hub, monkeypatch, no_sleep):
-    sent = _startup(monkeypatch, hub, True, local_udp=True)
-    assert "connectProfiles" not in sent and "probe" in sent
 
 
 def test_a_failed_startup_registration_is_counted(hub, monkeypatch, no_sleep):
     sent = _startup(monkeypatch, hub, False)
     assert sent == [] and hub.stats["register_failures"] == 1
-
-
-def test_a_connect_profiles_error_does_not_stop_the_startup(hub, monkeypatch, no_sleep, caplog):
-    sent = _startup(monkeypatch, hub, True, profiles=OSError("tls"))
-    assert "connectProfiles error" in caplog.text and "probe" in sent
 
 
 def test_a_startup_exception_is_logged(hub, monkeypatch, no_sleep, caplog):

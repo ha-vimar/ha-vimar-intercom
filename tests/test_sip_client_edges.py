@@ -82,16 +82,17 @@ def test_a_socket_that_cannot_tell_its_port_gives_the_configured_one(monkeypatch
     assert sip._my_port() == 5099
 
 
-def test_the_cloud_contact_carries_the_push_parameters_with_a_token(monkeypatch):
-    monkeypatch.setattr(R, "USE_LOCAL_UDP", False)
+@pytest.mark.parametrize("local_udp, uri", [
+    (True, "sip:7001@192.0.2.10:5061"),
+    (False, "sip:7001@192.0.2.10:5061;transport=tls"),
+])
+def test_the_contact_has_no_push_parameters(monkeypatch, local_udp, uri):
+    monkeypatch.setattr(R, "USE_LOCAL_UDP", local_udp)
     monkeypatch.setattr(R, "SIP_USER", "7001")
-    monkeypatch.setattr(R, "SIP_DOMAIN", "plant.example")
+    monkeypatch.setattr(R, "DEVICE_UUID", "uuid-1")
     monkeypatch.setattr(sip, "MY_IP", "192.0.2.10")
-    monkeypatch.setattr(C, "PN_TOKEN", "tok123")
-    contact = sip._contact_hdr()
-    assert "pn-tok=tok123" in contact and "domain-name=plant.example" in contact
-    assert contact.endswith("expires=5184000")
-    assert "pn-tok" not in sip._contact_hdr(include_pn=False)
+    monkeypatch.setattr(sip, "_my_port", lambda: 5061)
+    assert sip._contact_hdr() == f'<{uri}>;+sip.instance="<urn:uuid:uuid-1>";expires=3600'
 
 
 # ─── Challenges, TLS, SRV ─────────────────────────────────────────────────────
@@ -829,46 +830,6 @@ def test_a_broken_device_list_does_not_drop_the_request(monkeypatch, caplog):
     assert "Device inventory (peer) skipped" in caplog.text
 
 
-# ─── Push profile (cloud) ────────────────────────────────────────────────────
-
-def test_the_push_profile_needs_a_token(monkeypatch):
-    monkeypatch.setattr(C, "PN_TOKEN", "")
-    assert asyncio.run(sip.do_connect_profiles()) == (False, "No FCM token")
-
-
-@pytest.mark.parametrize("codes, expected", [
-    ([200], (True, "Profilo connesso")),
-    ([500], (False, "connectProfiles: 500")),
-    ([403, 200, 200], (True, "Profilo connesso")),
-    ([403, 200, 403], (False, "connectProfiles: 403")),
-])
-def test_the_push_profile_is_reconnected_after_a_403(monkeypatch, codes, expected):
-    requests = pytest.importorskip("requests")
-    posted = []
-
-    def _post(url, **kw):
-        posted.append(url.rsplit("/", 1)[1])
-        return types.SimpleNamespace(status_code=codes[len(posted) - 1])
-
-    monkeypatch.setattr(C, "PN_TOKEN", "tok")
-    monkeypatch.setattr(requests, "post", _post)
-    assert asyncio.run(sip.do_connect_profiles()) == expected
-    if codes[0] == 403:
-        assert posted == ["connectProfiles", "disconnectProfiles", "connectProfiles"]
-
-
-def test_a_push_profile_error_is_reported(monkeypatch):
-    requests = pytest.importorskip("requests")
-
-    def _post(url, **kw):
-        raise requests.ConnectionError("cloud down")
-
-    monkeypatch.setattr(C, "PN_TOKEN", "tok")
-    monkeypatch.setattr(requests, "post", _post)
-    ok, msg = asyncio.run(sip.do_connect_profiles())
-    assert not ok and "cloud down" in msg
-
-
 # ─── Readers ─────────────────────────────────────────────────────────────────
 
 async def _no_sleep(*a, **k):
@@ -1068,7 +1029,7 @@ def test_reconnect_over_udp_only_registers_again(monkeypatch):
     assert results == []
 
 
-def test_reconnect_over_tls_survives_a_failing_close_and_profile(monkeypatch):
+def test_reconnect_over_tls_survives_a_failing_close(monkeypatch):
     calls = []
 
     class _W:
@@ -1083,18 +1044,13 @@ def test_reconnect_over_tls_survives_a_failing_close_and_profile(monkeypatch):
         calls.append("register")
         return True
 
-    async def _profiles():
-        calls.append("profiles")
-        raise RuntimeError("cloud down")
-
     monkeypatch.setattr(R, "USE_LOCAL_UDP", False)
     monkeypatch.setattr(sip, "writer", _W())
     monkeypatch.setattr(sip, "connect", _connect)
     monkeypatch.setattr(sip, "do_register", _register)
-    monkeypatch.setattr(sip, "do_connect_profiles", _profiles)
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
     assert asyncio.run(sip._reconnect()) is True
-    assert calls == ["close", "connect", "register", "profiles"]
+    assert calls == ["close", "connect", "register"]
 
 
 def test_reconnect_gives_up_after_five_attempts(monkeypatch, caplog):
@@ -1242,17 +1198,13 @@ def test_reconnect_over_tls_without_a_writer_retries_a_failed_register(monkeypat
         calls.append("register")
         return results.pop(0)
 
-    async def _profiles():
-        calls.append("profiles")
-
     monkeypatch.setattr(R, "USE_LOCAL_UDP", False)
     monkeypatch.setattr(sip, "writer", None)
     monkeypatch.setattr(sip, "connect", _connect)
     monkeypatch.setattr(sip, "do_register", _register)
-    monkeypatch.setattr(sip, "do_connect_profiles", _profiles)
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
     assert asyncio.run(sip._reconnect()) is True
-    assert calls == ["connect", "register", "connect", "register", "profiles"]
+    assert calls == ["connect", "register", "connect", "register"]
 
 
 def test_a_short_grant_is_accepted_with_a_warning(monkeypatch, caplog):

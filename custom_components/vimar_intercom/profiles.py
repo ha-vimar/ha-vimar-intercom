@@ -38,9 +38,6 @@ class PlantProfile:
     plant_type: str
     label: str
     transport: str
-    #: ``None`` means "decide from the offer": always the right choice when
-    #: answering, and the only correct one on mixed plants.
-    media_encryption: bool | None
     verified: bool
 
     @property
@@ -48,10 +45,10 @@ class PlantProfile:
         return self.transport == TRANSPORT_LOCAL_UDP
 
 
-_DUE_FILI = PlantProfile("2F", "Due Fili Plus", TRANSPORT_LOCAL_UDP, False, True)
-_DUE_FILI_EVO = PlantProfile("2FV2", "Due Fili Plus EVO", TRANSPORT_CLOUD_TLS, True, True)
-_IP = PlantProfile("IP", "IP plant", TRANSPORT_LOCAL_UDP, None, False)
-_UNKNOWN = PlantProfile("", "Unknown plant", TRANSPORT_LOCAL_UDP, None, False)
+_DUE_FILI = PlantProfile("2F", "Due Fili Plus", TRANSPORT_LOCAL_UDP, True)
+_DUE_FILI_EVO = PlantProfile("2FV2", "Due Fili Plus EVO", TRANSPORT_CLOUD_TLS, True)
+_IP = PlantProfile("IP", "IP plant", TRANSPORT_LOCAL_UDP, False)
+_UNKNOWN = PlantProfile("", "Unknown plant", TRANSPORT_LOCAL_UDP, False)
 
 PROFILES: dict[str, PlantProfile] = {
     p.plant_type: p for p in (_DUE_FILI, _DUE_FILI_EVO, _IP)

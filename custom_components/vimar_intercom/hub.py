@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -1116,13 +1117,11 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         return await asyncio.shield(task)
 
     async def _door(self, target: str | None, command: str | None) -> tuple[bool, str, int | None]:
-        """Open door via SIP MESSAGE to targa (PE) address.
+        """Open a door with a SIP MESSAGE to the panel that owns its relay.
 
-        From Tab5S rubrica ACTUATOR_LIST:
-          55001 (targa master)  → OPEN_2F = Portone Esterno
-          55002 (targa interna) → OPEN_2F = Portone Interno
-        The targa forwards the command to its local relay.
-        No active call required.
+        The body is the explicit `command`, else OPEN_CURRENT for the calling
+        entrance (#186), else the phonebook's door actuator for that panel
+        (runtime.door_command_for), else OPEN_2F. No call needs to be up.
         """
         # Senza target: la targa che apre la porta (R.DOOR_TARGET, dalla
         # rubrica), non l'SGA — su un 2FV2 l'SGA risponde 200 e non apre.
@@ -1567,8 +1566,6 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         Riuscito solo con `ERRCODE: ERR_NONE` nella risposta: come l'app, una
         risposta senza ERRCODE, o nessuna risposta, è un fallimento.
         """
-        import json
-        import secrets
         msgid = secrets.token_hex(5)
         body = "SET_APT_PARAMS;" + json.dumps(
             {"MSGID": msgid, "PARAM": param, "VALUE": value}, separators=(",", ":"))
@@ -1642,8 +1639,6 @@ class VimarIntercomHub(PlantMessages, RingMedia):
     @staticmethod
     def _probe_outcome(ok: bool, msg: str) -> str:
         """Esito SIP di una sonda, nelle categorie della regola dei tre esiti."""
-        import re
-
         m = re.search(r"\b([1-6]\d\d)\b", msg or "")
         code = int(m.group(1)) if m else None
         if ok and code == 202:
@@ -1815,15 +1810,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
                 # Identificazione del modello: passiva (header dei messaggi in
                 # arrivo) + una sonda OPTIONS se non lo conosciamo ancora.
                 self._tasks.append(asyncio.create_task(self._probe_model()))
-            if ok and not R.USE_LOCAL_UDP:
-                # connectProfiles è solo per la modalità cloud (push notifications)
-                await asyncio.sleep(1)
-                try:
-                    ok2, msg2 = await sip.do_connect_profiles()
-                    _LOGGER.info("connectProfiles: ok=%s msg=%s", ok2, msg2)
-                except Exception as e:
-                    _LOGGER.error("connectProfiles error: %s", e)
-            elif not ok:
+            if not ok:
                 _LOGGER.error("SIP registration failed")
         except Exception as e:
             _LOGGER.error("Auto startup error: %s", e, exc_info=True)

@@ -112,7 +112,6 @@ class Rig:
         mp.setattr(away_tts, "_hass", None)
         mp.setattr(away_tts, "_cache", None)
         mp.setattr(C, "LOCAL_SIP_PORT", peer.port)
-        mp.setattr(C, "PN_TOKEN", "", raising=False)
         a, v = free_udp_ports(2)
         for mod in (C, media):
             mp.setattr(mod, "RTP_AUDIO_PORT", a)

@@ -30,63 +30,6 @@ async def async_setup_entry(
     ])
 
 
-class VimarSIPRegistrationSensor(BinarySensorEntity):
-    """Shows whether SIP registration is active."""
-
-    _attr_has_entity_name = True
-    _attr_translation_key = "sip_registered"
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_icon = "mdi:lan-connect"
-
-    def __init__(self, hub, entry_id: str) -> None:
-        self._hub = hub
-        self._attr_unique_id = f"{entry_id}_sip_registered"
-        self.entity_id = legacy_entity_id("binary_sensor", "intercom_sip")
-        self._attr_device_info = device_info(entry_id)
-
-    @property
-    def is_on(self) -> bool:
-        return self._hub.registered
-
-    async def async_added_to_hass(self) -> None:
-        self._hub.register_state_callback(self._on_state_change)
-
-    async def async_will_remove_from_hass(self) -> None:
-        self._hub.unregister_state_callback(self._on_state_change)
-
-    @callback
-    def _on_state_change(self) -> None:
-        self.async_write_ha_state()
-
-
-class VimarInCallSensor(BinarySensorEntity):
-    """Shows whether there is an active SIP call."""
-
-    _attr_has_entity_name = True
-    _attr_translation_key = "in_call"
-    _attr_icon = "mdi:phone-in-talk"
-
-    def __init__(self, hub, entry_id: str) -> None:
-        self._hub = hub
-        self._attr_unique_id = f"{entry_id}_in_call"
-        self.entity_id = legacy_entity_id("binary_sensor", "intercom_in_call")
-        self._attr_device_info = device_info(entry_id)
-
-    @property
-    def is_on(self) -> bool:
-        return self._hub.in_call
-
-    async def async_added_to_hass(self) -> None:
-        self._hub.register_state_callback(self._on_state_change)
-
-    async def async_will_remove_from_hass(self) -> None:
-        self._hub.unregister_state_callback(self._on_state_change)
-
-    @callback
-    def _on_state_change(self) -> None:
-        self.async_write_ha_state()
-
-
 class _VimarHubBinarySensor(BinarySensorEntity):
     """Base: binary sensor agganciato ai callback di stato dell'hub."""
 
@@ -109,6 +52,30 @@ class _VimarHubBinarySensor(BinarySensorEntity):
     @callback
     def _on_state_change(self) -> None:
         self.async_write_ha_state()
+
+
+class VimarSIPRegistrationSensor(_VimarHubBinarySensor):
+    """Shows whether SIP registration is active."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, hub, entry_id: str) -> None:
+        super().__init__(hub, entry_id, "sip_registered", "intercom_sip", "mdi:lan-connect")
+
+    @property
+    def is_on(self) -> bool:
+        return self._hub.registered
+
+
+class VimarInCallSensor(_VimarHubBinarySensor):
+    """Shows whether there is an active SIP call."""
+
+    def __init__(self, hub, entry_id: str) -> None:
+        super().__init__(hub, entry_id, "in_call", "intercom_in_call", "mdi:phone-in-talk")
+
+    @property
+    def is_on(self) -> bool:
+        return self._hub.in_call
 
 
 class VimarRingingSensor(_VimarHubBinarySensor):

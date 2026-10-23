@@ -33,7 +33,7 @@ SIP_DOMAIN:   str = ""   # dominio SIP attivo (locale o cloud, vedi configure)
 LOCAL_DOMAIN: str = ""   # dominio SIP locale del citofono (QR «domain»)
 CLOUD_DOMAIN: str = ""   # dominio SIP cloud Vimar (QR «cdomain»)
 SIP_HA1:      str = ""
-SIP_PROXY:    str = "ipvdes.vimar.cloud"   # cloud proxy (da QR cproxy)
+SIP_PROXY:    str = _const.DEFAULT_CLOUD_PROXY   # cloud proxy (da QR cproxy)
 LOCAL_PROXY:  str = ""                      # IP citofono locale
 PRODUCT_CODE: str = ""   # the QR's `pc`, the paired Tab (e.g. 40515)
 MAC_CITOFONO: str = ""
@@ -281,7 +281,7 @@ def configure(data: dict) -> None:
     SIP_PASSWORD = data.get("sip_password", "")
     SIP_DOMAIN   = data.get("sip_domain", "")
     SIP_HA1      = data.get("sip_ha1", "")
-    SIP_PROXY    = data.get("cloud_proxy", "ipvdes.vimar.cloud")
+    SIP_PROXY    = data.get("cloud_proxy", _const.DEFAULT_CLOUD_PROXY)
     LOCAL_PROXY  = data.get("local_proxy", "")
     PRODUCT_CODE = str(data.get("product_code") or "").strip()
     MAC_CITOFONO = data.get("mac", "")

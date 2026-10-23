@@ -166,7 +166,7 @@ def test_40515_il_dominio_locale_viene_dal_record_non_dal_qr(cf, monkeypatch):
         return True, "200"
 
     monkeypatch.setattr(cf, "_test_sip_registration", fake_test)
-    monkeypatch.setattr(cf, "_validate_ip", lambda ip: True)
+    monkeypatch.setattr(cf.discovery, "is_ip", lambda ip: True)
 
     async def set_uid(uid):
         pass

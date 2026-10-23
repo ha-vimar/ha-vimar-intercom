@@ -6,7 +6,6 @@ import base64
 import contextlib
 import logging
 import math
-import os
 import random
 import socket
 import struct
@@ -347,11 +346,7 @@ class RTPAudioProtocol(asyncio.DatagramProtocol):
                          "SRTP" if self.srtp_tx else "RTP", self.remote_addr, len(ulaw_payload))
 
     def send_stun(self):
-        if not self.transport or not self.remote_addr:
-            return
-        stun = struct.pack('!HHI', 0x0001, 0, 0x2112A442) + os.urandom(12)
-        self.transport.sendto(stun, self.remote_addr)
-        _LOGGER.debug("STUN Audio → %s", self.remote_addr)
+        _send_stun(self, "Audio")
 
 
 class RTPVideoProtocol(asyncio.DatagramProtocol):
@@ -927,11 +922,7 @@ class RTPVideoProtocol(asyncio.DatagramProtocol):
             pass
 
     def send_stun(self):
-        if not self.transport or not self.remote_addr:
-            return
-        stun = struct.pack('!HHI', 0x0001, 0, 0x2112A442) + os.urandom(12)
-        self.transport.sendto(stun, self.remote_addr)
-        _LOGGER.debug("STUN Video → %s", self.remote_addr)
+        _send_stun(self, "Video")
 
 
 # ─── State ──────────────────────────────────────────────────────────
@@ -1369,6 +1360,14 @@ async def send_pcm(pcm: bytes, alive) -> None:
 
 
 # ─── STUN keepalive ─────────────────────────────────────────────────
+
+def _send_stun(proto, label: str) -> None:
+    """A STUN binding request to the remote media address: it keeps the relay's path open."""
+    if not proto.transport or not proto.remote_addr:
+        return
+    proto.transport.sendto(rtcp.stun_binding_request(), proto.remote_addr)
+    _LOGGER.debug("STUN %s → %s", label, proto.remote_addr)
+
 
 async def _stun_keepalive():
     try:

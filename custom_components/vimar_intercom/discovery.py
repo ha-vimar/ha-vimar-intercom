@@ -32,7 +32,7 @@ TXT_MODEL = "dev"
 TXT_FIRMWARE = "fver"
 
 # Valori che non identificano un host raggiungibile: un `domain` così non è
-# utilizzabile come dominio SIP (stesso criterio di qr_decoder).
+# utilizzabile come dominio SIP. Li usa anche qr_decoder.
 _NON_ROUTABLE = frozenset({
     "", "127.0.0.1", "::1", "0.0.0.0", "localhost", "localhost.localdomain",
 })

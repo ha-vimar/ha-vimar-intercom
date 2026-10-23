@@ -6,6 +6,9 @@ import base64
 import hashlib
 import logging
 
+from .const import DEFAULT_CLOUD_PROXY
+from .discovery import _NON_ROUTABLE
+
 _LOGGER = logging.getLogger(__name__)
 
 # ─── Costanti chiavi payload (da QRComputationResult.java) ──────────────────
@@ -29,9 +32,7 @@ QR_PC       = "pc"         # Product code
 # stesso. Usarlo come dominio SIP di Home Assistant produce URI del tipo
 # «sip:<user>@127.0.0.1» che il proxy cloud rifiuta. In quei casi il dominio
 # buono è «cdomain».
-_NON_ROUTABLE_DOMAINS = frozenset({
-    "", "127.0.0.1", "::1", "0.0.0.0", "localhost", "localhost.localdomain",
-})
+_NON_ROUTABLE_DOMAINS = _NON_ROUTABLE
 
 
 def _is_routable(domain: str) -> bool:
@@ -145,7 +146,7 @@ def extract_sip_credentials(fields: dict[str, str]) -> dict[str, str]:
                 "QR: domain=%r non instradabile, uso cdomain=%r come dominio SIP",
                 local_domain, cloud_domain,
             )
-    cloud_proxy = fields.get(QR_CPROXY) or fields.get(QR_PROXY, "ipvdes.vimar.cloud")
+    cloud_proxy = fields.get(QR_CPROXY) or fields.get(QR_PROXY, DEFAULT_CLOUD_PROXY)
 
     # Pre-calcola HA1 per evitare di tenere la password in memoria durante auth
     sip_ha1 = hashlib.md5(

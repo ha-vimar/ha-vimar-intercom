@@ -287,11 +287,16 @@ class VimarIntercomHub(PlantMessages, RingMedia):
 
     def _touch(self):
         """Notifica le entità HA che le statistiche sono cambiate."""
-        for cb in list(self._state_callbacks):  # un callback può togliersi (select.py)
+        self._call_each(self._state_callbacks, "State")
+
+    @staticmethod
+    def _call_each(callbacks: list[Callable], label: str, *args) -> None:
+        """Call every callback: one that fails is logged and the others still run."""
+        for cb in list(callbacks):  # un callback può togliersi (select.py)
             try:
-                cb()
+                cb(*args)
             except Exception:
-                _LOGGER.exception("State callback error")
+                _LOGGER.exception("%s callback error", label)
 
     @property
     def calling(self) -> bool:
@@ -470,11 +475,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         """Evento doorbell → automazioni, e il webhook di inizio squillo."""
         if R.RING_WEBHOOK_URL:
             self._spawn(webhook.fire(R.RING_WEBHOOK_URL), "ring webhook")
-        for cb in self._ring_callbacks:
-            try:
-                cb()
-            except Exception:
-                _LOGGER.exception("Ring callback error")
+        self._call_each(self._ring_callbacks, "Ring")
 
     def register_video_end_callback(self, callback: Callable) -> Callable[[], None]:
         """Chiamata o squillo finiti: non arriva più video. Restituisce l'annullamento."""
@@ -482,11 +483,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         return lambda: self._video_end_callbacks.remove(callback)
 
     def _video_ended(self) -> None:
-        for cb in self._video_end_callbacks:
-            try:
-                cb()
-            except Exception:
-                _LOGGER.exception("Video callback error")
+        self._call_each(self._video_end_callbacks, "Video")
 
     def register_ring_callback(self, callback: Callable) -> None:
         self._ring_callbacks.append(callback)
@@ -514,11 +511,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
 
     def _fire_event(self, event_type: str, data: dict) -> None:
         """Propaga un evento in ingresso ai callback registrati (bus HA)."""
-        for cb in self._event_callbacks:
-            try:
-                cb(event_type, data)
-            except Exception:
-                _LOGGER.exception("Event callback error (%s)", event_type)
+        self._call_each(self._event_callbacks, f"Event ({event_type})", event_type, data)
 
     @property
     def detected_model(self) -> str:
@@ -531,11 +524,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
 
     def _on_model_detected(self, model: str, fw: str, ua: str, priority: int):
         """Chiamata da sip_client quando un peer SIP rivela il modello."""
-        for cb in self._model_callbacks:
-            try:
-                cb(model, fw, ua, priority)
-            except Exception:
-                _LOGGER.exception("Model callback error")
+        self._call_each(self._model_callbacks, "Model", model, fw, ua, priority)
 
     async def _probe_model(self):
         """Interroga gli interni con un OPTIONS finché qualcuno si identifica."""
@@ -984,17 +973,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         self._cancel_keyframe_loop()
         await media.stop_media()
         media.close_transports()
-        if sip.writer:
-            try:
-                sip.writer.close()
-            except Exception:
-                pass
-        if sip._udp_sock:
-            try:
-                sip._udp_sock.close()
-            except Exception:
-                pass
-        sip.reset_state()
+        sip.reset_state()  # closes the SIP writer and the UDP socket
         _LOGGER.info("Hub stopped")
 
     async def async_call(self, target: str | None = None) -> tuple[bool, str]:

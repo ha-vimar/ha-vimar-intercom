@@ -17,7 +17,18 @@ MANUFACTURER = "Vimar"
 MODEL        = "Vimar Elvox video intercom"
 
 # ─── SIP — valori di default per cloud (override da config entry) ─────────────
+# What the H.264 decoder prints when it conceals a lost packet: not a fault
+# (homekit_audio and av_stream both filter it).
+DECODER_CONCEALMENT = (
+    "error while decoding mb", "invalid level prefix", "concealing",
+    "left block unavailable", "top block unavailable", "cbp too large",
+    "negative number of zero coeffs", "out of range intra chroma",
+    "corrupt decoded frame", "ac-tex damaged", "dquant out of range",
+    "mb_type", "rtp: missed", "max delay reached", "no frame!",
+    "non-existing pps", "decode_slice_header error")
+
 SIP_PORT = 7042                          # porta TLS cloud
+DEFAULT_CLOUD_PROXY = "ipvdes.vimar.cloud"  # <cproxy> quando il QR non lo porta
 # SNI e Route non sono costanti: valgono <cproxy>, che arriva dal QR e sta nel
 # config entry (runtime.SIP_PROXY, default "ipvdes.vimar.cloud"). Vedi
 # sip_client._route_line() e la connect TLS.

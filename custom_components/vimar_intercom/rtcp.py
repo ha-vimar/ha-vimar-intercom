@@ -117,6 +117,11 @@ class RTCPProbe(asyncio.DatagramProtocol):
             self.transport = None
 
 
+def stun_binding_request() -> bytes:
+    """A STUN binding request (RFC 5389): no attributes, a random transaction id."""
+    return struct.pack("!HHI", 0x0001, 0, 0x2112A442) + os.urandom(12)
+
+
 def punch(probe: RTCPProbe | None, remote_ip: str, rtp_port: int) -> None:
     """Open the path to the remote RTCP port (RTP + 1) with a STUN binding request.
 
@@ -125,9 +130,8 @@ def punch(probe: RTCPProbe | None, remote_ip: str, rtp_port: int) -> None:
     """
     if not probe or not probe.transport:
         return
-    stun = struct.pack("!HHI", 0x0001, 0, 0x2112A442) + os.urandom(12)
     try:
-        probe.transport.sendto(stun, (remote_ip, rtp_port + 1))
+        probe.transport.sendto(stun_binding_request(), (remote_ip, rtp_port + 1))
         _LOGGER.debug("RTCP %s: path opened towards %s:%d", probe.label, remote_ip, rtp_port + 1)
     except OSError as e:
         _LOGGER.debug("RTCP %s: punch failed: %s", probe.label, e)

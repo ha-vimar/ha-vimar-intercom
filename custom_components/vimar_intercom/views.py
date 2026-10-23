@@ -222,38 +222,38 @@ class VimarAudioWSView(HomeAssistantView):
             await ws.send_str(json.dumps({"type": "error", "msg": "Integration not loaded"}))
             return
 
+        try:
+            await self._run_action(ws, hub, action, data)
+        except Exception as e:  # any failure of an action goes back to the client
+            await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+
+    async def _run_action(self, ws: web.WebSocketResponse, hub, action, data: dict) -> None:
         if action == "status":
             await ws.send_str(json.dumps(hub.state_message()))
 
         elif action == "call":
             target = data.get("target")  # optional: "55002" etc.
-            try:
-                ok, m = await hub.async_call(target=target)
-                if ok:
-                    await self._broadcast({"type": "call_started", "msg": m,
-                                           "target": target,
-                                           "registered": hub.registered, "in_call": True})
-                elif sip.in_call:
-                    # Already connected — tell the app immediately
-                    _LOGGER.info("Call request: already in call, notifying client")
-                    await self._broadcast({"type": "call_started", "msg": "Already in call",
-                                           "target": target,
-                                           "registered": hub.registered, "in_call": True})
-                elif sip.calling:
-                    # Call in progress (connecting) — SIP broadcast will notify when connected
-                    _LOGGER.info("Call request: already calling, will notify on connect")
-                else:
-                    await ws.send_str(json.dumps({"type": "error", "msg": m}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok, m = await hub.async_call(target=target)
+            if ok:
+                await self._broadcast({"type": "call_started", "msg": m,
+                                       "target": target,
+                                       "registered": hub.registered, "in_call": True})
+            elif sip.in_call:
+                # Already connected — tell the app immediately
+                _LOGGER.info("Call request: already in call, notifying client")
+                await self._broadcast({"type": "call_started", "msg": "Already in call",
+                                       "target": target,
+                                       "registered": hub.registered, "in_call": True})
+            elif sip.calling:
+                # Call in progress (connecting) — SIP broadcast will notify when connected
+                _LOGGER.info("Call request: already calling, will notify on connect")
+            else:
+                await ws.send_str(json.dumps({"type": "error", "msg": m}))
 
         elif action == "hangup":
-            try:
-                await hub.async_hangup()
-                await self._broadcast({"type": "call_ended", "msg": "Call ended",
-                                       "registered": hub.registered, "in_call": False})
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            await hub.async_hangup()
+            await self._broadcast({"type": "call_ended", "msg": "Call ended",
+                                   "registered": hub.registered, "in_call": False})
 
         elif action == "switch":
             # Atomic panel switch: BYE current + INVITE new (like official app)
@@ -261,104 +261,77 @@ class VimarAudioWSView(HomeAssistantView):
             if not target:
                 await ws.send_str(json.dumps({"type": "error", "msg": "No target"}))
             else:
-                try:
-                    with sip.silenced():  # il BYE del cambio targa non è una fine chiamata
-                        await hub.async_hangup()
-                    await asyncio.sleep(0.05)  # Minimal — just enough for BYE to send
-                    ok, m = await hub.async_call(target=target)
-                    if ok:
-                        await self._broadcast({"type": "call_started", "msg": m,
-                                               "target": target,
-                                               "registered": hub.registered, "in_call": True})
-                    else:
-                        await self._broadcast({"type": "call_ended", "msg": f"Switch failed: {m}",
-                                               "registered": hub.registered, "in_call": False})
-                except Exception as e:
-                    await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+                with sip.silenced():  # il BYE del cambio targa non è una fine chiamata
+                    await hub.async_hangup()
+                await asyncio.sleep(0.05)  # Minimal — just enough for BYE to send
+                ok, m = await hub.async_call(target=target)
+                if ok:
+                    await self._broadcast({"type": "call_started", "msg": m,
+                                           "target": target,
+                                           "registered": hub.registered, "in_call": True})
+                else:
+                    await self._broadcast({"type": "call_ended", "msg": f"Switch failed: {m}",
+                                           "registered": hub.registered, "in_call": False})
 
         elif action == "door":
             target = data.get("target")  # "55001" (esterno) or "55002" (interno)
             _LOGGER.info("Door action: target=%s", target)
-            try:
-                ok, result, code = await hub.async_door(target=target)
-                t = "door" if ok else "error"
-                await self._broadcast({"type": t, "msg": result, "code": code})
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok, result, code = await hub.async_door(target=target)
+            t = "door" if ok else "error"
+            await self._broadcast({"type": t, "msg": result, "code": code})
 
         elif action == "command":
             # Comando SIP MESSAGE arbitrario: {"action":"command","body":"...","target":"55001"}
-            try:
-                ok, m = await hub.async_send_command(
-                    body=data.get("body", ""),
-                    target=data.get("target"),  # default: SGA, in hub.async_send_command
-                    header_name=data.get("header_name", "Panda"),
-                    header_value=data.get("header_value", "command"),
-                )
-                await ws.send_str(json.dumps({"type": "command_result", "ok": ok, "msg": m,
-                                              "body": data.get("body")}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok, m = await hub.async_send_command(
+                body=data.get("body", ""),
+                target=data.get("target"),  # default: SGA, in hub.async_send_command
+                header_name=data.get("header_name", "Panda"),
+                header_value=data.get("header_value", "command"),
+            )
+            await ws.send_str(json.dumps({"type": "command_result", "ok": ok, "msg": m,
+                                          "body": data.get("body")}))
 
         elif action == "register":
-            try:
-                ok = await sip.do_register()
-                if ok:
-                    await self._broadcast({"type": "registered", "msg": "SIP registered",
-                                           "registered": True, "in_call": hub.in_call})
-                else:
-                    await ws.send_str(json.dumps({"type": "error", "msg": "Registration failed"}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok = await sip.do_register()
+            if ok:
+                await self._broadcast({"type": "registered", "msg": "SIP registered",
+                                       "registered": True, "in_call": hub.in_call})
+            else:
+                await ws.send_str(json.dumps({"type": "error", "msg": "Registration failed"}))
 
         elif action == "probe":
             target = data.get("target", "")
-            try:
-                ok, m = await hub.async_probe(target)
-                await ws.send_str(json.dumps({"type": "probe_result",
-                                               "target": target, "ok": ok, "msg": m}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok, m = await hub.async_probe(target)
+            await ws.send_str(json.dumps({"type": "probe_result",
+                                           "target": target, "ok": ok, "msg": m}))
 
         elif action == "scan":
             start = data.get("start", 55001)
             end = data.get("end", 55020)
-            try:
-                results = await hub.async_scan(start, end)
-                await ws.send_str(json.dumps({"type": "scan_result", "results": results}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            results = await hub.async_scan(start, end)
+            await ws.send_str(json.dumps({"type": "scan_result", "results": results}))
 
         elif action == "answer":
-            try:
-                ok, m = await hub.async_answer()
-                if ok:
-                    # Broadcast ring_ended FIRST so other devices stop ringing
-                    await self._broadcast({"type": "ring_ended", "msg": "Answered on another device",
-                                           "registered": hub.registered, "in_call": True})
-                    await self._broadcast({"type": "call_started", "msg": m,
-                                           "registered": hub.registered, "in_call": True})
-                else:
-                    await ws.send_str(json.dumps({"type": "error", "msg": m}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok, m = await hub.async_answer()
+            if ok:
+                # Broadcast ring_ended FIRST so other devices stop ringing
+                await self._broadcast({"type": "ring_ended", "msg": "Answered on another device",
+                                       "registered": hub.registered, "in_call": True})
+                await self._broadcast({"type": "call_started", "msg": m,
+                                       "registered": hub.registered, "in_call": True})
+            else:
+                await ws.send_str(json.dumps({"type": "error", "msg": m}))
 
         elif action == "decline":
-            try:
-                # il ring_ended lo manda già do_decline_incoming
-                ok, _ = await hub.async_decline()
-                if not ok:
-                    await ws.send_str(json.dumps({"type": "error", "msg": "No ringing call"}))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            # il ring_ended lo manda già do_decline_incoming
+            ok, _ = await hub.async_decline()
+            if not ok:
+                await ws.send_str(json.dumps({"type": "error", "msg": "No ringing call"}))
 
         elif action == "reconnect":
             _LOGGER.info("Force reconnect requested via WS")
-            try:
-                ok = await sip.reconnect()
-                await ws.send_str(json.dumps(hub.state_message(msg="Reconnected" if ok else "Reconnect failed")))
-            except Exception as e:
-                await ws.send_str(json.dumps({"type": "error", "msg": str(e)}))
+            ok = await sip.reconnect()
+            await ws.send_str(json.dumps(hub.state_message(msg="Reconnected" if ok else "Reconnect failed")))
 
 
 class VimarDebugView(HomeAssistantView):

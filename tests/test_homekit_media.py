@@ -138,6 +138,15 @@ def test_the_audio_tap_delivers_the_call_audio_to_its_port(monkeypatch):
     assert not os.path.exists(tap.sdp_path)
 
 
+def test_the_audio_tap_logs_what_it_filled_and_dropped(monkeypatch, caplog):
+    monkeypatch.setattr(media, "audio_proto", None)
+    tap = hkm.AudioTap()
+    tap.filled, tap.late_dropped = 3, 2
+    with caplog.at_level("DEBUG", logger=hkm.__name__):
+        tap.close()
+    assert "3 silence packets filled, 2 late packets dropped" in caplog.text
+
+
 def test_without_panel_audio_the_tap_sends_silence(monkeypatch):
     """The ring preview carries video only. Without audio coming in, the phone
     sends nothing when Talk is pressed, so answer-on-Talk never fired."""

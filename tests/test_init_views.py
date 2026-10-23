@@ -221,6 +221,21 @@ def test_an_action_after_the_integration_went_away_says_so(views):
     assert json.loads(ws.sent[0]) == {"type": "error", "msg": "Integration not loaded"}
 
 
+def test_a_failing_status_is_an_error_not_a_dropped_connection(views):
+    # Every action answers a failure with an error message; status used to
+    # let it through, and the socket loop dropped the client.
+    hub = ViewHub()
+
+    def boom(**_kw):
+        raise RuntimeError("no state")
+
+    hub.state_message = boom
+    ws = views.web.WebSocketResponse()
+    view = views.VimarAudioWSView(_hass(hub))
+    asyncio.run(view._handle_text(ws, json.dumps({"action": "status"}), True))
+    assert json.loads(ws.sent[0]) == {"type": "error", "msg": "no state"}
+
+
 def test_status_reports_registration_and_call(views, monkeypatch):
     hub = ViewHub()
     hub.in_call = True

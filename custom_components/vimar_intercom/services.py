@@ -24,6 +24,9 @@ SERVICE_OPEN_DOOR = "open_door"
 SERVICE_FETCH_LOCAL = "fetch_local"
 SERVICE_SIMULATE_RING = "simulate_ring"
 SERVICE_FIND_SGA = "find_sga"
+# All of them, for the unload: a new service goes here and in _register_services.
+SERVICES = (SERVICE_SEND_COMMAND, SERVICE_CALL, SERVICE_ANSWER, SERVICE_DECLINE, SERVICE_HANGUP,
+            SERVICE_OPEN_DOOR, SERVICE_FETCH_LOCAL, SERVICE_SIMULATE_RING, SERVICE_FIND_SGA)
 
 
 def _sip_id(value) -> str:
@@ -74,6 +77,11 @@ OPEN_DOOR_SCHEMA = vol.Schema({
     vol.Optional("command"): vol.All(cv.string, vol.Match(r"^OPEN(_[A-Z0-9_]{1,16})?\Z")),
 })
 
+
+
+def _unregister_services(hass: HomeAssistant) -> None:
+    for service in SERVICES:
+        hass.services.async_remove(DOMAIN, service)
 
 
 def _register_services(hass: HomeAssistant) -> None:

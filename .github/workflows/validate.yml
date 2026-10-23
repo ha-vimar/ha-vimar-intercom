@@ -1,7 +1,9 @@
 name: Validate
 
 on:
+  # Branches are checked through their PR; a push of its own only on main.
   push:
+    branches: [main]
   pull_request:
   merge_group:
   schedule:
@@ -19,14 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: home-assistant/actions/hassfest@master
+      - uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6  # master, 17/10/2026
 
   hacs:
     name: HACS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: hacs/action@main
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa  # main, 08/06/2026
         with:
           category: integration
 
@@ -38,9 +40,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      # Pinned so that a new ruff release cannot turn the CI red on its own;
-      # bump it on purpose together with the fixes it asks for.
-      - run: pip install ruff==0.16.10
+      # Pinned in requirements-dev.txt, so the CI and /check run the same ruff:
+      # a new release cannot turn the CI red on its own.
+      - run: pip install "$(grep '^ruff==' requirements-dev.txt)"
       - run: ruff check .
 
   tests:
@@ -55,6 +57,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       # I test girano senza Home Assistant installato: conftest.py fornisce gli
       # stub. I test marcati `live` (che richiedono il citofono in rete) sono
@@ -75,6 +79,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pip install -r requirements-dev.txt aiohttp playwright
       - run: python -m playwright install --with-deps chromium

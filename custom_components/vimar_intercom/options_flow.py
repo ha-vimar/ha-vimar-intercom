@@ -16,7 +16,7 @@ from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
-from . import away_config, cloud_phonebook, rest_client, rubrica_import, runtime, validate
+from . import away_config, cloud_phonebook, discovery, rest_client, rubrica_import, runtime, validate
 from .config_flow import (
     DEFAULT_LOCAL_UDP_PORT,
     KEY_ACTUATORS,
@@ -49,7 +49,6 @@ from .config_flow import (
     KEY_VIEW_KA,
     KEY_VOICE_ANSWER,
     _test_sip_registration,
-    _validate_ip,
 )
 from .const import (
     AWAY_TEXT_MAX,
@@ -92,6 +91,20 @@ KEY_AWAY_UPLOAD = "away_message_upload"  # solo nel form: non si salva nelle opz
 
 # Icone ammesse per gli attuatori dinamici (vedi tools/parse_rubrica.py)
 ALLOWED_ACTUATOR_ICONS = ("door", "light", "switch")
+
+
+def _parse_via_temp_file(fill, gid: str) -> dict:
+    """rubrica_import reads a file: `fill(path)` writes one, removed afterwards. Blocking."""
+    fd, path = tempfile.mkstemp(suffix=".db", prefix="vimar_rubrica_")
+    os.close(fd)
+    try:
+        fill(path)
+        return rubrica_import.parse_rubrica_file(path, gid)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:  # pragma: no cover — file già rimosso
+            pass
 
 
 class ActuatorsError(ValueError):
@@ -373,7 +386,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     title="", data={**self._entry.options, KEY_INTERNAL_PANEL_TARGET: target})
             errors[KEY_INTERNAL_PANEL_TARGET] = "invalid_target"
         else:
-            hub = (self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}).get("hub")
+            hub = self._hub()
             nicks = (hub.stats.get("nicknames") or []) if hub else []
             picg = str(current.get(KEY_PICG_TARGET) or PICG_TARGET).strip()
             has_picg = any(str(n.get("role") or "").upper() == rest_client.ROLE_PICG
@@ -614,7 +627,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             or use_local_udp  != current.get(KEY_USE_LOCAL_UDP, True)
             or local_udp_port != current.get(KEY_LOCAL_UDP_PORT, DEFAULT_LOCAL_UDP_PORT)
         )
-        if not _validate_ip(local_proxy):
+        if not discovery.is_ip(local_proxy):
             errors["local_proxy"] = "invalid_ip"
         elif use_local_udp and sip_changed:
             ok, msg = await _test_sip_registration(
@@ -638,10 +651,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # The test's unregister may have taken the live binding
                 # with it: register again now, whether or not the form is
                 # saved (saving reloads and registers anyway).
-                entry_data = getattr(self.hass, "data", {}).get(DOMAIN, {}).get(
-                    getattr(self._entry, "entry_id", None), {})
-                hub = entry_data.get("hub") if isinstance(entry_data, dict) else None
-                if hub is not None:
+                if (hub := self._hub()) is not None:
                     self.hass.async_create_background_task(
                         hub.async_register_now(), "vimar_intercom re-register")
 
@@ -746,18 +756,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             def _fetch() -> tuple[dict, str | None]:
                 """Scarica, legge, ripulisce. Tutto bloccante, quindi executor."""
-                fd, path = tempfile.mkstemp(suffix=".db", prefix="vimar_rubrica_")
-                os.close(fd)
-                try:
-                    rest_client.download_db(
-                        host, sip_user, sip_password, rest_client.DB_RUBRICA, dest=path
-                    )
-                    parsed = rubrica_import.parse_rubrica_file(path, gid)
-                finally:
-                    try:
-                        os.unlink(path)
-                    except OSError:  # pragma: no cover — file già rimosso
-                        pass
+                parsed = _parse_via_temp_file(
+                    lambda path: rest_client.download_db(
+                        host, sip_user, sip_password, rest_client.DB_RUBRICA, dest=path),
+                    gid)
 
                 # I nickname sono un di più: se non arrivano, l'import della
                 # rubrica resta valido e il PICG rimane quello configurato.
@@ -783,15 +785,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors["base"] = "rubrica_import_failed"
                 self._rubrica_error = str(exc)
             else:
-                if not result["actuators"]:
-                    errors["base"] = "rubrica_no_actuators"
-                    self._rubrica_error, self._rubrica_gid = "", gid
-                else:
-                    self._imported = result
-                    self._imported_gid = gid
-                    self._picg_from_rest = picg
-                    self._phonebook_source = "Tab"
-                    return await self.async_step_import_confirm()
+                if (step := await self._accept_import(errors, "base", result, gid, picg, "Tab")):
+                    return step
 
         return self.async_show_form(
             step_id="fetch_rubrica",
@@ -810,13 +805,30 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             },
         )
 
+    def _hub(self):
+        """This entry's hub, or None while the integration is not loaded."""
+        entry_data = getattr(self.hass, "data", {}).get(DOMAIN, {}).get(
+            getattr(self._entry, "entry_id", None))
+        return entry_data.get("hub") if isinstance(entry_data, dict) else None
+
+    async def _accept_import(self, errors: dict, field: str, result: dict, gid: str,
+                             picg: str | None, source: str) -> FlowResult | None:
+        """On to the confirmation with what the phonebook gave, or an error when it has no actuator."""
+        if not result["actuators"]:
+            errors[field] = "rubrica_no_actuators"
+            self._rubrica_error, self._rubrica_gid = "", gid
+            return None
+        self._imported, self._imported_gid = result, gid
+        self._picg_from_rest, self._phonebook_source = picg, source
+        return await self.async_step_import_confirm()
+
     async def _cloud_token(self) -> tuple[str | None, str | None, str | None, bool]:
         """Read the token, phonebook version, GID and whether a fresh reply arrived.
 
         Se il token manca si richiede lo stato una volta e si aspetta qualche secondo:
         la risposta arriva come MESSAGE separato. Il token non si salva da nessuna parte.
         """
-        hub = (self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}).get("hub")
+        hub = self._hub()
         if hub is None:
             return None, None, None, False
 
@@ -868,17 +880,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             def _fetch() -> dict:
                 data = cloud_phonebook.download(cdomain, cproxy, token, ver)
-                fd, path = tempfile.mkstemp(suffix=".db", prefix="vimar_rubrica_")
-                os.close(fd)
-                try:
-                    with open(path, "wb") as fh:
-                        fh.write(data)
-                    return rubrica_import.parse_rubrica_file(path, gid)
-                finally:
-                    try:
-                        os.unlink(path)
-                    except OSError:  # pragma: no cover
-                        pass
+                return _parse_via_temp_file(lambda path: Path(path).write_bytes(data), gid)
 
             try:
                 result = await self.hass.async_add_executor_job(_fetch)
@@ -890,15 +892,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors["base"] = "cloud_failed"
                 self._rubrica_error = str(exc)
             else:
-                if not result["actuators"]:
-                    errors["base"] = "rubrica_no_actuators"
-                    self._rubrica_error, self._rubrica_gid = "", gid
-                else:
-                    self._imported = result
-                    self._imported_gid = gid
-                    self._picg_from_rest = None
-                    self._phonebook_source = "Vimar cloud"
-                    return await self.async_step_import_confirm()
+                if (step := await self._accept_import(errors, "base", result, gid, None, "Vimar cloud")):
+                    return step
 
         return self.async_show_form(
             step_id="fetch_rubrica_cloud",
@@ -942,15 +937,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors["rubrica_file"] = "rubrica_import_failed"
                 self._rubrica_error = str(exc)
             else:
-                if not result["actuators"]:
-                    errors["rubrica_file"] = "rubrica_no_actuators"
-                    self._rubrica_error, self._rubrica_gid = "", gid
-                else:
-                    self._imported = result
-                    self._imported_gid = gid
-                    self._picg_from_rest = None
-                    self._phonebook_source = "rubrica.db"
-                    return await self.async_step_import_confirm()
+                if (step := await self._accept_import(errors, "rubrica_file", result, gid, None, "rubrica.db")):
+                    return step
 
         return self.async_show_form(
             step_id="import_rubrica",

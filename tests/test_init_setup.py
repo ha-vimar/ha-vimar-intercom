@@ -250,12 +250,9 @@ def test_setup_wires_the_hub_views_services_card_and_platforms(init, tmp_path):
     assert os.path.isfile(os.path.join(www, init.CARD_URL.rpartition("/")[2]))
     assert init.js_urls == [f"{init.CARD_DIR}/{v}/vimar-intercom-card.js"]
     names = {n for _, n in hass.services.handlers}
-    assert names == {init.SERVICE_SEND_COMMAND, init.SERVICE_CALL, init.SERVICE_ANSWER,
-                     init.SERVICE_DECLINE, init.SERVICE_HANGUP, init.SERVICE_OPEN_DOOR,
-                     init.SERVICE_FETCH_LOCAL, init.SERVICE_SIMULATE_RING, init.SERVICE_FIND_SGA}
+    assert names == set(init.SERVICES)  # what the unload removes
     # Anything that sends arbitrary messages or carries the SIP password is admin only.
-    assert hass.services.admin == {init.SERVICE_SEND_COMMAND, init.SERVICE_FETCH_LOCAL,
-                                   init.SERVICE_SIMULATE_RING, init.SERVICE_FIND_SGA}
+    assert hass.services.admin == {"send_command", "fetch_local", "simulate_ring", "find_sga"}
 
 
 def test_a_second_setup_registers_the_card_and_services_once(init, tmp_path):

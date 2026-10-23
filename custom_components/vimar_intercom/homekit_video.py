@@ -33,12 +33,11 @@ import struct
 import time
 from collections import OrderedDict
 
-from .homekit_audio import _Datagrams, is_rtcp
+from .homekit_audio import _MASK32, _Datagrams, is_rtcp
 from .srtp import SRTCPContext, SRTPContext
 
 _LOGGER = logging.getLogger(__name__)
 
-_MASK32 = 0xFFFFFFFF
 _NTP_EPOCH = 2208988800           # 1900 → 1970
 _VIDEO_CLOCK = 90000
 # One panel frame (15 per second) on the 90 kHz clock.

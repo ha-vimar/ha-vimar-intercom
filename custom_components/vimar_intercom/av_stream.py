@@ -11,7 +11,7 @@ import subprocess
 
 from . import homekit_audio
 from . import media_handler as media
-from .const import FFMPEG_AV_AUDIO_PORT, FFMPEG_AV_VIDEO_PORT
+from .const import DECODER_CONCEALMENT, FFMPEG_AV_AUDIO_PORT, FFMPEG_AV_VIDEO_PORT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,13 +24,8 @@ _av_stopping = False
 # ffmpeg lines that are not faults: the decoder concealing a packet the relay
 # lost, the jitter buffer giving up on a late one, and the input timing out
 # when the call ends and RTP stops arriving.
-_HARMLESS_STDERR = (
-    "error while decoding mb", "invalid level prefix", "concealing",
-    "left block unavailable", "top block unavailable", "cbp too large",
-    "negative number of zero coeffs", "out of range intra chroma",
-    "corrupt decoded frame", "ac-tex damaged", "dquant out of range",
-    "mb_type", "rtp: missed", "max delay reached", "no frame!",
-    "non-existing pps", "decode_slice_header error", "dropping old packet",
+_HARMLESS_STDERR = DECODER_CONCEALMENT + (
+    "dropping old packet",
     "error during demuxing: operation timed out", "no filtered frames",
     "immediate exit requested", "poorly interleaved",
 )

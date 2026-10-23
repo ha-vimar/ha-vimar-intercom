@@ -20,13 +20,12 @@ import os
 import random
 import socket
 import struct
-import tempfile
 import time
 
 from . import frame_grabber, ring_log
 from . import media_handler as media
 from . import runtime as R
-from .homekit_audio import free_udp_port
+from .homekit_audio import _MASK32, _signed32, free_udp_port, write_sdp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -117,12 +116,7 @@ def _gop_in_sequence_order() -> list[bytes]:
     The cache fills in the order packets ARRIVE, ahead of the reorder buffer.
     Replayed as it is, the phone's decoder takes the first packet as its
     reference and drops the ones that belong before it: an incomplete IDR,
-    and a black picture until the next keyframe (2.8 s measured). The order
-    is rebuilt around the first packet, with the distance taken as a signed
-    16-bit number, so a sequence wrap inside the group does not upset it.
-
-    Our own helper: media_handler has no sorted accessor for its cache on this
-    branch, so this one reads ``_gop`` directly.
+    and a black picture until the next keyframe (2.8 s measured).
 
     Empty when the protocol has had no packet since the call began: the
     protocol lives as long as the hub, and the end of a call resets its
@@ -132,16 +126,7 @@ def _gop_in_sequence_order() -> list[bytes]:
     vp = media.video_proto
     if not vp or not vp.pkt_count:
         return []
-    packets = [p for p in (vp._gop or ()) if len(p) >= 12]
-    if len(packets) < 2:
-        return packets
-    base = struct.unpack_from("!H", packets[0], 2)[0]
-
-    def distance(pkt: bytes) -> int:
-        delta = (struct.unpack_from("!H", pkt, 2)[0] - base) & 0xFFFF
-        return delta - 0x10000 if delta >= 0x8000 else delta
-
-    return sorted(packets, key=distance)
+    return vp.gop_in_sequence_order()
 
 
 def gop_has_keyframe() -> bool:
@@ -224,14 +209,8 @@ def last_frame() -> bytes | None:
 
 # ─── audio ───────────────────────────────────────────────────────────────────
 
-_MASK32 = 0xFFFFFFFF
 _PCMU_RATE = 8000
 _SLOT = 0.02            # one PCMU packet, 160 samples
-
-
-def _signed32(value: int) -> int:
-    value &= _MASK32
-    return value - (1 << 32) if value & 0x80000000 else value
 
 
 class AudioTap:
@@ -263,12 +242,11 @@ class AudioTap:
 
     def __init__(self) -> None:
         self.port = free_udp_port()
-        fd, self.sdp_path = tempfile.mkstemp(prefix="vimar_intercom_homekit_",
-                                             suffix=".sdp")
-        with os.fdopen(fd, "w") as f:
-            f.write("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=Vimar\r\n"
-                    "c=IN IP4 127.0.0.1\r\nt=0 0\r\n"
-                    f"m=audio {self.port} RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n")
+        self.sdp_path = write_sdp(
+            "vimar_intercom_homekit_",
+            "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=Vimar\r\n"
+            "c=IN IP4 127.0.0.1\r\nt=0 0\r\n"
+            f"m=audio {self.port} RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n")
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._dest = ("127.0.0.1", self.port)
         self._attached = False
@@ -375,6 +353,9 @@ class AudioTap:
             media.audio_proto.rtp_sinks.remove(self._send)
         self._attached = False
         self._sock.close()
+        # What the relay cost this view: silence put in for lost audio, late packets dropped.
+        _LOGGER.debug("HomeKit audio: %d silence packets filled, %d late packets dropped",
+                      self.filled, self.late_dropped)
         try:
             os.unlink(self.sdp_path)
         except OSError:

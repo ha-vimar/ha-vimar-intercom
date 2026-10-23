@@ -3,6 +3,8 @@ ffmpeg, the hub and Home Assistant's own objects. Moved out of tests/test_homeki
 import asyncio
 import time
 
+from custom_components.vimar_intercom.media_handler import RTPVideoProtocol
+
 SPS = b"\x67\x42\xc0\x1f\x8d\x68\x14\x1f\x90"
 PPS = b"\x68\xee\x01\x44\x44\x80"
 
@@ -254,6 +256,8 @@ class SetupHub:
 
 
 class FakeVideoProto:
+    gop_in_sequence_order = RTPVideoProtocol.gop_in_sequence_order
+
     def __init__(self, gop, ps=(SPS, PPS)):
         self._gop = gop
         self._ps = ps

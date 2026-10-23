@@ -25,7 +25,6 @@ import asyncio
 import base64
 import bisect
 import logging
-import os
 import socket
 import struct
 import time
@@ -34,6 +33,7 @@ from collections import OrderedDict
 from .homekit_audio import (
     LOOPBACK_INPUT,
     _Datagrams,
+    _unlink,
     ffmpeg_binary,
     free_udp_port,
     is_rtcp,
@@ -413,10 +413,3 @@ class Transcoder:
             return ""
         return (f", frame delay median {d[len(d) // 2] * 1000:.0f} ms"
                 f" (p90 {d[int(len(d) * 0.9)] * 1000:.0f} ms, {len(d)} frames)")
-
-
-def _unlink(path: str) -> None:
-    try:
-        os.unlink(path)
-    except OSError:
-        pass

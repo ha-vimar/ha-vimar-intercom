@@ -3,7 +3,9 @@
 Mixed into VimarIntercomHub: the handlers use the hub's stats, events and probe waiters.
 """
 
+import json
 import logging
+import re
 
 from . import const as C
 from . import plant_state as S
@@ -128,6 +130,18 @@ class PlantMessages:
             return None
         return parts[prefix_parts].strip()
 
+    def _json_dict(self, raw: str, label: str) -> dict | None:
+        """The JSON object after the first ';', or None (logged at DEBUG when it does not parse)."""
+        payload = self._split_json_payload(raw, 1)
+        if not payload:
+            return None
+        try:
+            j = json.loads(payload)
+        except (ValueError, RecursionError):
+            _LOGGER.debug("%s non parsabile: %r", label, payload[:120])
+            return None
+        return j if isinstance(j, dict) else None
+
     def _parse_init_status_reply(self, raw: str) -> None:
         """Parsa GET_INIT_STATUS_REPLY;[{PARAM,VALUE}] in modo generico e robusto.
 
@@ -135,9 +149,6 @@ class PlantMessages:
         quindi il JSON può essere incompleto → usiamo un fallback a regex sui
         segmenti {PARAM..VALUE} presenti, così estraiamo tutto ciò che c'è.
         """
-        import json
-        import re
-
         payload = self._split_json_payload(raw, 1) or ""
         pairs: dict[str, str] = {}
         try:
@@ -215,35 +226,26 @@ class PlantMessages:
             st["apt_names"] = [str(n) for n in pairs["apt_names"]]
 
     def _handle_apt_params_changed(self, raw: str) -> None:
-        import json
-        try:
-            j = json.loads(self._split_json_payload(raw, 1) or "")
-        except ValueError:
-            _LOGGER.debug("APT_PARAMS_CHANGED non parsabile: %r", raw[:120])
-            return
-        if isinstance(j, dict) and "PARAM" in j:
+        j = self._json_dict(raw, "APT_PARAMS_CHANGED")
+        if j is not None and "PARAM" in j:
             self._apply_apt_params({str(j["PARAM"]): j.get("VALUE")})
             _LOGGER.info("Parametro dell'appartamento cambiato: %s=%s", j["PARAM"], j.get("VALUE"))
 
     def _handle_apt_params_reply(self, raw: str) -> None:
-        import json
-        try:
-            j = json.loads(self._split_json_payload(raw, 1) or "")
-        except ValueError:
-            j = None
-        if not isinstance(j, dict):
-            _LOGGER.debug("SET_APT_PARAMS_REPLY non parsabile: %r", raw[:120])
+        j = self._json_dict(raw, "SET_APT_PARAMS_REPLY")
+        if j is None:
             return
         fut = self._apt_param_waiters.pop(str(j.get("MSGID")), None)
         if fut and not fut.done():
             fut.set_result(j.get("ERRCODE"))
 
-    def _update_rubrica_ver(self, new_ver, gid: str | None = None) -> None:
-        """Aggiorna rubrica_ver; se CAMBIA (dopo il primo) emette phonebook_changed."""
+    def _update_rubrica_ver(self, new_ver, gid: str | None = None, *, first_counts: bool = False) -> None:
+        """Aggiorna rubrica_ver; se CAMBIA emette phonebook_changed. Il primo valore
+        conta come cambio solo con `first_counts` (NEW_PHONEBOOK è un cambio per definizione)."""
         new_ver = None if new_ver is None else str(new_ver)
         old = self.stats.get("rubrica_ver")
         self.stats["rubrica_ver"] = new_ver
-        if old is not None and new_ver is not None and new_ver != old:
+        if new_ver is not None and new_ver != old and (old is not None or first_counts):
             _LOGGER.info("Rubrica cambiata: %s → %s", old, new_ver)
             self._fire_event(
                 C.EVENT_PHONEBOOK_CHANGED,
@@ -251,17 +253,10 @@ class PlantMessages:
             )
 
     def _handle_missed_call(self, raw: str) -> None:
-        import json
         data = {"sip_id": None, "ts": None}
-        payload = self._split_json_payload(raw, 1)
-        if payload:
-            try:
-                j = json.loads(payload)
-                if isinstance(j, dict):
-                    data["sip_id"] = j.get("SIP_ID") or j.get("sip_id")
-                    data["ts"] = j.get("TS") or j.get("ts")
-            except Exception:
-                _LOGGER.debug("MISSED_CALL payload non-JSON: %r", payload[:120])
+        if (j := self._json_dict(raw, "MISSED_CALL")) is not None:
+            data["sip_id"] = j.get("SIP_ID") or j.get("sip_id")
+            data["ts"] = j.get("TS") or j.get("ts")
         data["name"] = sip_id_name(str(data["sip_id"])) if data["sip_id"] is not None else None
         self.stats["last_missed_call"] = data
         self.stats["missed_call_count"] += 1
@@ -282,42 +277,28 @@ class PlantMessages:
         )
 
     def _handle_fuoriporta(self, raw: str) -> None:
-        import json
         data = {"sip_id": None, "msg": None}
-        payload = self._split_json_payload(raw, 1)
-        if payload:
-            try:
-                j = json.loads(payload)
-                if isinstance(j, dict):
-                    data["sip_id"] = j.get("SIP_ID") or j.get("sip_id")
-                    data["msg"] = j.get("MSG") or j.get("msg")
-            except Exception:
-                _LOGGER.debug("FP payload non-JSON: %r", payload[:120])
+        if (j := self._json_dict(raw, "FP")) is not None:
+            data["sip_id"] = j.get("SIP_ID") or j.get("sip_id")
+            data["msg"] = j.get("MSG") or j.get("msg")
         self.stats["last_fuoriporta"] = data
         _LOGGER.info("Fuoriporta: %s", data)
         self._fire_event(C.EVENT_FUORIPORTA, data)
 
     def _handle_call_info(self, raw: str) -> None:
-        import json
         data = {"sip_id": None, "reason": None, "media_type": None, "video_src": None}
-        payload = self._split_json_payload(raw, 1)
-        if payload:
-            try:
-                j = json.loads(payload)
-                if isinstance(j, dict):
-                    # `is not None`, non `or`: 0 è un valore significativo in tre
-                    # campi su quattro — MEDIA_TYPE 0 = audio, REASON 0 = rifiutata,
-                    # VIDEO_SRC 0 = sorgente non commutabile. Con `or` fino alla
-                    # 1.0.6 diventavano None (MsgCallInfoReceiver.java dell'app).
-                    def _pick(upper: str, lower: str):
-                        value = j.get(upper)
-                        return j.get(lower) if value is None else value
-                    data["sip_id"] = _pick("SIP_ID", "sip_id")
-                    data["reason"] = _pick("REASON", "reason")
-                    data["media_type"] = _pick("MEDIA_TYPE", "media_type")
-                    data["video_src"] = _pick("VIDEO_SRC", "video_src")
-            except Exception:
-                _LOGGER.debug("CALL_INFO payload non-JSON: %r", payload[:120])
+        if (j := self._json_dict(raw, "CALL_INFO")) is not None:
+            # `is not None`, non `or`: 0 è un valore significativo in tre
+            # campi su quattro — MEDIA_TYPE 0 = audio, REASON 0 = rifiutata,
+            # VIDEO_SRC 0 = sorgente non commutabile. Con `or` fino alla
+            # 1.0.6 diventavano None (MsgCallInfoReceiver.java dell'app).
+            def _pick(upper: str, lower: str):
+                value = j.get(upper)
+                return j.get(lower) if value is None else value
+            data["sip_id"] = _pick("SIP_ID", "sip_id")
+            data["reason"] = _pick("REASON", "reason")
+            data["media_type"] = _pick("MEDIA_TYPE", "media_type")
+            data["video_src"] = _pick("VIDEO_SRC", "video_src")
         self.stats["last_call_info"] = data
         _LOGGER.info("Call info: %s", data)
         self._fire_event(C.EVENT_CALL_INFO, data)
@@ -337,12 +318,7 @@ class PlantMessages:
         # Aggiorna rubrica_ver ed emette phonebook_changed (anche se primo valore,
         # NEW_PHONEBOOK è per definizione un cambio → forziamo l'evento).
         if ver is not None:
-            old = self.stats.get("rubrica_ver")
-            self.stats["rubrica_ver"] = str(ver)
-            if old != str(ver):
-                self._fire_event(
-                    C.EVENT_PHONEBOOK_CHANGED, {"gid": gid or R.SIP_USER, "rubrica_ver": str(ver)}
-                )
+            self._update_rubrica_ver(ver, gid, first_counts=True)
         else:
             self._fire_event(
                 C.EVENT_PHONEBOOK_CHANGED, {"gid": gid or R.SIP_USER, "rubrica_ver": None}

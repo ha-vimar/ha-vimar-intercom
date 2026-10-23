@@ -18,6 +18,7 @@ import time
 from collections import deque
 
 from . import media_handler as media
+from .const import DECODER_CONCEALMENT
 from .srtp import SRTCPContext, SRTPContext
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,8 +47,11 @@ LOOPBACK_INPUT = ("-localaddr", "127.0.0.1")
 # ─── RTP helpers ────────────────────────────────────────────────────
 
 
+_MASK32 = 0xFFFFFFFF
+
+
 def _signed32(value: int) -> int:
-    value &= 0xFFFFFFFF
+    value &= _MASK32
     return value - (1 << 32) if value & 0x80000000 else value
 
 
@@ -509,14 +513,6 @@ def _unlink_when_written(written: asyncio.Future) -> None:
         return
     asyncio.get_running_loop().run_in_executor(None, _unlink, written.result())
 
-
-# What the H.264 decoder prints when it conceals a lost packet.
-DECODER_CONCEALMENT = ("error while decoding mb", "invalid level prefix", "concealing",
-                "left block unavailable", "top block unavailable", "cbp too large",
-                "negative number of zero coeffs", "out of range intra chroma",
-                "corrupt decoded frame", "ac-tex damaged", "dquant out of range",
-                "mb_type", "rtp: missed", "max delay reached", "no frame!",
-                "non-existing pps", "decode_slice_header error")
 
 
 async def log_stderr(proc: asyncio.subprocess.Process, label: str,

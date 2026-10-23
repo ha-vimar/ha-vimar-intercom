@@ -21,7 +21,9 @@ from homeassistant.data_entry_flow import FlowResult
 from . import discovery, profiles, qr_decoder, runtime
 from .const import (
     CA_PATH,
+    DEFAULT_CLOUD_PROXY,
     DOMAIN,
+    LOCAL_SIP_PORT,
     MY_NAME,
     USER_AGENT,
 )
@@ -72,8 +74,7 @@ KEY_ALLOWED_USERS  = "allowed_users"
 KEY_RING_WEBHOOK_URL     = "ring_webhook_url"
 KEY_RING_END_WEBHOOK_URL = "ring_end_webhook_url"
 
-DEFAULT_CLOUD_PROXY    = "ipvdes.vimar.cloud"
-DEFAULT_LOCAL_SIP_PORT = 5060
+DEFAULT_LOCAL_SIP_PORT = LOCAL_SIP_PORT
 DEFAULT_LOCAL_UDP_PORT = 5060
 
 # ─── Validazione ─────────────────────────────────────────────────────────────
@@ -82,14 +83,6 @@ def _valid_device_name(name: str) -> bool:
     """The device name goes into the MyName header: 1 to 64 printable
     characters, no control characters (a line break would split the header)."""
     return 1 <= len(name) <= 64 and name.isprintable()
-
-
-def _validate_ip(ip: str) -> bool:
-    try:
-        ipaddress.ip_address(ip)
-        return True
-    except ValueError:
-        return False
 
 
 async def _test_sip_registration(
@@ -736,7 +729,7 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["device_name"] = "invalid_device_name"
             if not local_proxy:
                 errors["local_proxy"] = "required"
-            elif not _validate_ip(local_proxy):
+            elif not discovery.is_ip(local_proxy):
                 errors["local_proxy"] = "invalid_ip"
             elif not errors:
                 # The probe registers with the identity the integration will

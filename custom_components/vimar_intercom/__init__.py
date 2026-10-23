@@ -22,18 +22,8 @@ from . import log_buffer as _log_buffer
 from . import media_handler as media
 from .const import CONF_HOMEKIT_ACCESSORY, DEFAULT_HOMEKIT_ACCESSORY, DOMAIN, HOMEKIT_REQUIREMENTS
 from .hub import VimarIntercomHub
-from .services import (
-    SERVICE_ANSWER,
-    SERVICE_CALL,
-    SERVICE_DECLINE,
-    SERVICE_FETCH_LOCAL,
-    SERVICE_FIND_SGA,
-    SERVICE_HANGUP,
-    SERVICE_OPEN_DOOR,
-    SERVICE_SEND_COMMAND,
-    SERVICE_SIMULATE_RING,
-    _register_services,
-)
+from .services import SERVICES as SERVICES
+from .services import _register_services, _unregister_services
 from .services import _sip_id as _sip_id  # re-exported: the tests reach it from the package
 from .views import (
     VimarAudioWSView,
@@ -180,9 +170,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "detected_ua":       ua,
             "detected_priority": priority,
         }
-        if any(entry.data.get(k) != v for k, v in stored.items()):
-            hass.config_entries.async_update_entry(
-                entry, data={**entry.data, **stored})
+        if (data := _learned_data(entry.data, stored)) is not None:
+            hass.config_entries.async_update_entry(entry, data=data)
 
     hub.register_model_callback(_on_model_detected)
 
@@ -422,10 +411,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ir.async_delete_issue(hass, DOMAIN, f"{REGISTRATION_ISSUE}_{entry.entry_id}")
         if not hass.data[DOMAIN]:
             await av_passive.stop()
-            for svc in (SERVICE_SEND_COMMAND, SERVICE_CALL, SERVICE_ANSWER,
-                        SERVICE_DECLINE, SERVICE_HANGUP, SERVICE_OPEN_DOOR, SERVICE_FETCH_LOCAL,
-                        SERVICE_SIMULATE_RING, SERVICE_FIND_SGA):
-                hass.services.async_remove(DOMAIN, svc)
+            _unregister_services(hass)
     return ok
 
 

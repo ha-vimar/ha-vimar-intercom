@@ -15,6 +15,7 @@ from homeassistant import config_entries
 from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
+from homeassistant.helpers.translation import async_get_translations
 
 from . import away_config, cloud_phonebook, discovery, rest_client, rubrica_import, runtime, validate
 from .config_flow import (
@@ -1024,68 +1025,50 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 },
             )
 
+        # The sentences are in the translations (selector.import_info), in HA's language.
+        texts = await async_get_translations(self.hass, self.hass.config.language, "selector", {DOMAIN})
+
+        def say(key: str, **values) -> str:
+            text = texts.get(f"component.{DOMAIN}.selector.import_info.options.{key}") or key
+            return text.format(**values)
+
         current_sga = current.get(KEY_SGA_TARGET) or SGA_TARGET
         if sga and sga != current_sga:
-            sga_info = (
-                f"{sga} — diverso da quello attualmente configurato ({current_sga}); "
-                "confermando verrà impostato come nuovo sga_target."
-            )
+            sga_info = say("sga_differs", sga=sga, current=current_sga)
         elif sga:
-            sga_info = f"{sga} — coincide con quello già in uso."
+            sga_info = say("sga_same", sga=sga)
         else:
-            sga_info = "non trovato (tabella SYSTEM assente o senza MAGIC_APT_INTERCOM); resta invariato quello già configurato."
+            sga_info = say("sga_missing")
 
         configured_picg = current.get(KEY_PICG_TARGET)
         new_picg = self._confirm_picg(current, sga)
         if self._picg_from_rest and self._picg_from_rest != (configured_picg or PICG_TARGET):
-            picg_info = (
-                f"{self._picg_from_rest} — dichiarato dal citofono stesso, "
-                f"diverso da quello configurato ({configured_picg or PICG_TARGET}); "
-                "confermando verrà impostato come nuovo picg_target."
-            )
+            picg_info = say("picg_differs", picg=self._picg_from_rest, current=configured_picg or PICG_TARGET)
         elif self._picg_from_rest:
-            picg_info = f"{self._picg_from_rest} — dichiarato dal citofono, coincide con quello già in uso."
+            picg_info = say("picg_same", picg=self._picg_from_rest)
         elif configured_picg:
-            picg_info = (
-                f"non rilevato dalla fonte della rubrica: resta quello già configurato ({configured_picg})."
-            )
+            picg_info = say("picg_kept", current=configured_picg)
         else:
-            picg_info = (
-                f"non rilevato dalla fonte della rubrica e non ancora configurato: verrà impostato "
-                f"uguale all'SGA ({new_picg})."
-            )
+            picg_info = say("picg_from_sga", picg=new_picg)
 
         current_camera = current.get(KEY_CAMERA_TARGET) or CAMERA_TARGET
         if camera and camera != current_camera:
-            camera_info = (
-                f"{camera} — diversa da quella attualmente configurata ({current_camera}); "
-                "confermando verrà impostata come nuova camera_target."
-            )
+            camera_info = say("camera_differs", camera=camera, current=current_camera)
         elif camera:
-            camera_info = f"{camera} — coincide con quella già in uso."
+            camera_info = say("camera_same", camera=camera)
         else:
-            camera_info = (
-                f"nessuna targa (PE) trovata nella rubrica; resta quella già configurata ({current_camera})."
-            )
+            camera_info = say("camera_missing", current=current_camera)
 
         current_door = current.get(KEY_DOOR_TARGET) or ""
         if door and door != current_door:
-            door_info = (
-                f"{door} — la targa dell'attuatore porta (GID_PE)"
-                + (f", diversa da quella configurata ({current_door})" if current_door else "")
-                + "; confermando il comando di apertura andrà lì."
-            )
+            door_info = (say("door_differs", door=door, current=current_door) if current_door
+                         else say("door_new", door=door))
         elif door:
-            door_info = f"{door} — coincide con quella già in uso."
+            door_info = say("door_same", door=door)
         elif current_door:
-            door_info = (
-                f"nessun attuatore porta nella rubrica; resta quella già configurata ({current_door})."
-            )
+            door_info = say("door_kept", current=current_door)
         else:
-            door_info = (
-                f"nessun attuatore porta nella rubrica; il comando di apertura resta all'SGA "
-                f"({sga or current_sga})."
-            )
+            door_info = say("door_sga", sga=sga or current_sga)
 
         return self.async_show_form(
             step_id="import_confirm",

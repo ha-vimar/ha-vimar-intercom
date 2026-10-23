@@ -36,6 +36,7 @@ def _flow(of, options: dict, picg_from_rest: str | None = None):
     }
     flow._imported_gid = "101"
     flow._picg_from_rest = picg_from_rest
+    flow.hass = types.SimpleNamespace(config=types.SimpleNamespace(language="it"))
     # Le due chiamate di HA che il passo usa: restituiscono ciò che ricevono.
     flow.async_show_form = lambda **kw: {"type": "form", **kw}
     flow.async_create_entry = lambda **kw: {"type": "create_entry", **kw}

@@ -17,6 +17,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 
 from . import discovery, profiles, qr_decoder, runtime
 from .const import (
@@ -616,10 +617,10 @@ class VimarIntercomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("mode", default="qr"): vol.In({
-                    "qr":     "Scansiona il QR di abbinamento (consigliato)",
-                    "manual": "Inserimento manuale credenziali SIP",
-                }),
+                vol.Required("mode", default="qr"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["qr", "manual"], translation_key="mode",
+                        mode=selector.SelectSelectorMode.LIST)),
             }),
         )
 

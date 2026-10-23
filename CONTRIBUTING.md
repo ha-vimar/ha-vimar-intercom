@@ -86,7 +86,7 @@ add a test — those are the parts that break silently on other plants.
       plus a `Before you update: ...` line when users must act after updating. The template shows how;
       the "PR text" check reads them. **Don't edit `CHANGELOG.md`**: it is written at release time from these lines
 - [ ] `manifest.json` version left alone: it changes only in `release/X.Y.Z` PRs
-- [ ] UI strings kept in sync across `strings.json`, `translations/it.json` and `translations/en.json`
+- [ ] UI strings kept in sync across `strings.json`, `translations/it.json` and `translations/en.json` (`strings.json` is English, the same as `en.json`)
 - [ ] A new entity or action has its row in `docs/ENTITIES.md` and `docs/ENTITIES.it.md` (`tests/test_entities_doc.py` checks it)
 - [ ] No credentials, MAC addresses or raw QR payloads anywhere in the diff
 - [ ] Says which hardware you tested on: model, article number, firmware, and whether local UDP or cloud TLS

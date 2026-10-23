@@ -3,7 +3,10 @@
     "step": {
       "user": {
         "title": "Vimar Intercom",
-        "description": "Aggiungi il videocitofono Vimar Elvox. Le credenziali SIP sono dentro il QR di abbinamento: con il QR non serve scriverle."
+        "description": "Aggiungi il videocitofono Vimar Elvox. Le credenziali SIP sono dentro il QR di abbinamento: con il QR non serve scriverle.",
+        "data": {
+          "mode": "Come aggiungerlo"
+        }
       },
       "qr": {
         "title": "Scansiona il QR di abbinamento",
@@ -848,6 +851,31 @@
         "auto": "Automatico (2 Mbit/s in locale, 256 kbit/s in cloud)",
         "256": "256 kbit/s (risoluzione più bassa su alcune targhe)",
         "2048": "2 Mbit/s (più nitido, serve una connessione pulita)"
+      }
+    },
+    "mode": {
+      "options": {
+        "qr": "Scansiona il QR di abbinamento (consigliato)",
+        "manual": "Inserimento manuale credenziali SIP"
+      }
+    },
+    "import_info": {
+      "options": {
+        "sga_differs": "{sga} — diverso da quello attualmente configurato ({current}); confermando verrà impostato come nuovo sga_target.",
+        "sga_same": "{sga} — coincide con quello già in uso.",
+        "sga_missing": "non trovato (tabella SYSTEM assente o senza MAGIC_APT_INTERCOM); resta invariato quello già configurato.",
+        "picg_differs": "{picg} — dichiarato dal citofono stesso, diverso da quello configurato ({current}); confermando verrà impostato come nuovo picg_target.",
+        "picg_same": "{picg} — dichiarato dal citofono, coincide con quello già in uso.",
+        "picg_kept": "non rilevato dalla fonte della rubrica: resta quello già configurato ({current}).",
+        "picg_from_sga": "non rilevato dalla fonte della rubrica e non ancora configurato: verrà impostato uguale all'SGA ({picg}).",
+        "camera_differs": "{camera} — diversa da quella attualmente configurata ({current}); confermando verrà impostata come nuova camera_target.",
+        "camera_same": "{camera} — coincide con quella già in uso.",
+        "camera_missing": "nessuna targa (PE) trovata nella rubrica; resta quella già configurata ({current}).",
+        "door_differs": "{door} — la targa dell'attuatore porta (GID_PE), diversa da quella configurata ({current}); confermando il comando di apertura andrà lì.",
+        "door_new": "{door} — la targa dell'attuatore porta (GID_PE); confermando il comando di apertura andrà lì.",
+        "door_same": "{door} — coincide con quella già in uso.",
+        "door_kept": "nessun attuatore porta nella rubrica; resta quella già configurata ({current}).",
+        "door_sga": "nessun attuatore porta nella rubrica; il comando di apertura resta all'SGA ({sga})."
       }
     }
   },

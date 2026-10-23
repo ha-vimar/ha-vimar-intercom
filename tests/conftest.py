@@ -100,6 +100,25 @@ class _HomeAssistantError(Exception):
         self.translation_placeholders = translation_placeholders
 
 
+async def _get_translations(hass, language, category, integrations=None, config_flow=None):
+    """As Home Assistant: the integration's translations/<language>.json, one
+    category flattened to `component.<domain>.<category>.<path>` keys."""
+    import json
+    path = COMPONENT / "translations" / f"{language}.json"
+    tree = json.loads(path.read_text(encoding="utf-8")).get(category, {})
+    out: dict[str, str] = {}
+
+    def walk(prefix, node):
+        for key, value in node.items():
+            if isinstance(value, dict):
+                walk(f"{prefix}.{key}", value)
+            else:
+                out[f"{prefix}.{key}"] = value
+
+    walk(f"component.vimar_intercom.{category}", tree)
+    return out
+
+
 def _stub_ha() -> None:
     if "homeassistant" in sys.modules and not getattr(sys.modules["homeassistant"], "_is_stub", False):
         return  # HA vero installato
@@ -107,7 +126,7 @@ def _stub_ha() -> None:
     for sub in [
         "core", "config_entries", "const", "exceptions", "helpers", "helpers.entity", "helpers.entity_platform",
         "helpers.restore_state", "helpers.device_registry", "helpers.entity_registry", "helpers.issue_registry", "helpers.storage", "helpers.event", "helpers.aiohttp_client",
-        "helpers.config_validation", "helpers.selector", "helpers.start", "requirements", "components", "components.http", "components.camera",
+        "helpers.config_validation", "helpers.selector", "helpers.start", "helpers.translation", "requirements", "components", "components.http", "components.camera",
         "components.sensor", "components.binary_sensor", "components.switch", "components.button", "components.event",
         "components.lock", "components.select", "components.text", "components.number", "components.ffmpeg", "components.tts", "util", "util.dt",
         "components.file_upload", "data_entry_flow",
@@ -137,6 +156,7 @@ def _stub_ha() -> None:
                SelectSelector=_Any, SelectSelectorConfig=_Any, SelectSelectorMode=_Any(),
                FileSelector=_Any, FileSelectorConfig=_Any)
     ha.helpers.selector = sel
+    ha.helpers.translation.async_get_translations = _get_translations
     ha.components.file_upload.process_uploaded_file = None
     ha.data_entry_flow.FlowResult = dict
     # switch.py derives from both: two distinct classes, not the same jolly twice.

@@ -16,6 +16,7 @@ import asyncio
 import importlib
 import re
 import sqlite3
+import types
 from pathlib import Path
 
 import pytest
@@ -220,6 +221,7 @@ def _confirm(of, options: dict, imported: dict):
         flow._imported = imported
         flow._imported_gid = "3"
         flow._picg_from_rest = None
+        flow.hass = types.SimpleNamespace(config=types.SimpleNamespace(language="it"))
         flow.async_show_form = lambda **kw: {"type": "form", **kw}
         flow.async_create_entry = lambda **kw: {"type": "create_entry", **kw}
         return flow

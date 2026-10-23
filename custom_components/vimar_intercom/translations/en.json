@@ -3,7 +3,10 @@
     "step": {
       "user": {
         "title": "Vimar Intercom",
-        "description": "Add the Vimar Elvox video intercom. The SIP credentials are inside the pairing QR code: with the QR you don't need to type them."
+        "description": "Add the Vimar Elvox video intercom. The SIP credentials are inside the pairing QR code: with the QR you don't need to type them.",
+        "data": {
+          "mode": "How to add it"
+        }
       },
       "qr": {
         "title": "Scan pairing QR code",
@@ -848,6 +851,31 @@
         "auto": "Automatic (2 Mbit/s locally, 256 kbit/s over the cloud)",
         "256": "256 kbit/s (lower resolution on some panels)",
         "2048": "2 Mbit/s (sharper, needs a clean connection)"
+      }
+    },
+    "mode": {
+      "options": {
+        "qr": "Scan the pairing QR code (recommended)",
+        "manual": "Enter the SIP credentials by hand"
+      }
+    },
+    "import_info": {
+      "options": {
+        "sga_differs": "{sga} — different from the one configured now ({current}); confirming makes it the new sga_target.",
+        "sga_same": "{sga} — the same as the one in use.",
+        "sga_missing": "not found (no SYSTEM table, or no MAGIC_APT_INTERCOM in it); the one configured stays.",
+        "picg_differs": "{picg} — declared by the intercom itself, different from the one configured ({current}); confirming makes it the new picg_target.",
+        "picg_same": "{picg} — declared by the intercom, the same as the one in use.",
+        "picg_kept": "not found by the phonebook source: the one configured stays ({current}).",
+        "picg_from_sga": "not found by the phonebook source and not configured yet: it will be set equal to the SGA ({picg}).",
+        "camera_differs": "{camera} — different from the one configured now ({current}); confirming makes it the new camera_target.",
+        "camera_same": "{camera} — the same as the one in use.",
+        "camera_missing": "no entrance panel (PE) in the phonebook; the one configured stays ({current}).",
+        "door_differs": "{door} — the panel of the door actuator (GID_PE), different from the one configured ({current}); confirming sends the door command there.",
+        "door_new": "{door} — the panel of the door actuator (GID_PE); confirming sends the door command there.",
+        "door_same": "{door} — the same as the one in use.",
+        "door_kept": "no door actuator in the phonebook; the one configured stays ({current}).",
+        "door_sga": "no door actuator in the phonebook; the door command stays with the SGA ({sga})."
       }
     }
   },

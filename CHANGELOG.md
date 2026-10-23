@@ -6,6 +6,24 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
+## [1.0.26] - 2026-10-23
+
+### Bug fixes
+
+- Registration no longer fails as "credentials refused" when the registrar sends its nonce without quotes ([#215](https://github.com/ha-vimar/ha-vimar-intercom/pull/215))
+- Wrong SRTP audio keys no longer fill the log with one warning per packet ([#215](https://github.com/ha-vimar/ha-vimar-intercom/pull/215))
+- Call and keepalive timeouts are no longer cut short or stretched when the system clock jumps (NTP sync at boot) ([#215](https://github.com/ha-vimar/ha-vimar-intercom/pull/215))
+- Reloading the integration no longer leaves two UDP sockets open ([#215](https://github.com/ha-vimar/ha-vimar-intercom/pull/215))
+- A phonebook file that is not a SQLite database is no longer left open (and locked on Windows) after the import refuses it ([#216](https://github.com/ha-vimar/ha-vimar-intercom/pull/216))
+- With Home Assistant in English, the first setup step and the phonebook import confirmation are no longer in Italian ([#219](https://github.com/ha-vimar/ha-vimar-intercom/pull/219))
+
+### Other changes
+
+- Background tasks (incoming SIP requests, ring timeout, keyframe requests, ring clip) are kept referenced until they end ([#215](https://github.com/ha-vimar/ha-vimar-intercom/pull/215))
+- The startup log shows the transport set in the options ([#215](https://github.com/ha-vimar/ha-vimar-intercom/pull/215))
+- Removed unused code, including the push-notification registration that never ran; cloud setups no longer log a "connectProfiles" line at start-up ([#217](https://github.com/ha-vimar/ha-vimar-intercom/pull/217))
+- Duplicated code folded into one copy each (HomeKit, media, phonebook import, services); a failing "status" request on the card's connection now gets an error back instead of dropping it ([#218](https://github.com/ha-vimar/ha-vimar-intercom/pull/218))
+
 ## [1.0.25] - 2026-10-22
 
 ### Enhancements

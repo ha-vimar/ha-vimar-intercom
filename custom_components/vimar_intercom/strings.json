@@ -3,425 +3,428 @@
     "step": {
       "user": {
         "title": "Vimar Intercom",
-        "description": "Aggiungi il videocitofono Vimar Elvox. Le credenziali SIP sono dentro il QR di abbinamento: con il QR non serve scriverle."
+        "description": "Add the Vimar Elvox video intercom. The SIP credentials are inside the pairing QR code: with the QR you don't need to type them.",
+        "data": {
+          "mode": "How to add it"
+        }
       },
       "qr": {
-        "title": "Scansiona il QR di abbinamento",
-        "description": "Incolla il testo del QR di abbinamento (quello mostrato dal citofono o dall'app VIEW): leggilo con un'app per QR e incolla quello che mostra, non una foto. In caso di errore: {error_detail}",
+        "title": "Scan pairing QR code",
+        "description": "Paste the text of the pairing QR code (the one the intercom or the VIEW app shows): read it with a QR scanner app and paste what it shows, not a photo. On error: {error_detail}",
         "data": {
-          "qr_text": "Testo QR"
+          "qr_text": "QR text"
         },
         "data_description": {
-          "qr_text": "Un'unica lunga stringa codificata (Base64), così come la mostra il lettore di QR. Contiene la password SIP: non usare decodificatori online."
+          "qr_text": "One long encoded (Base64) string, exactly as the QR scanner shows it. It holds the SIP password: don't use an online decoder."
         }
       },
       "manual": {
-        "title": "Credenziali SIP",
-        "description": "Solo se non puoi usare il QR: sono i valori contenuti nel QR di abbinamento decodificato (ID, PWD, DOMAIN, CPROXY).",
+        "title": "SIP credentials",
+        "description": "Only if you can't use the QR: these are the values inside the decoded pairing QR code (ID, PWD, DOMAIN, CPROXY).",
         "data": {
-          "sip_user": "ID SIP (utente)",
-          "sip_password": "Password SIP",
-          "sip_domain": "Dominio SIP",
-          "cloud_proxy": "Proxy cloud"
+          "sip_user": "SIP ID (user)",
+          "sip_password": "SIP password",
+          "sip_domain": "SIP domain",
+          "cloud_proxy": "Cloud proxy"
         },
         "data_description": {
-          "sip_user": "L'ID SIP della credenziale (ID nel QR decodificato): il posto che Home Assistant occupa sul citofono.",
-          "sip_password": "La password SIP della credenziale (PWD nel QR decodificato; nel testo del QR non si legge in chiaro).",
-          "sip_domain": "Il dominio SIP della credenziale (DOMAIN nel QR decodificato; se è 127.0.0.1, come su un 40515, usa CDOMAIN). Non è il proxy cloud.",
-          "cloud_proxy": "Il proxy SIP cloud (CPROXY nel QR decodificato). Default: ipvdes.vimar.cloud."
+          "sip_user": "The credential's SIP ID (ID in the decoded QR): the place Home Assistant takes on the intercom.",
+          "sip_password": "The credential's SIP password (PWD in the decoded QR; the QR text does not show it in clear).",
+          "sip_domain": "The credential's SIP domain (DOMAIN in the decoded QR; if it is 127.0.0.1, as on a 40515, use CDOMAIN). Not the cloud proxy.",
+          "cloud_proxy": "The cloud SIP proxy (CPROXY in the decoded QR). Default: ipvdes.vimar.cloud."
         }
       },
       "network": {
-        "title": "Rete locale",
-        "description": "Inserisci l'IP locale del citofono. Impianto: {plant}. La configurazione prova una registrazione vera sul trasporto atteso e, se fallisce, prova l'altro (UDP locale o cloud TLS) e tiene quello che funziona. Utente: {sip_user}@{sip_domain}, MAC: {mac}. In caso di errore: {error_detail}",
+        "title": "Local network",
+        "description": "Enter the local IP of the intercom. Plant: {plant}. Setup registers for real on the expected transport and, if that fails, tries the other one (local UDP or cloud TLS) and keeps whichever works. User: {sip_user}@{sip_domain}, MAC: {mac}. On error: {error_detail}",
         "data": {
-          "local_proxy": "IP citofono (proxy locale)",
-          "use_local_udp": "Prova prima l'UDP locale",
-          "local_udp_port": "Porta UDP locale",
-          "device_name": "Nome del dispositivo"
+          "local_proxy": "Intercom IP (local proxy)",
+          "use_local_udp": "Try local UDP first",
+          "local_udp_port": "Local UDP port",
+          "device_name": "Device name"
         },
         "data_description": {
-          "local_proxy": "L'indirizzo IP locale del tuo citofono Vimar (es. 192.168.1.100).",
-          "use_local_udp": "Preimpostato dal tipo di impianto nel QR. Gli impianti Due Fili Plus EVO ricevono le chiamate solo tramite il relay cloud; se la prima via fallisce, si prova l'altra.",
-          "local_udp_port": "Porta UDP usata da HA per il SIP locale. Default: 5060.",
-          "device_name": "Il nome con cui l'integrazione si presenta al citofono (header MyName). L'abbinamento lo lega alla credenziale: una volta registrato non va cambiato."
+          "local_proxy": "The local IP address of your Vimar intercom (e.g. 192.168.1.100).",
+          "use_local_udp": "Preset from the plant type in the QR. Due Fili Plus EVO plants only deliver calls through the cloud relay; if the first path fails, the other one is tried.",
+          "local_udp_port": "UDP port used by HA for local SIP. Default: 5060.",
+          "device_name": "The name the integration shows the intercom (MyName header). The pairing binds it to the credential: do not change it once registered."
         }
       },
       "zeroconf_confirm": {
-        "title": "Citofono Vimar trovato in rete",
-        "description": "Home Assistant ha trovato un citofono Vimar all'indirizzo {host} (MAC {mac}, modello {model}, firmware {firmware}). Per collegarlo servono ancora il QR di abbinamento o le credenziali SIP: indirizzo e dominio locale sono già compilati."
+        "title": "Vimar intercom found on the network",
+        "description": "Home Assistant found a Vimar intercom at {host} (MAC {mac}, model {model}, firmware {firmware}). To connect it you still need the pairing QR code or the SIP credentials: the address and the local domain are already filled in."
       },
       "zeroconf_moved": {
-        "title": "Il citofono ha cambiato indirizzo?",
-        "description": "Il citofono Vimar configurato si è annunciato all'indirizzo {new} invece di {old}. Conferma solo se l'hai spostato o se il router gli ha dato un nuovo indirizzo: chiunque nella rete locale può annunciarsi con il suo MAC. Confermando, Home Assistant userà {new} e ricaricherà l'integrazione."
+        "title": "Has the intercom changed address?",
+        "description": "The configured Vimar intercom announced itself at {new} instead of {old}. Confirm only if you moved it or your router gave it a new address: anyone on the local network can announce its MAC. On confirmation Home Assistant uses {new} and reloads the integration."
       },
       "reconfigure": {
-        "title": "Nuovo QR di abbinamento",
-        "description": "Incolla il testo del QR nuovo generato dal citofono per Home Assistant (leggilo con un'app per QR e incolla quello che mostra, non una foto). Cambiano solo le credenziali SIP: entità, automazioni, opzioni e impostazioni di rete restano come sono (il trasporto cambia solo se il QR funziona soltanto sull'altro, e in quel caso viene detto). Prima di salvare il QR viene provato con una registrazione vera. In caso di errore: {error_detail}",
+        "title": "New pairing QR",
+        "description": "Paste the text of the new QR the intercom created for Home Assistant (read it with a QR app and paste what it shows, not a photo). Only the SIP credentials change: entities, automations, options and network settings stay as they are (the transport changes only if the QR works solely on the other one, and you are told). Before saving, the QR is tried with a real registration. If it fails: {error_detail}",
         "data": {
-          "qr_text": "Testo QR"
+          "qr_text": "QR text"
         },
         "data_description": {
-          "qr_text": "Un'unica lunga stringa codificata (Base64), così come la mostra il lettore di QR. Contiene la password SIP: non usare decodificatori online."
+          "qr_text": "One long encoded string (Base64), exactly as the QR reader shows it. It contains the SIP password: do not use online decoders."
         }
       }
     },
     "error": {
-      "qr_invalid": "QR non valido o non riconosciuto.",
-      "required": "Questo campo è obbligatorio.",
-      "invalid_ip": "Indirizzo IP non valido.",
-      "invalid_device_name": "Nome non valido: da 1 a 64 caratteri stampabili, senza caratteri di controllo.",
-      "sip_registration_failed": "Registrazione SIP fallita sia in UDP locale sia via cloud TLS. Controlla che l'IP del citofono sia giusto e raggiungibile da HA, e che le credenziali siano quelle del QR (dominio compreso)."
+      "qr_invalid": "Invalid or unrecognized QR code.",
+      "required": "This field is required.",
+      "invalid_ip": "Invalid IP address.",
+      "invalid_device_name": "Invalid name: 1 to 64 printable characters, no control characters.",
+      "sip_registration_failed": "SIP registration failed over both local UDP and cloud TLS. Check that the intercom IP is right and reachable from HA, and that the credentials are the QR's (domain included)."
     },
     "abort": {
-      "already_configured": "Il dispositivo è già configurato.",
-      "no_mac": "Il citofono si è annunciato senza MAC: aggiungilo a mano da Impostazioni → Dispositivi e servizi.",
-      "single_instance_allowed": "C'è già un'installazione di Vimar Intercom: ne è supportata una sola.",
-      "address_updated": "Indirizzo del citofono aggiornato.",
-      "reconfigure_successful": "Credenziali aggiornate: l'integrazione si ricarica con il QR nuovo.",
-      "reconfigure_transport_changed": "Credenziali aggiornate, ma il QR nuovo funziona solo sull'altro trasporto (UDP locale o cloud TLS): l'integrazione ora usa quello e si ricarica. Il dettaglio è nel log di Home Assistant."
+      "already_configured": "Device is already configured.",
+      "no_mac": "The intercom announced itself without a MAC: add it by hand from Settings → Devices & services.",
+      "single_instance_allowed": "Vimar Intercom is already set up: only one installation is supported.",
+      "address_updated": "Intercom address updated.",
+      "reconfigure_successful": "Credentials updated: the integration reloads with the new QR.",
+      "reconfigure_transport_changed": "Credentials updated, but the new QR works only on the other transport (local UDP or cloud TLS): the integration now uses that one and reloads. The detail is in the Home Assistant log."
     },
     "create_entry": {
-      "transport_fallback": "Home Assistant non è riuscito a registrarsi via {tried} e usa {used}: {detail}. Funziona, ma se ti aspettavi {tried} controlla le impostazioni di rete del citofono."
+      "transport_fallback": "Home Assistant could not register over {tried} and uses {used} instead: {detail}. It works, but if you expected {tried}, check the intercom's network settings."
     },
     "flow_title": "{name} ({host})"
   },
   "options": {
     "step": {
       "init": {
-        "title": "Impostazioni Vimar Intercom",
+        "title": "Vimar Intercom settings",
         "menu_options": {
-          "internal_panel": "Rileva il posto interno",
-          "settings": "Impostazioni di rete e attuatori",
+          "internal_panel": "Find indoor monitor",
+          "settings": "Network and actuator settings",
           "homekit": "HomeKit",
-          "av_key": "Chiave dello stream /av",
-          "import_rubrica": "Importa attuatori da rubrica.db",
-          "fetch_rubrica": "Scarica la rubrica dal citofono",
-          "fetch_rubrica_cloud": "Scarica la rubrica dal cloud Vimar"
+          "av_key": "/av stream key",
+          "import_rubrica": "Import actuators from rubrica.db",
+          "fetch_rubrica": "Download the phonebook from the intercom",
+          "fetch_rubrica_cloud": "Download the phonebook from the Vimar cloud"
         }
       },
       "internal_panel": {
-        "title": "Rileva il posto interno",
-        "description": "L’impianto dichiara il PICG {detected}. La destinazione attuale di Chiama Casa è {current}. Il PICG dichiarato viene proposto come posto interno, anche quando coincide con l’SGA: sugli impianti provati è l’indirizzo che fa squillare il monitor. Conferma la destinazione o inserisci l’indirizzo noto di un posto interno. Il salvataggio non avvia una chiamata.",
+        "title": "Find indoor monitor",
+        "description": "The system declares the PICG {detected}. The current Call Home target is {current}. The declared PICG is proposed as the indoor monitor, also when it is the same as the SGA: on the plants tried it is the address that rings the monitor. Confirm the target or enter the known address of an indoor monitor. Saving does not start a call.",
         "data": {
-          "internal_panel_target": "Indirizzo SIP del posto interno"
+          "internal_panel_target": "Indoor monitor SIP address"
         }
       },
       "settings": {
-        "title": "Impostazioni Vimar Intercom",
-        "description": "Rete SIP e attuatori dinamici. Nel campo Attuatori incolla la lista JSON prodotta da tools/parse_rubrica.py, oppure torna al menu e usa \"Importa attuatori da rubrica.db\".",
+        "title": "Vimar Intercom settings",
+        "description": "SIP network and dynamic actuators. In the Actuators field paste the JSON list produced by tools/parse_rubrica.py, or go back to the menu and use \"Import actuators from rubrica.db\".",
         "data": {
-          "local_proxy": "IP del citofono",
-          "use_local_udp": "Usa SIP UDP locale",
-          "local_udp_port": "Porta UDP locale",
-          "voice_answer": "Risposta a voce (microfono su /audio_ws)",
-          "media_enc": "Cifratura del media (SRTP)",
-          "video_enabled": "Abilita video nelle chiamate in uscita",
-          "actuators": "Attuatori (JSON)",
-          "sga_target": "SGA (id SIP segreteria/DND)",
-          "picg_target": "PICG (id SIP GET_INIT_STATUS)",
-          "camera_target": "Targa video (id SIP da chiamare)",
-          "internal_panel_target": "Pannello interno (id SIP «Chiama casa (interno)»)",
-          "door_target": "Targa che apre la porta",
-          "door_open_current": "Durante una chiamata, apri l'ingresso che sta chiamando (OPEN_CURRENT)",
-          "away_message_file": "Messaggio se nessuno risponde (file audio)",
-          "away_message_upload": "Oppure carica il file audio (mp3, wav, m4a)",
-          "away_message_text": "Messaggio se nessuno risponde (testo, letto dal TTS)",
-          "away_message_tts": "Voce (entità TTS)",
-          "away_message_delay": "Dopo quanti secondi di squillo (usato solo se il Tab non espone il ritardo della segreteria; 0 = 20 s)",
-          "snapshot_dir": "Cartella foto squillo",
-          "snapshot_delay": "Secondi per la foto migliore (0 = solo la prima)",
-          "view_keepalive": "Secondi di silenzio a «Vedi esterno» (0 = nessuno)",
-          "allowed_users": "Utenti ammessi a squilli e media live (vuoto = tutti)",
-          "ring_webhook_url": "Webhook a inizio squillo (URL)",
-          "ring_end_webhook_url": "Webhook a fine squillo (URL)",
-          "video_bandwidth": "Qualità video dalla targa"
+          "local_proxy": "Intercom IP address",
+          "use_local_udp": "Use local SIP UDP",
+          "local_udp_port": "Local UDP port",
+          "voice_answer": "Voice answer (mic on /audio_ws)",
+          "media_enc": "Media encryption (SRTP)",
+          "video_enabled": "Enable video in outgoing calls",
+          "actuators": "Actuators (JSON)",
+          "sga_target": "SGA (voicemail/DND SIP id)",
+          "picg_target": "PICG (GET_INIT_STATUS SIP id)",
+          "camera_target": "Video entrance panel (SIP id to call)",
+          "internal_panel_target": "Internal panel (SIP id for “Call the indoor monitor”)",
+          "door_target": "Entrance panel that opens the door",
+          "door_open_current": "During a call, open the calling entrance (OPEN_CURRENT)",
+          "away_message_file": "Message if nobody answers (audio file)",
+          "away_message_upload": "Or upload the audio file (mp3, wav, m4a)",
+          "away_message_text": "Message if nobody answers (text, read by TTS)",
+          "away_message_tts": "Voice (TTS entity)",
+          "away_message_delay": "After how many seconds of ringing (used only if the Tab does not expose the voicemail delay; 0 = 20 s)",
+          "snapshot_dir": "Ring snapshot folder",
+          "snapshot_delay": "Seconds for the better snapshot (0 = first only)",
+          "view_keepalive": "Seconds of silence for “Vedi esterno” (0 = none)",
+          "allowed_users": "Users allowed to see rings and live media (empty = everyone)",
+          "ring_webhook_url": "Ring-start webhook (URL)",
+          "ring_end_webhook_url": "Ring-end webhook (URL)",
+          "video_bandwidth": "Video quality from the panel"
         },
         "data_description": {
-          "voice_answer": "Chi può rispondere alla chiamata parlando mentre squilla. Solo dichiarato: risponde solo chi si collega con /audio_ws?voice_answer=1 (Echo Show, HomeKit via Scrypted). Mai: la voce non risponde. Chiunque: risponde qualsiasi connessione con microfono; attenzione, un tablet a muro con il microfono rimasto aperto può rispondere da solo con i rumori di casa.",
-          "media_enc": "Automatico: segue quello che dichiara l'impianto nella risposta a GET_INIT_STATUS (\"media_enc\": \"srtp\" su un Tab 5S Up 40515 in cloud); se l'impianto non lo dichiara (risposta corta, come sul 40507) resta in chiaro. Attivo/Disattivo forzano. Se la camera non si accende o la chiamata fallisce con 488, prova Attivo.",
-          "video_enabled": "Attivo di default. Disattivalo per le targhe senza telecamera: le chiamate restano solo audio. Il campo VIDEO del QR di abbinamento non lo cambia: nelle app Vimar decide solo l'anteprima durante lo squillo.",
-          "actuators": "Lista JSON di oggetti name, msg, target, icon. icon: door|light|switch. target \"AUTO\" usa la targa che apre la porta. Vuoto = nessun bottone.",
-          "sga_target": "Destinatario di VOICEMAIL;/DND;, e dell'apertura porta se «Targa che apre la porta» è vuota. Vuoto = default storico (55001). Cambialo solo se il tuo impianto usa un altro SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
-          "picg_target": "Destinatario di GET_INIT_STATUS. Sugli impianti verificati finora coincide con l'SGA. Vuoto = default storico (55001).",
-          "camera_target": "Targa chiamata dalla camera, da «Chiama» e da «Chiama video (esterno)»: la riga PHONEBOOK con TYPE='PE' in rubrica.db (l'import rubrica la compila da solo). Vuoto = la targa imparata dall'ultimo squillo con video, altrimenti 55100. Non è l'SGA.",
-          "internal_panel_target": "Destinatario del pulsante «Chiama casa (interno)». Vuoto = il PICG dell'appartamento (quello di GET_INIT_STATUS), che sugli impianti provati fa squillare il posto interno. Usa «Rileva il posto interno» per proporlo, o inserisci un indirizzo noto.",
-          "door_target": "La targa a cui va il comando di apertura: il GID_PE dell'attuatore porta nella rubrica (su un 2FV2 non è l'SGA). Si compila da sola importando o scaricando la rubrica. Vuoto = la targa dell'attuatore porta, se gli attuatori sono stati importati, altrimenti l'SGA.",
-          "door_open_current": "Per gli impianti con gateway (2FV2 con più targhe), dove l'app VIEW apre il portone solo durante una chiamata. Acceso: mentre squilla una chiamata in arrivo, o dopo averle risposto, il pulsante porta, la serratura e la card mandano OPEN_CURRENT all'ingresso corrente (60002) invece del comando della rubrica. Fuori da una chiamata non cambia nulla. Spento di default: su un 2F con una sola targa non serve.",
-          "away_message_file": "File audio (mp3, wav...) da far sentire al visitatore se nessuno risponde, es. /config/media/citofono/messaggio.mp3 (o scegli il file dalla pagina del dispositivo: caricalo da Media > Local media > citofono/messaggi). Vuoto = disattivato.",
-          "away_message_upload": "Il file finisce in cartella media/citofono/messaggi e diventa subito il messaggio di assenza. Massimo 5 MB; se c'è già un file diverso con lo stesso nome, a questo si aggiunge -2.",
-          "away_message_text": "Testo da far leggere al visitatore dalla sintesi vocale di Home Assistant, se il campo file è vuoto (il file ha la precedenza). Nella lingua di HA, max 30 s di audio. Vuoto = disattivato.",
-          "away_message_tts": "Entità TTS che legge il testo (es. tts.google_translate_it_com, tts.piper). Vuoto = il motore TTS predefinito di HA. Se la sintesi fallisce, il citofono squilla come sempre.",
-          "away_message_delay": "Se dopo questi secondi sta ancora squillando (nessuno ha risposto da Tab, telefono o HA), l'integrazione risponde, fa sentire il file e riaggancia. Se il Tab espone il ritardo (Segreteria · ritardo) si usa quello; questo valore serve solo se il Tab non lo espone. 0 = 20 s.",
-          "snapshot_dir": "Cartella dove salvare la foto di chi suona (squillo_AAAAMMGG_HHMMSS_mmm.jpg e ultimo_squillo.jpg) e il clip dello squillo (.mp4, fino a 60 s), es. /config/media/citofono. Deve essere in allowlist_external_dirs o fra le cartelle media. Vuoto = non salvare.",
-          "snapshot_delay": "La prima foto si salva appena arriva il primo fotogramma (~1 s dallo squillo); dopo questi secondi la sostituisce un fotogramma con l'esposizione regolata (il primo della targa è scuro). 3 s va bene per Tab 5S Up 40515; aumenta se le foto escono scure, 0 = resta la prima.",
-          "view_keepalive": "Durante la vista dell'esterno l'integrazione manda silenzio audio, senza il quale via cloud la targa chiude la vista dopo ~10 s. Si ferma dopo questi secondi dall'inizio della vista (poi la vista si chiude da sola). Sul 2 fili in locale il silenzio tiene occupato l'appartamento: il predefinito è 0 in locale e 120 via cloud; 0 = nessun silenzio (sul 2 fili va bene 0 o 30).",
-          "allowed_users": "Limita la card, lo storico squilli (foto e clip) e /audio_ws a questi utenti di Home Assistant. Gli amministratori sempre. Vuoto = ogni utente autenticato. NON limita l'entità camera né /av dalla rete locale: chi può aprire la camera vede (e sente) lo stream; e se la cartella foto è sotto una cartella media di HA, foto e clip compaiono nel browser media per tutti gli utenti.",
-          "ring_webhook_url": "GET (fire-and-forget) inviata quando inizia uno squillo, es. per accendere un interruttore fittizio (Scrypted Dummy Switch) collegato a un Custom Doorbell Button. Un fallimento si logga come warning e non ferma lo squillo. Vuoto = disattivato.",
-          "ring_end_webhook_url": "GET (fire-and-forget) inviata quando lo squillo finisce, risposto, annullato o scaduto: stessa idea di sopra, per spegnere l'interruttore. Vuoto = disattivato.",
-          "video_bandwidth": "Vale per tutto il video della targa: card, camera, /av e HomeKit. Automatico (consigliato): 2 Mbit/s in UDP locale, 256 kbit/s tramite il relay cloud, che perde qualche pacchetto su cento. 256 kbit/s: flusso più leggero, meno fotogrammi rovinati con un relay che perde pacchetti, ma immagine più piccola su alcune targhe (un Tab 5S Up 40515 scende a 320x240 a 15 fps). 2 Mbit/s: l'immagine più nitida (720x576 a 24 fps su un 40515) e dieci volte il traffico; con un relay che perde pacchetti (misurato su un Tab 7S Up 40517) il video si sgrana, si blocca e va in ritardo."
+          "voice_answer": "Who can answer the call by talking while it rings. Declared only: only connections using /audio_ws?voice_answer=1 (Echo Show, HomeKit via Scrypted). Never: talking never answers. Anyone: any connection with a microphone can answer; beware, a wall tablet whose microphone was left open can answer by itself with household noise.",
+          "media_enc": "Automatic: follows what the system declares in its GET_INIT_STATUS reply (\"media_enc\": \"srtp\" on a cloud Tab 5S Up 40515); when the system does not declare it (short reply, as on the 40507) media stays plain. On/Off force it. If the camera stays black or the call fails with 488, try On.",
+          "video_enabled": "On by default. Turn it off for entrance panels without a camera, whose calls then stay audio only. The pairing QR's VIDEO field does not change it: in the Vimar apps it only allows the preview while it rings.",
+          "actuators": "JSON list of objects name, msg, target, icon. icon: door|light|switch. target \"AUTO\" uses the panel that opens the door. Empty = no buttons.",
+          "sga_target": "Target for VOICEMAIL;/DND;, and for the door-open command when “Entrance panel that opens the door” is empty. Empty = historical default (55001). Change it only if your system uses a different SGA (SYSTEM.MAGIC_APT_INTERCOM in rubrica.db).",
+          "picg_target": "Target for GET_INIT_STATUS. On systems verified so far it matches the SGA. Empty = historical default (55001).",
+          "camera_target": "Panel called by the camera, by “Call” and by “Call the entrance panel (video)”: the PHONEBOOK row with TYPE='PE' in rubrica.db (the phonebook import fills it in). Empty = the panel learned from the last ring with video, else 55100. This is not the SGA.",
+          "internal_panel_target": "Target of the “Call the indoor monitor” button. Empty = the apartment's PICG (the GET_INIT_STATUS target), which rings the indoor monitor on the plants tried. Use “Find indoor monitor” to propose it, or enter a known address.",
+          "door_target": "Where the door-open command goes: the GID_PE of the door actuator in the phonebook (on a 2FV2 it is not the SGA). Filled in by importing or downloading the phonebook. Empty = the door actuator's panel if actuators were imported, otherwise the SGA.",
+          "door_open_current": "For plants behind a gateway (2FV2 with several entrance panels), where the VIEW app opens the door only during a call. On: while an incoming call rings, or once it is answered, the door button, the lock and the card send OPEN_CURRENT to the current entrance (60002) instead of the phonebook command. Outside a call nothing changes. Off by default: a single-panel 2F does not need it.",
+          "away_message_file": "Audio file (mp3, wav...) played to the visitor when nobody answers, e.g. /config/media/citofono/messaggio.mp3 (or pick the file on the device page: upload it from Media > Local media > citofono/messaggi). Empty = off.",
+          "away_message_upload": "The file goes to media folder/citofono/messaggi and becomes the away message right away. Max 5 MB; if a different file with the same name is already there, this one gets -2 added.",
+          "away_message_text": "Text read to the visitor by Home Assistant's text-to-speech when the file field is empty (the file takes precedence). In HA's language, max 30 s of audio. Empty = off.",
+          "away_message_tts": "TTS entity that reads the text (e.g. tts.google_translate_en_com, tts.piper). Empty = HA's default TTS engine. If synthesis fails the doorbell keeps ringing as usual.",
+          "away_message_delay": "If it is still ringing after this many seconds (nobody answered from the panel, phone or HA), the integration answers, plays the file and hangs up. If the Tab exposes the delay (Voicemail delay) that one is used; this value only matters when the Tab does not expose it. 0 = 20 s.",
+          "snapshot_dir": "Folder where the visitor's snapshot (squillo_YYYYMMDD_HHMMSS_mmm.jpg and ultimo_squillo.jpg) and the ring clip (.mp4, up to 60 s) are saved, e.g. /config/media/citofono. Must be in allowlist_external_dirs or a media folder. Empty = do not save.",
+          "snapshot_delay": "The first snapshot is saved as soon as the first frame arrives (~1 s after the ring); after this many seconds it is replaced by a frame with the exposure settled (the panel's first one is dark). 3 s suits the Tab 5S Up 40515; increase it if snapshots come out dark, 0 = keep the first.",
+          "view_keepalive": "While viewing the outside the integration sends audio silence; without it, over the cloud the panel closes the view after ~10 s. It stops this many seconds after the view starts (the view then ends by itself). On the 2-wire plant in local mode the silence keeps the apartment busy: the default is 0 in local mode and 120 over the cloud; 0 = no silence (on the 2-wire use 0 or 30).",
+          "allowed_users": "Limits the card, the ring history (photos and clips) and /audio_ws to these Home Assistant users. Admins always. Empty = every logged-in user. It does NOT limit the camera entity or /av from the local network: anyone who can open the camera sees (and hears) the stream; and if the photo folder is under an HA media directory, photos and clips show up in the media browser for every user.",
+          "ring_webhook_url": "GET (fire-and-forget) sent when a ring starts, e.g. to turn on a dummy switch (Scrypted Dummy Switch) linked to a Custom Doorbell Button. A failure is only logged as a warning and never stops the ring. Empty = off.",
+          "ring_end_webhook_url": "GET (fire-and-forget) sent when the ring ends, answered, cancelled or timed out: same idea as above, to turn the switch off. Empty = off.",
+          "video_bandwidth": "Applies to every video from the panel: the card, the camera, /av and HomeKit. Automatic (recommended): 2 Mbit/s on local UDP, 256 kbit/s over the cloud relay, which loses a few packets in a hundred. 256 kbit/s: a lighter stream, fewer damaged frames on a lossy relay, but a smaller picture on some panels (a Tab 5S Up 40515 drops to 320x240 at 15 fps). 2 Mbit/s: the sharpest picture (720x576 at 24 fps on a 40515) and ten times the traffic; on a relay that loses packets (measured on a Tab 7S Up 40517) the video smears, freezes and lags."
         }
       },
       "homekit": {
-        "title": "Videocitofono HomeKit",
-        "description": "Pubblica il citofono nell'app Casa come videocitofono: squillo, video dal vivo, audio nei due sensi e il cancello nella stessa vista.\n\nChi abbina il citofono (e chiunque con cui si condivide la casa nell'app Casa) vede il video, parla e apre il cancello: l'opzione degli utenti ammessi di Home Assistant non vale per HomeKit.\n\nNon abbinare lo stesso citofono anche tramite un bridge HomeKit di Scrypted: l'app Casa mostrerebbe due campanelli e ogni squillo arriverebbe due volte.\n\n{pairing}",
+        "title": "HomeKit video doorbell",
+        "description": "Publish the intercom to the Apple Home app as a video doorbell: ring notification, live video, two-way audio and the gate in the same view.\n\nWhoever pairs it (and everyone the home is shared with in the Home app) sees the video, talks and opens the gate: Home Assistant's allowed users option does not apply to HomeKit.\n\nDo not also pair the same intercom through a Scrypted HomeKit bridge: the Home app would show two doorbells and every ring would notify twice.\n\n{pairing}",
         "data": {
-          "homekit_accessory": "Pubblica in HomeKit",
-          "homekit_video_smooth": "Video più fluido (ricodifica)",
-          "homekit_answer": "Durante uno squillo",
-          "homekit_ring_button": "Pulsante squillo per le automazioni Casa"
+          "homekit_accessory": "Publish to HomeKit",
+          "homekit_video_smooth": "Smoother video (re-encode)",
+          "homekit_answer": "During a ring",
+          "homekit_ring_button": "Ring button for Home automations"
         },
         "data_description": {
-          "homekit_accessory": "Accende il videocitofono in HomeKit. Finché non è abbinato, il codice e il QR da inquadrare con l'app Casa compaiono qui sopra; una notifica ricorda che l'abbinamento è in attesa. Dopo 10 codici sbagliati di fila il codice cambia.",
-          "homekit_video_smooth": "Acceso (consigliato): Home Assistant ricodifica il video della targa con un keyframe al secondo, così un pacchetto perso dal relay diventa una breve sbavatura invece di un blocco. L'apertura richiede circa mezzo secondo in più e un po' di CPU. Spento: il video va dritto al telefono e si apre prima, ma un pacchetto perso può fermare l'immagine fino a 3 secondi.",
-          "homekit_answer": "Rispondi quando parli: aprire la notifica mostra e fa sentire la strada senza rispondere, così il Tab e l'app possono ancora rispondere; la prima parola (Parla) risponde. Rispondi all'apertura: aprire la notifica risponde subito e il Tab smette di suonare.",
-          "homekit_ring_button": "Aggiunge all'accessorio un pulsante programmabile che si preme a ogni squillo, da usare come attivatore nelle automazioni dell'app Casa. Spento: una voce in meno nell'app Casa; notifica, video, Parla e cancello non cambiano."
+          "homekit_accessory": "Turns on the HomeKit video doorbell. Until it is paired, the setup code and the QR code to scan with the Home app appear above; a notification says that pairing is waiting. After 10 wrong codes in a row the code changes.",
+          "homekit_video_smooth": "On (recommended): Home Assistant re-encodes the panel's video with a keyframe every second, so a packet lost on the cloud relay shows as a brief smear instead of a freeze. Opening takes about half a second longer and uses some CPU. Off: the video goes straight to the phone and opens faster, but a lost packet can freeze the picture for up to 3 seconds.",
+          "homekit_answer": "Answer when you talk: opening the notification shows and plays the street without answering, so the Tab and the app can still answer; your first word (Talk) answers. Answer when the view opens: opening the notification answers at once and the Tab stops ringing.",
+          "homekit_ring_button": "Adds a programmable button that is pressed at every ring, to use as a trigger in Home app automations. Off: one tile less in the Home app; the ring notification, video, Talk and the gate are unchanged."
         }
       },
       "import_rubrica": {
-        "title": "Importa da rubrica.db",
-        "description": "Carica il file rubrica.db estratto dall'impianto (vedi docs/RUBRICA.md): l'integrazione ne ricava automaticamente gli attuatori del tuo appartamento, senza copiare a mano l'output di tools/parse_rubrica.py. Il file viene letto in sola lettura e non viene conservato da Home Assistant dopo l'importazione. {rubrica_error}",
+        "title": "Import from rubrica.db",
+        "description": "Upload the rubrica.db file extracted from the system (see docs/RUBRICA.md): the integration automatically derives your apartment's actuators, without manually copying the output of tools/parse_rubrica.py. The file is read read-only and is not kept by Home Assistant after import. {rubrica_error}",
         "data": {
-          "rubrica_file": "File rubrica.db",
-          "rubrica_gid": "GID appartamento"
+          "rubrica_file": "rubrica.db file",
+          "rubrica_gid": "Apartment GID"
         },
         "data_description": {
-          "rubrica_gid": "Il GID dell'appartamento nella rubrica (di solito quello già in uso, es. 101)."
+          "rubrica_gid": "The apartment's GID in the phonebook (usually the one already in use, e.g. 101)."
         }
       },
       "import_confirm": {
-        "title": "Conferma importazione",
-        "description": "Fonte della rubrica: {source}.\n\nTrovati {count} attuatori per il GID {gid}: {names}.\n\nSGA (MAGIC_APT_INTERCOM) rilevato: {sga_info}\n\nPICG rilevato: {picg_info}\n\nTarga video (camera) rilevata: {camera_info}\n\nTarga che apre la porta rilevata: {door_info}\n\nConfermando, questa lista SOSTITUISCE gli attuatori attualmente configurati e, se rilevato, aggiorna sga_target/picg_target/camera_target/door_target. Per annullare, chiudi questa finestra senza confermare."
+        "title": "Confirm import",
+        "description": "Phonebook source: {source}.\n\nFound {count} actuators for GID {gid}: {names}.\n\nDetected SGA (MAGIC_APT_INTERCOM): {sga_info}\n\nPICG detected: {picg_info}\n\nVideo entrance panel (camera) detected: {camera_info}\n\nDoor panel detected: {door_info}\n\nConfirming REPLACES the currently configured actuators and, when detected, updates sga_target/picg_target/camera_target/door_target. To cancel, close this window without confirming."
       },
       "fetch_rubrica": {
-        "title": "Scarica dal citofono",
-        "description": "Chiede la rubrica direttamente al citofono ({host}) usando le credenziali SIP già configurate: non serve estrarre il file a mano né un account Vimar. Nella stessa richiesta l'integrazione chiede anche il PICG, che il citofono dichiara da sé.\n\nFunziona se il citofono è raggiungibile in rete locale; se non risponde, usa «Importa attuatori da rubrica.db». {rubrica_error}",
+        "title": "Download from the intercom",
+        "description": "Asks the intercom ({host}) for the phonebook directly, using the SIP credentials already configured: no manual extraction and no Vimar account needed. The same request also asks for the PICG, which the intercom reports itself.\n\nThis works when the intercom is reachable on the local network; if it does not answer, use \"Import actuators from rubrica.db\". {rubrica_error}",
         "data": {
-          "rubrica_gid": "GID appartamento"
+          "rubrica_gid": "Apartment GID"
         },
         "data_description": {
-          "rubrica_gid": "Il GID dell'appartamento nella rubrica (di solito quello già in uso, es. 101)."
+          "rubrica_gid": "The apartment GID in the phonebook (usually the one already in use, e.g. 101)."
         }
       },
       "fetch_rubrica_cloud": {
-        "title": "Scarica dal cloud Vimar",
-        "description": "Scarica la rubrica da {cproxy} con il token che l'impianto manda nella risposta a GET_INIT_STATUS: è lo stesso file rubrica.db dell'app VIEW. Serve solo agli impianti che mandano la risposta lunga (visto su un Tab 5S Up 40515 / 2FV2); il token non viene salvato. {rubrica_error}",
+        "title": "Download from the Vimar cloud",
+        "description": "Downloads the phonebook from {cproxy} with the token the system sends in its GET_INIT_STATUS reply: it is the same rubrica.db file the VIEW app uses. Only for systems that send the long reply (seen on a Tab 5S Up 40515 / 2FV2); the token is not stored. {rubrica_error}",
         "data": {
-          "rubrica_gid": "GID appartamento"
+          "rubrica_gid": "Apartment GID"
         },
         "data_description": {
-          "rubrica_gid": "Il GID dell'appartamento nella rubrica (proposto quello che dichiara l'impianto)."
+          "rubrica_gid": "The apartment GID in the phonebook (the one the system declares is proposed)."
         }
       },
       "av_key": {
-        "title": "Chiave dello stream /av",
-        "description": "`/api/vimar_intercom/av` senza `autocall=0` chiama la targa: accetta solo un utente di Home Assistant autenticato oppure questa chiave nel parametro `{param}`. La camera dell'integrazione la usa da sola.\n\nChiave attuale: `{key}`\n\nPer go2rtc, Frigate o Scrypted aggiungi `&{param}=` seguito dalla chiave all'URL (vedi docs/EXTERNAL.md). Sugli URL passivi (`autocall=0`) per ora è facoltativa, ma una chiave sbagliata viene rifiutata.\n\nSe un log o un URL con la chiave è finito in mani altrui, rigenerala: la vecchia smette subito di funzionare e l'integrazione si ricarica (una chiamata in corso cade).",
+        "title": "/av stream key",
+        "description": "`/api/vimar_intercom/av` without `autocall=0` calls the panel: it only accepts an authenticated Home Assistant user or this key in the `{param}` parameter. The integration's camera adds it by itself.\n\nCurrent key: `{key}`\n\nFor go2rtc, Frigate or Scrypted append `&{param}=` followed by the key to the URL (see docs/EXTERNAL.md). On passive URLs (`autocall=0`) it is optional for now, but a wrong key is refused.\n\nIf a log or a URL with the key ever reached someone else, regenerate it: the old key stops working at once and the integration reloads (a call in progress drops).",
         "data": {
-          "regenerate": "Rigenera la chiave"
+          "regenerate": "Regenerate the key"
         },
         "data_description": {
-          "regenerate": "Crea una chiave nuova. Poi aggiorna l'URL in go2rtc, Frigate o Scrypted, se la usano."
+          "regenerate": "Creates a new key. Then update the URL in go2rtc, Frigate or Scrypted, if they use it."
         }
       }
     },
     "error": {
-      "invalid_ip": "Indirizzo IP non valido.",
-      "sip_registration_failed": "Registrazione SIP fallita.",
-      "invalid_actuator_target": "Target attuatore non valido ({actuators_error}): usa solo cifre (es. 55001) oppure AUTO.",
-      "rubrica_import_failed": "Importazione fallita. Vedi il dettaglio nella descrizione.",
-      "rubrica_no_actuators": "Nessun attuatore trovato per il GID {rubrica_gid}: controlla il GID dell'appartamento.",
-      "internal_panel_not_found": "La risposta dei nickname non dichiara un PICG valido e univoco. Inserisci manualmente l’indirizzo noto di un posto interno.",
-      "internal_panel_no_reply": "Non è arrivata una risposta dei nickname dal PICG configurato. Alcuni impianti cloud non rispondono a GET_NICKS anche a un indirizzo esistente. Questo non dimostra che l’indirizzo sia errato; inserisci manualmente l’indirizzo noto di un posto interno.",
-      "internal_panel_unavailable": "La ricerca dei nickname non è disponibile: l’integrazione potrebbe essere disconnessa o un’altra ricerca potrebbe essere in corso. Riprova quando disponibile o inserisci manualmente l’indirizzo noto di un posto interno.",
-      "invalid_target": "Valore non valido: usa solo cifre (es. 55001).",
-      "invalid_url": "URL non valido: deve iniziare con http:// o https:// e avere un host.",
-      "no_local_proxy": "Manca l'indirizzo del citofono: impostalo in «Impostazioni di rete e attuatori».",
-      "rest_auth_failed": "Il citofono ha rifiutato le credenziali SIP, oppure non espone questa API. Nota: risponde 401 in entrambi i casi.",
-      "rest_unavailable": "Citofono non raggiungibile in HTTP sulla rete locale. Se l'impianto funziona solo via cloud, usa «Scarica la rubrica dal cloud Vimar» o l'importazione da file.",
-      "file_not_allowed": "File fuori dalle cartelle che Home Assistant può leggere: aggiungi la sua cartella ad allowlist_external_dirs o usa una cartella media.",
-      "text_too_long": "Testo troppo lungo: massimo 255 caratteri.",
-      "file_not_found": "File non trovato: indica il percorso completo, es. /config/media/citofono/messaggio.mp3.",
-      "upload_bad_type": "Carica un file .mp3, .wav o .m4a con un nome semplice (lettere, cifre, spazi, - _ . ( )).",
-      "upload_too_big": "File troppo grande: massimo 5 MB.",
-      "upload_failed": "File non salvato nella cartella messaggi: guarda il log di Home Assistant.",
-      "path_not_allowed": "Home Assistant non può scrivere in questa cartella: aggiungila ad allowlist_external_dirs o usa una cartella media.",
-      "path_public": "Cartella pubblica: /config/www è servita su /local senza login. Usa ad esempio /config/media/citofono.",
-      "no_cloud_token": "La risposta di stato non contiene il token della rubrica. Usa lo scaricamento dal citofono oppure importa rubrica.db.",
-      "no_cloud_status": "Non è arrivata una risposta di stato. Verifica che l’integrazione sia connessa e che l’indirizzo PICG sia corretto, poi riprova. Questo non indica se l’impianto supporta lo scaricamento della rubrica dal cloud.",
-      "cloud_auth_failed": "Il cloud Vimar ha rifiutato il token.",
-      "cloud_failed": "Download della rubrica dal cloud non riuscito.",
-      "actuators_bad_json": "Lista attuatori non valida: il JSON non è valido ({actuators_error})",
-      "actuators_not_list": "Lista attuatori non valida: deve essere una lista JSON, [ ... ]",
-      "actuators_not_object": "Lista attuatori non valida: l'elemento {actuators_error} non è un oggetto JSON",
-      "actuators_missing_keys": "Lista attuatori non valida: chiavi mancanti nell'elemento {actuators_error} (servono name, msg, target, icon)",
-      "actuators_bad_icon": "Lista attuatori non valida: icona non ammessa nell'elemento {actuators_error} (ammesse: door, light, switch)",
-      "cloud_missing_data": "Download della rubrica dal cloud non possibile: manca {cloud_missing} (dominio e proxy cloud vengono dal QR)."
+      "invalid_ip": "Invalid IP address.",
+      "sip_registration_failed": "SIP registration failed.",
+      "invalid_actuator_target": "Invalid actuator target ({actuators_error}): digits only (e.g. 55001) or AUTO.",
+      "rubrica_import_failed": "Import failed. See description above for details.",
+      "rubrica_no_actuators": "No actuators found for GID {rubrica_gid}: check the apartment GID.",
+      "internal_panel_not_found": "The nickname reply does not declare a unique valid PICG. Enter a known indoor monitor address manually.",
+      "internal_panel_no_reply": "No nickname reply arrived from the configured PICG. Some cloud plants do not answer GET_NICKS even at an existing address. This does not prove the address is wrong; enter a known indoor monitor address manually.",
+      "internal_panel_unavailable": "The nickname lookup could not run: the integration may be disconnected or another search may be in progress. Retry once it is available, or enter a known indoor monitor address manually.",
+      "invalid_target": "Invalid value: digits only (e.g. 55001).",
+      "invalid_url": "Invalid URL: it must start with http:// or https:// and have a host.",
+      "no_local_proxy": "The intercom address is missing: set it under \"Network and actuator settings\".",
+      "rest_auth_failed": "The intercom rejected the SIP credentials, or does not expose this API. Note: it answers 401 in both cases.",
+      "rest_unavailable": "The intercom is not reachable over HTTP on the local network. If the system only works through the cloud, use “Download the phonebook from the Vimar cloud” or the file import instead.",
+      "file_not_allowed": "File outside the folders Home Assistant may read: add its folder to allowlist_external_dirs or use a media folder.",
+      "text_too_long": "Text too long: 255 characters at most.",
+      "file_not_found": "File not found: use the full path, e.g. /config/media/citofono/messaggio.mp3.",
+      "upload_bad_type": "Upload an .mp3, .wav or .m4a file with a plain name (letters, digits, spaces, - _ . ( )).",
+      "upload_too_big": "File too big: max 5 MB.",
+      "upload_failed": "File not saved in the messages folder: see the Home Assistant log.",
+      "path_not_allowed": "Home Assistant cannot write to this folder: add it to allowlist_external_dirs or use a media folder.",
+      "path_public": "Public folder: /config/www is served on /local without login. Use e.g. /config/media/citofono.",
+      "no_cloud_token": "The status reply did not include a phonebook token. Use the intercom download or import rubrica.db instead.",
+      "no_cloud_status": "No status reply was received. Check that the integration is connected and that the PICG address is correct, then retry. This does not establish whether the system supports cloud phonebook downloads.",
+      "cloud_auth_failed": "The Vimar cloud rejected the token.",
+      "cloud_failed": "Phonebook download from the cloud failed.",
+      "actuators_bad_json": "Invalid actuators list: not valid JSON ({actuators_error})",
+      "actuators_not_list": "Invalid actuators list: it must be a JSON list, [ ... ]",
+      "actuators_not_object": "Invalid actuators list: item {actuators_error} is not a JSON object",
+      "actuators_missing_keys": "Invalid actuators list: missing keys in item {actuators_error} (needed: name, msg, target, icon)",
+      "actuators_bad_icon": "Invalid actuators list: icon not allowed in item {actuators_error} (allowed: door, light, switch)",
+      "cloud_missing_data": "Phonebook download from the cloud not possible: missing {cloud_missing} (the cloud domain and proxy come from the QR code)."
     }
   },
   "entity": {
     "binary_sensor": {
       "sip_registered": {
-        "name": "Registrazione SIP"
+        "name": "SIP registration"
       },
       "in_call": {
-        "name": "In chiamata"
+        "name": "In call"
       },
       "ringing": {
-        "name": "Squillo",
+        "name": "Ringing",
         "state_attributes": {
           "chiamante": {
-            "name": "Chiamante"
+            "name": "Caller"
           },
           "chiamante_id": {
-            "name": "ID chiamante"
+            "name": "Caller ID"
           }
         }
       },
       "calling": {
-        "name": "Chiamata in uscita"
+        "name": "Outgoing call"
       },
       "new_videomessage": {
-        "name": "Nuovo videomessaggio",
+        "name": "New video message",
         "state_attributes": {
           "ultimo_cambio": {
-            "name": "Ultimo cambio"
+            "name": "Last change"
           },
           "spazio": {
-            "name": "Spazio"
+            "name": "Storage"
           }
         }
       }
     },
     "button": {
       "call": {
-        "name": "Chiama"
+        "name": "Call"
       },
       "call_ext": {
-        "name": "Chiama video (esterno)"
+        "name": "Call the entrance panel (video)"
       },
       "call_int": {
-        "name": "Chiama casa (interno)"
+        "name": "Call the indoor monitor"
       },
       "answer": {
-        "name": "Rispondi"
+        "name": "Answer"
       },
       "decline": {
-        "name": "Rifiuta"
+        "name": "Decline"
       },
       "hangup": {
-        "name": "Riaggancia"
+        "name": "Hang up"
       },
       "door_street": {
-        "name": "Apri porta"
+        "name": "Open door"
       },
       "test_ring": {
-        "name": "Squillo di prova"
+        "name": "Test ring"
       }
     },
     "event": {
       "doorbell": {
-        "name": "Campanello"
+        "name": "Doorbell"
       },
       "fuoriporta": {
-        "name": "Fuoriporta"
+        "name": "Apartment door bell"
       }
     },
     "lock": {
       "lock": {
-        "name": "Serratura"
+        "name": "Door lock"
       }
     },
     "select": {
       "vm_timeout": {
-        "name": "Segreteria · ritardo"
+        "name": "Voicemail delay"
       },
       "away_file": {
-        "name": "Segreteria · file audio",
+        "name": "Voicemail audio file",
         "state": {
-          "none": "Nessuno (usa il testo)"
+          "none": "None (use the text)"
         }
       }
     },
     "sensor": {
       "devices": {
-        "name": "Dispositivi",
+        "name": "Devices",
         "state_attributes": {
           "dispositivi": {
-            "name": "Dispositivi"
+            "name": "Devices"
           },
           "riepilogo": {
-            "name": "Riepilogo"
+            "name": "Summary"
           }
         }
       },
       "status": {
-        "name": "Stato",
+        "name": "Status",
         "state": {
-          "offline": "Non raggiungibile",
-          "idle": "Pronto",
-          "ringing": "Squilla",
-          "in_call": "In chiamata",
-          "calling": "Chiamata in corso"
+          "offline": "Unreachable",
+          "idle": "Ready",
+          "ringing": "Ringing",
+          "in_call": "In call",
+          "calling": "Calling"
         },
         "state_attributes": {
           "registrato": {
-            "name": "Registrato"
+            "name": "Registered"
           },
           "in_chiamata": {
-            "name": "In chiamata"
+            "name": "In call"
           },
           "squillo": {
-            "name": "Squillo"
+            "name": "Ringing"
           },
           "chiamata_in_uscita": {
-            "name": "Chiamata in uscita"
+            "name": "Outgoing call"
           },
           "sip_user": {
-            "name": "Utente SIP"
+            "name": "SIP user"
           },
           "sip_domain": {
-            "name": "Dominio SIP"
+            "name": "SIP domain"
           },
           "proxy": {
             "name": "Proxy"
           },
           "transport": {
-            "name": "Trasporto"
+            "name": "Transport"
           },
           "ip_locale": {
-            "name": "IP locale"
+            "name": "Local IP"
           },
           "ultima_registrazione": {
-            "name": "Ultima registrazione"
+            "name": "Last registration"
           },
           "registrazioni_fallite": {
-            "name": "Registrazioni fallite"
+            "name": "Failed registrations"
           },
           "ultimo_errore": {
-            "name": "Ultimo errore"
+            "name": "Last error"
           },
           "ultimo_errore_ora": {
-            "name": "Ora ultimo errore"
+            "name": "Last error time"
           },
           "avviato_il": {
-            "name": "Avviato il"
+            "name": "Started at"
           },
           "gid_appartamento": {
-            "name": "GID appartamento"
+            "name": "Apartment GID"
           },
           "nomi_appartamento": {
-            "name": "Nomi appartamento"
+            "name": "Apartment names"
           },
           "cifratura_impianto": {
-            "name": "Cifratura impianto"
+            "name": "System media encryption"
           },
           "srtp_attivo": {
-            "name": "SRTP attivo"
+            "name": "SRTP active"
           }
         }
       },
       "last_caller": {
-        "name": "Ultimo chiamante",
+        "name": "Last caller",
         "state_attributes": {
           "id": {
             "name": "ID"
@@ -430,244 +433,244 @@
             "name": "URI"
           },
           "ora": {
-            "name": "Ora"
+            "name": "Time"
           }
         }
       },
       "last_ring": {
-        "name": "Ultimo squillo",
+        "name": "Last ring",
         "state_attributes": {
           "chiamante": {
-            "name": "Chiamante"
+            "name": "Caller"
           },
           "foto": {
-            "name": "Foto"
+            "name": "Photo"
           },
           "foto_url": {
-            "name": "URL foto"
+            "name": "Photo URL"
           },
           "clip": {
             "name": "Clip"
           },
           "clip_url": {
-            "name": "URL clip"
+            "name": "Clip URL"
           }
         }
       },
       "ring_count": {
-        "name": "Squilli",
+        "name": "Rings",
         "state_attributes": {
           "non_risposti_da_ha": {
-            "name": "Non risposti da HA"
+            "name": "Not answered from HA"
           },
           "nota": {
-            "name": "Nota",
+            "name": "Note",
             "state": {
-              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
-              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
-              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
-              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
             }
           }
         }
       },
       "call_count": {
-        "name": "Chiamate",
+        "name": "Calls",
         "state_attributes": {
           "ultima_direzione": {
-            "name": "Ultima direzione",
+            "name": "Last direction",
             "state": {
-              "in": "In arrivo",
-              "out": "In uscita"
+              "in": "Incoming",
+              "out": "Outgoing"
             }
           },
           "ultimo_inizio": {
-            "name": "Ultimo inizio"
+            "name": "Last start"
           },
           "ultima_fine": {
-            "name": "Ultima fine"
+            "name": "Last end"
           },
           "nota": {
-            "name": "Nota",
+            "name": "Note",
             "state": {
-              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
-              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
-              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
-              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
             }
           }
         }
       },
       "last_call_duration": {
-        "name": "Durata ultima chiamata"
+        "name": "Last call duration"
       },
       "last_door": {
-        "name": "Ultima apertura",
+        "name": "Last door opening",
         "state_attributes": {
           "target": {
-            "name": "Targa"
+            "name": "Panel"
           },
           "target_id": {
-            "name": "ID targa"
+            "name": "Panel ID"
           },
           "esito": {
-            "name": "Esito",
+            "name": "Result",
             "state": {
-              "opened": "Aperta",
-              "busy": "Occupato",
-              "queued": "In coda",
-              "unconfirmed": "Non confermata",
-              "not_registered": "Non registrato",
-              "timeout": "Nessuna risposta",
-              "error": "Errore",
-              "send_failed": "Non inviato"
+              "opened": "Opened",
+              "busy": "Busy",
+              "queued": "Queued",
+              "unconfirmed": "Not confirmed",
+              "not_registered": "Not registered",
+              "timeout": "No answer",
+              "error": "Error",
+              "send_failed": "Not sent"
             }
           },
           "codice": {
-            "name": "Codice"
+            "name": "Code"
           },
           "comando": {
-            "name": "Comando"
+            "name": "Command"
           },
           "origine_comando": {
-            "name": "Origine comando",
+            "name": "Command source",
             "state": {
-              "phonebook": "Rubrica",
-              "default": "Predefinito",
-              "explicit": "Indicato nella chiamata"
+              "phonebook": "Phonebook",
+              "default": "Default",
+              "explicit": "Given in the call"
             }
           },
           "aperture": {
-            "name": "Aperture"
+            "name": "Openings"
           }
         }
       },
       "last_command": {
-        "name": "Ultimo comando",
+        "name": "Last command",
         "state_attributes": {
           "body": {
             "name": "Body"
           },
           "target": {
-            "name": "Destinatario"
+            "name": "Target"
           },
           "ora": {
-            "name": "Ora"
+            "name": "Time"
           }
         }
       },
       "last_message_in": {
-        "name": "Ultimo messaggio ricevuto",
+        "name": "Last message received",
         "state_attributes": {
           "ora": {
-            "name": "Ora"
+            "name": "Time"
           }
         }
       },
       "vm_level": {
-        "name": "Spazio segreteria",
+        "name": "Voicemail storage",
         "state_attributes": {
           "nota": {
-            "name": "Nota",
+            "name": "Note",
             "state": {
-              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
-              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
-              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
-              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
             }
           }
         }
       },
       "rubrica_ver": {
-        "name": "Versione rubrica",
+        "name": "Phonebook version",
         "state_attributes": {
           "vm_ver": {
-            "name": "Versione videomessaggi"
+            "name": "Video message version"
           },
           "nota": {
-            "name": "Nota",
+            "name": "Note",
             "state": {
-              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
-              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
-              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
-              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
             }
           }
         }
       },
       "last_missed_call": {
-        "name": "Ultima chiamata persa",
+        "name": "Last missed call",
         "state_attributes": {
           "sip_id": {
-            "name": "ID SIP"
+            "name": "SIP ID"
           },
           "ts": {
-            "name": "Ora"
+            "name": "Time"
           },
           "totale": {
-            "name": "Totale"
+            "name": "Total"
           }
         }
       }
     },
     "switch": {
       "segreteria": {
-        "name": "Segreteria",
+        "name": "Voicemail",
         "state_attributes": {
           "modo": {
-            "name": "Messaggio da"
+            "name": "Message from"
           },
           "target": {
-            "name": "Destinatario"
+            "name": "Target"
           },
           "comando_on": {
-            "name": "Comando on"
+            "name": "Command on"
           },
           "comando_off": {
-            "name": "Comando off"
+            "name": "Command off"
           },
           "stato_reale": {
-            "name": "Stato confermato"
+            "name": "Confirmed state"
           },
           "ultimo_esito": {
-            "name": "Ultimo esito"
+            "name": "Last result"
           },
           "nota": {
-            "name": "Nota",
+            "name": "Note",
             "state": {
-              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
-              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
-              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
-              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
             }
           }
         }
       },
       "dnd": {
-        "name": "Non disturbare",
+        "name": "Do not disturb",
         "state_attributes": {
           "target": {
-            "name": "Destinatario"
+            "name": "Target"
           },
           "comando_on": {
-            "name": "Comando on"
+            "name": "Command on"
           },
           "comando_off": {
-            "name": "Comando off"
+            "name": "Command off"
           },
           "stato_reale": {
-            "name": "Stato confermato"
+            "name": "Confirmed state"
           },
           "ultimo_esito": {
-            "name": "Ultimo esito"
+            "name": "Last result"
           },
           "nota": {
-            "name": "Nota",
+            "name": "Note",
             "state": {
-              "since_integration_start": "Conteggio dall'ultimo avvio dell'integrazione",
-              "video_message_storage": "Occupazione videomessaggi (usato/totale) dal GET_INIT_STATUS",
-              "reimport_on_change": "Cambia quando la rubrica del Tab viene aggiornata → reimporta gli attuatori",
-              "sip_command_to_sga": "Comando via SIP MESSAGE (Panda: blue) verso l'SGA; stato letto dagli annunci del Tab."
+              "since_integration_start": "Counted since the integration started",
+              "video_message_storage": "Video message storage (used/total) from GET_INIT_STATUS",
+              "reimport_on_change": "Changes when the Tab's phonebook is updated: import the actuators again",
+              "sip_command_to_sga": "Command by SIP MESSAGE (Panda: blue) to the SGA; state read from the Tab's announcements."
             }
           }
         }
@@ -675,14 +678,14 @@
     },
     "text": {
       "away_text": {
-        "name": "Segreteria · testo del messaggio"
+        "name": "Voicemail message text"
       }
     },
     "camera": {
       "camera": {
         "state_attributes": {
           "card_entities": {
-            "name": "Entità della card"
+            "name": "Card entities"
           }
         }
       }
@@ -690,134 +693,134 @@
   },
   "services": {
     "send_command": {
-      "name": "Invia comando SIP",
-      "description": "Invia un SIP MESSAGE arbitrario al citofono (test comandi).",
+      "name": "Send SIP command",
+      "description": "Send an arbitrary SIP MESSAGE to the intercom (for testing commands).",
       "fields": {
         "body": {
-          "name": "Comando",
-          "description": "Testo del comando, es. OPEN_2F"
+          "name": "Command",
+          "description": "Command text, e.g. OPEN_2F"
         },
         "target": {
-          "name": "Destinatario",
-          "description": "ID SIP o URI"
+          "name": "Target",
+          "description": "SIP ID or URI"
         },
         "header_name": {
-          "name": "Header (nome)",
-          "description": "Header SIP extra"
+          "name": "Header (name)",
+          "description": "Extra SIP header name"
         },
         "header_value": {
-          "name": "Header (valore)",
-          "description": "Valore header SIP extra"
+          "name": "Header (value)",
+          "description": "Extra SIP header value"
         }
       }
     },
     "call": {
-      "name": "Chiama",
-      "description": "Avvia una chiamata verso una targa/monitor.",
+      "name": "Call",
+      "description": "Start a call to an entry panel or monitor.",
       "fields": {
         "target": {
-          "name": "Destinatario",
-          "description": "ID SIP"
+          "name": "Target",
+          "description": "SIP ID"
         }
       }
     },
     "answer": {
-      "name": "Rispondi",
-      "description": "Risponde alla chiamata in arrivo."
+      "name": "Answer",
+      "description": "Answer an incoming call."
     },
     "decline": {
-      "name": "Rifiuta",
-      "description": "Rifiuta la chiamata in arrivo (603): smette di suonare tutta la casa."
+      "name": "Decline",
+      "description": "Decline the incoming call (603): the whole house stops ringing."
     },
     "simulate_ring": {
-      "name": "Squillo di prova",
-      "description": "Simula uno squillo completo senza la targa né traffico SIP: stato «squilla» (card, sensori), evento doorbell e webhook di inizio, poi la fine da sola come uno squillo senza risposta (webhook di fine).",
+      "name": "Test ring",
+      "description": "Simulate a whole ring with no entrance panel and no SIP traffic: ringing state (card, sensors), doorbell event and start webhook, then it ends by itself like an unanswered ring (end webhook).",
       "fields": {
         "duration": {
-          "name": "Durata",
-          "description": "Secondi di squillo prima della fine automatica."
+          "name": "Duration",
+          "description": "Seconds of ringing before it ends by itself."
         }
       }
     },
     "hangup": {
-      "name": "Riaggancia",
-      "description": "Termina la chiamata attiva."
+      "name": "Hang up",
+      "description": "End the active call."
     },
     "open_door": {
-      "name": "Apri porta",
-      "description": "Invia il comando di apertura alla targa.",
+      "name": "Open door",
+      "description": "Send the door-open command to the entry panel.",
       "fields": {
         "target": {
-          "name": "Targa",
-          "description": "ID SIP della targa. Vuoto = la targa che apre la porta (dalla rubrica), altrimenti l'SGA."
+          "name": "Entry panel",
+          "description": "Entry panel SIP ID. Empty = the panel that opens the door (from the phonebook), otherwise the SGA."
         },
         "command": {
-          "name": "Comando",
-          "description": "Comando di apertura. Vuoto = quello dell'attuatore porta della rubrica per quella targa, altrimenti OPEN_2F."
+          "name": "Command",
+          "description": "Door-open command. Empty = the one of the phonebook's door actuator for that panel, otherwise OPEN_2F."
         }
       }
     },
     "fetch_local": {
-      "name": "Fetch HTTP locale",
-      "description": "GET (Digest sipID/password) verso l'interfaccia locale del citofono. Solo amministratori.",
+      "name": "Local HTTP fetch",
+      "description": "GET (Digest sipID/password) to the intercom's local web interface. Admins only.",
       "fields": {
         "path": {
           "name": "Path",
-          "description": "Es. rest/get_info.php?action=status"
+          "description": "E.g. rest/get_info.php?action=status"
         },
         "save_as": {
-          "name": "Salva come",
-          "description": "Solo il nome del file, in /config/vimar_intercom/"
+          "name": "Save as",
+          "description": "File name only, saved in /config/vimar_intercom/"
         },
         "host": {
           "name": "Host",
-          "description": "IP privato o di loopback (default: il citofono)"
+          "description": "Private or loopback IP (default: the intercom)"
         },
         "scheme": {
-          "name": "Schema",
-          "description": "http o https"
+          "name": "Scheme",
+          "description": "http or https"
         }
       }
     },
     "find_sga": {
-      "name": "Cerca SGA/PICG",
-      "description": "Chiede GET_NICKS (Panda: blue) agli indirizzi indicati, uno alla volta, e si ferma quando il citofono risponde con GET_NICKS_REPLY: la voce con ruolo PICG è il capogruppo dell'impianto. Serve quando non conosci l'SGA e non hai la rubrica (impianti solo-cloud, issue #14). Sull'impianto di riferimento GET_NICKS non fa comparire notifiche sull'app; su altri impianti non è ancora verificato. Non modifica la configurazione, salvo «Applica».",
+      "name": "Find SGA/PICG",
+      "description": "Sends GET_NICKS (Panda: blue) to the given addresses one at a time and stops when the intercom answers with GET_NICKS_REPLY: the entry with role PICG is the system's group head. Use it when you don't know the SGA and have no phonebook (cloud-only systems, issue #14). On the reference system GET_NICKS raises no notification in the app; on others this is not verified yet. It does not change the configuration unless you choose Apply.",
       "fields": {
         "start": {
-          "name": "Primo indirizzo",
-          "description": "Inizio dell'intervallo (compreso)."
+          "name": "First address",
+          "description": "Start of the range (inclusive)."
         },
         "end": {
-          "name": "Ultimo indirizzo",
-          "description": "Fine dell'intervallo (compreso). Al massimo 50 indirizzi."
+          "name": "Last address",
+          "description": "End of the range (inclusive). At most 50 addresses."
         },
         "targets": {
-          "name": "Indirizzi precisi",
-          "description": "In alternativa all'intervallo, una lista separata da virgole (es. 55001, 55002, 55100). Se indicata, start/end vengono ignorati."
+          "name": "Specific addresses",
+          "description": "Instead of the range, a comma-separated list (e.g. 55001, 55002, 55100). If set, start/end are ignored."
         },
         "delay": {
-          "name": "Pausa tra le sonde",
-          "description": "Secondi tra una sonda e la successiva."
+          "name": "Pause between probes",
+          "description": "Seconds between one probe and the next."
         },
         "reply_wait": {
-          "name": "Attesa della risposta",
-          "description": "Secondi di attesa di GET_NICKS_REPLY dopo ogni sonda accettata."
+          "name": "Reply wait",
+          "description": "Seconds to wait for GET_NICKS_REPLY after each accepted probe."
         },
         "apply": {
-          "name": "Applica come PICG",
-          "description": "Se trovato, lo scrive in picg_target (l'integrazione si ricarica)."
+          "name": "Apply as PICG",
+          "description": "If found, write it to picg_target (the integration reloads)."
         },
         "apply_sga": {
-          "name": "Applica anche come SGA",
-          "description": "Se trovato, scrive lo stesso indirizzo anche in sga_target (destinatario di segreteria, non disturbare e apri-porta). Sugli impianti visti finora coincidono; sono comunque due valori distinti."
+          "name": "Also apply as SGA",
+          "description": "If found, also write the same address to sga_target (target of voicemail, do-not-disturb and door opening). They matched on every system seen so far, but they are two distinct values."
         },
         "probe": {
-          "name": "Sonda",
-          "description": "get_nicks (default) è silenziosa sull'app e la risposta dichiara il PICG. get_init_status è l'alternativa per gli impianti dove get_nicks va in timeout: dà i tre esiti puliti, ma all'SGA vero fa comparire «Configurazione appartamento modificata» sull'app a ogni invio."
+          "name": "Probe",
+          "description": "get_nicks (default) raises no notification in the app and its reply names the PICG. get_init_status is the fallback for systems where get_nicks times out: it gives the three clean outcomes, but sent to the real SGA it makes the app show \"Configurazione appartamento modificata\" every time."
         },
         "sip_timeout": {
-          "name": "Timeout SIP per sonda",
-          "description": "Quanto aspettare la risposta SIP (200/202/404) di ogni sonda prima di passare oltre. Via cloud il relay può rispondere 202 (accettato, non consegnato) solo dopo ~15 s, quindi usare 20."
+          "name": "SIP timeout per probe",
+          "description": "How long to wait for each probe's SIP answer (200/202/404) before moving on. Over the cloud the relay may answer 202 (accepted, not delivered) only after ~15 s, so use 20."
         }
       }
     }
@@ -825,92 +828,117 @@
   "selector": {
     "voice_answer": {
       "options": {
-        "declared": "Solo dichiarato (?voice_answer=1)",
-        "off": "Mai",
-        "any": "Chiunque abbia il microfono"
+        "declared": "Declared only (?voice_answer=1)",
+        "off": "Never",
+        "any": "Anyone with a microphone"
       }
     },
     "media_enc": {
       "options": {
-        "auto": "Automatico (dall'impianto)",
-        "on": "Attivo (SRTP)",
-        "off": "Disattivo (RTP in chiaro)"
+        "auto": "Automatic (from the system)",
+        "on": "On (SRTP)",
+        "off": "Off (plain RTP)"
       }
     },
     "homekit_answer": {
       "options": {
-        "talk": "Rispondi quando parli",
-        "open": "Rispondi all'apertura"
+        "talk": "Answer when you talk",
+        "open": "Answer when the view opens"
       }
     },
     "video_bandwidth": {
       "options": {
-        "auto": "Automatico (2 Mbit/s in locale, 256 kbit/s in cloud)",
-        "256": "256 kbit/s (risoluzione più bassa su alcune targhe)",
-        "2048": "2 Mbit/s (più nitido, serve una connessione pulita)"
+        "auto": "Automatic (2 Mbit/s locally, 256 kbit/s over the cloud)",
+        "256": "256 kbit/s (lower resolution on some panels)",
+        "2048": "2 Mbit/s (sharper, needs a clean connection)"
+      }
+    },
+    "mode": {
+      "options": {
+        "qr": "Scan the pairing QR code (recommended)",
+        "manual": "Enter the SIP credentials by hand"
+      }
+    },
+    "import_info": {
+      "options": {
+        "sga_differs": "{sga} — different from the one configured now ({current}); confirming makes it the new sga_target.",
+        "sga_same": "{sga} — the same as the one in use.",
+        "sga_missing": "not found (no SYSTEM table, or no MAGIC_APT_INTERCOM in it); the one configured stays.",
+        "picg_differs": "{picg} — declared by the intercom itself, different from the one configured ({current}); confirming makes it the new picg_target.",
+        "picg_same": "{picg} — declared by the intercom, the same as the one in use.",
+        "picg_kept": "not found by the phonebook source: the one configured stays ({current}).",
+        "picg_from_sga": "not found by the phonebook source and not configured yet: it will be set equal to the SGA ({picg}).",
+        "camera_differs": "{camera} — different from the one configured now ({current}); confirming makes it the new camera_target.",
+        "camera_same": "{camera} — the same as the one in use.",
+        "camera_missing": "no entrance panel (PE) in the phonebook; the one configured stays ({current}).",
+        "door_differs": "{door} — the panel of the door actuator (GID_PE), different from the one configured ({current}); confirming sends the door command there.",
+        "door_new": "{door} — the panel of the door actuator (GID_PE); confirming sends the door command there.",
+        "door_same": "{door} — the same as the one in use.",
+        "door_kept": "no door actuator in the phonebook; the one configured stays ({current}).",
+        "door_sga": "no door actuator in the phonebook; the door command stays with the SGA ({sga})."
       }
     }
   },
   "exceptions": {
     "door_busy": {
-      "message": "Apertura non riuscita: un'altra apertura è in corso"
+      "message": "Door not opened: another door command is still in progress"
     },
     "door_queued": {
-      "message": "Apertura non confermata: il relay ha messo il comando in coda (202) e nessun dispositivo l'ha confermato"
+      "message": "Door not confirmed: the relay queued the command (202) and no device confirmed it"
     },
     "door_unconfirmed": {
-      "message": "Nessuna conferma dal relay: la porta potrebbe aprirsi lo stesso, attendi prima di riprovare"
+      "message": "No confirmation from the relay: the door may still open, wait before trying again"
     },
     "door_not_registered": {
-      "message": "Apertura non riuscita: il citofono non è registrato"
+      "message": "Door not opened: the intercom is not registered"
     },
     "door_timeout": {
-      "message": "Apertura non riuscita: nessuna risposta dal citofono"
+      "message": "Door not opened: no answer from the intercom"
     },
     "door_error": {
-      "message": "Apertura non riuscita: il citofono ha risposto con l'errore SIP {code}"
+      "message": "Door not opened: the intercom answered with SIP error {code}"
     },
     "door_send_failed": {
-      "message": "Apertura non riuscita: invio del comando fallito"
+      "message": "Door not opened: the command could not be sent"
     },
     "command_queued": {
-      "message": "Comando non confermato: il relay l'ha messo in coda (202) e nessun dispositivo l'ha confermato"
+      "message": "Command not confirmed: the relay queued it (202) and no device confirmed it"
     },
     "proxy_unreachable": {
-      "message": "Proxy SIP non raggiungibile: {error}"
+      "message": "SIP proxy unreachable: {error}"
     },
     "call_failed": {
-      "message": "Chiamata non riuscita: {error}"
+      "message": "Call failed: {error}"
     },
     "call_target_failed": {
-      "message": "Chiamata a {target} non riuscita: {error}"
+      "message": "Call to {target} failed: {error}"
     },
     "answer_failed": {
-      "message": "Risposta non riuscita: {error}"
+      "message": "Answer failed: {error}"
     },
     "decline_failed": {
-      "message": "Rifiuto non riuscito: {error}"
+      "message": "Decline failed: {error}"
     },
     "test_ring_busy": {
-      "message": "Squillo di prova non avviato: una chiamata è già in corso"
+      "message": "Test ring not started: a call is already in progress"
     },
     "actuator_failed": {
-      "message": "{name} non riuscito: {error}"
+      "message": "{name} failed: {error}"
     },
     "vm_timeout_not_allowed": {
-      "message": "Valore non ammesso dal citofono: {option}"
+      "message": "Value not allowed by the intercom: {option}"
     },
     "vm_timeout_failed": {
-      "message": "Ritardo segreteria non cambiato: {error}"
+      "message": "Voicemail delay not changed: {error}"
     },
     "switch_failed": {
-      "message": "{entity}: comando non riuscito ({error})"
+      "message": "{entity}: command failed ({error})"
     }
   },
   "issues": {
     "registration_refused": {
-      "title": "Il citofono rifiuta la registrazione di Home Assistant",
-      "description": "Il citofono risponde **{code}** a ogni registrazione di «{title}»: le credenziali del QR di abbinamento non valgono più. Succede quando il posto di Home Assistant sul citofono è stato rigenerato o tolto, per esempio abbinando un altro telefono. Finché resta così il citofono non squilla in Home Assistant e video, porta e segreteria non funzionano.\n\nSul citofono genera un QR nuovo per Home Assistant e in Home Assistant apri l'integrazione Vimar Intercom e scegli **⋮ → Riconfigura** per incollare quel QR (entità e automazioni restano). L'integrazione intanto continua a riprovare: questo avviso sparisce da solo appena la registrazione riesce."
+      "title": "The intercom refuses Home Assistant's registration",
+      "description": "The intercom answers **{code}** to every registration of “{title}”: the credentials from the pairing QR are no longer valid. This happens when Home Assistant's slot on the intercom was regenerated or removed, for example while pairing another phone. Until then the intercom does not ring in Home Assistant, and video, door and voicemail do not work.\n\nOn the intercom, create a new QR for Home Assistant and in Home Assistant open the Vimar Intercom integration and choose **⋮ → Reconfigure** to paste it (entities and automations stay). The integration keeps retrying meanwhile: this notice goes away by itself as soon as the registration succeeds."
     }
   }
 }

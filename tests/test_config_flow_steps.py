@@ -237,7 +237,7 @@ def _options_flow(of, data=None, options=None, *, hass_data=None, allowed=True, 
     flow.hass = types.SimpleNamespace(
         data=hass_data or {},
         auth=types.SimpleNamespace(async_get_users=users),
-        config=types.SimpleNamespace(is_allowed_path=lambda p: allowed,
+        config=types.SimpleNamespace(is_allowed_path=lambda p: allowed, language="it",
                                      path=lambda *p: "/config/" + "/".join(p)),
         async_add_executor_job=_job)
     flow.async_show_form = _form

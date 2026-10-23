@@ -575,7 +575,7 @@ def test_every_entity_is_named_by_a_translation(tmp_path):
         domain, key = e.entity_id.split(".")[0], e._attr_translation_key
         for name, table in tables.items():
             assert table[domain][key]["name"], (name, uid)
-    assert tables["strings.json"] == tables["translations/it.json"]
+    assert tables["strings.json"] == tables["translations/en.json"]  # HA's English source
 
 
 def test_actuator_buttons_keep_the_name_from_the_options():

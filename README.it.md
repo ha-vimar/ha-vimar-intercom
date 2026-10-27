@@ -25,7 +25,9 @@ oppure attraverso il cloud Vimar. Niente RTSP, e non serve un account Vimar.
 
 Anche gli altri Tab Vimar 2F / 2FV2 / IP dovrebbero funzionare: la configurazione arriva dal QR di
 abbinamento che il Tab mostra per l'app VIEW. I kit Wi-Fi che usano l'app **View Door** (per esempio
-K40955) non sono supportati: per quanto ne sappiamo non hanno questo QR ([#167](https://github.com/ha-vimar/ha-vimar-intercom/issues/167)). Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
+K40955) non sono supportati: per quanto ne sappiamo non hanno questo QR ([#167](https://github.com/ha-vimar/ha-vimar-intercom/issues/167)). Per quei
+kit c'è un'integrazione separata e sperimentale della community:
+[ha-vimar-viewdoor](https://github.com/italo1983/ha-vimar-viewdoor) (non fa parte di questo progetto). Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 Cosa cambia da un impianto all'altro: [Configurazione](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.it.md#cosa-cambia-da-impianto-a-impianto).
 
 ## Installazione

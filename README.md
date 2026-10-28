@@ -29,7 +29,9 @@ far as we know they have no such QR code ([#167](https://github.com/ha-vimar/ha-
 kits there are two separate, experimental community integrations, not part of this project:
 [zepedropaixao/vimar-viewdoor](https://github.com/zepedropaixao/vimar-viewdoor) (setup with the monitor's IP and
 View Door password) and [italo1983/ha-vimar-viewdoor](https://github.com/italo1983/ha-vimar-viewdoor) (gate
-buttons, keys entered by hand). Both use the `vimar_viewdoor` domain, so install only one. Got it
+buttons, keys entered by hand). Both use the `vimar_viewdoor` domain, so install only one. On firmware
+V401R001B002 (reported on a K40955) the monitor does not expose the stream key locally, so the first one's
+self-service setup cannot start video there and the key has to come from the cloud, as in the second. Got it
 running, or not? Please open a [compatibility report](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 What changes from one plant to another: [Configuration](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.md#what-differs-between-plants).
 

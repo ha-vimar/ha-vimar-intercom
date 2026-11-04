@@ -19,7 +19,29 @@ Giro 2 (verifica con le dipendenze installate):
 - `ruff check .`: pulito (ruff 0.16.10).
 - Nessuna correzione al codice necessaria: niente commit di codice in questo giro.
 
+Giro 3 (revisione dei commit di stanotte e degli ultimi 7 giorni: `1ccb4b2`, `c728fcb`,
+`2fdaa07`, `59c09bf`). Le affermazioni dei commit di documentazione tornano col codice
+(icone in `button.py`, download cloud dalla 1.0.12, README/README.it allineati). Trovati
+due bug nel codice che quei commit documentano e testano:
+
+- `9094567` fix(rubrica): percorsi con '#', '%' o '?' aperti correttamente. L'URI SQLite
+  in sola lettura non faceva l'escape del percorso: un `rubrica #2.db` caricato dalle
+  opzioni dava risultati vuoti senza errori, un `%` "file non trovato". Corretto in
+  `rubrica_import.py` e in `tools/parse_rubrica.py`, con test.
+- `2c56ea6` fix(tools): `parse_rubrica.py` su un file non SQLite usciva con un traceback;
+  ora con un messaggio, come per il file mancante.
+- Suite come in CI dopo la prima correzione: 2450 passati, 29 saltati, 1 fallito
+  (vedi sotto, test dipendente dai tempi), copertura 97,15%. `ruff check .` pulito.
+
 ## Non fatto e perche'
+
+- `tests/test_tmp_uri_probe.py`: file di prova creato nel giro 3 per riprodurre il bug
+  dei percorsi. Cancellare/spostare file non mi era permesso, quindi l'ho svuotato (solo
+  un commento, nessun test) e NON l'ho committato: si puo' cancellare.
+- `tests/test_homekit_media.py::test_after_a_stall_silence_resumes_after_fill_after` e'
+  fallito una volta nella suite completa (giro 3) e passa ripetuto da solo: misura tempi
+  reali (`time.monotonic`, soglie di 30 ms) e sotto carico puo' sforare. Non toccato,
+  causa non certa.
 
 - `mypy`: non installato nella `.venv` e non usato dal progetto (nessun passo in CI,
   non e' in `requirements-dev.txt`); non l'ho aggiunto per non cambiare le dipendenze.
@@ -37,5 +59,8 @@ Giro 2 (verifica con le dipendenze installate):
 - Roadmap di `docs/RUBRICA.md` §6: supporto `TIME` ed entita' derivate dal
   `PHONEBOOK` (+ `TVCC_LIST`). Sono funzioni nuove, scelte di design non ancora
   prese nei documenti.
+- Commenti nel codice che rimandano ancora a `PROTOCOL.md`, che non c'e' (`const.py`,
+  `event.py`, `hub.py`, `plant_messages.py`, `rubrica_import.py`, `ARCHITECTURE.md`):
+  sistemarli o recuperare il documento.
 - Se rendere robusto il test della porta chiusa sopra (es. accettare anche il
   timeout su Windows) o lasciarlo com'e' finche' non fallisce in CI.

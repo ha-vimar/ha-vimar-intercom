@@ -8,6 +8,7 @@ errori su file mancante o non-SQLite.
 from __future__ import annotations
 
 import sqlite3
+import sys
 
 import pytest
 
@@ -79,6 +80,18 @@ def test_parse_rubrica_file_no_system_table(tmp_path):
 
     assert result["system"] == {}
     assert result["sga"] is None
+
+
+@pytest.mark.parametrize("name", ["rubrica #2.db", "rubrica 100%41.db", "rubrica?.db"])
+def test_uri_characters_in_the_file_name_are_not_read_as_uri_syntax(tmp_path, name):
+    """The upload keeps the user's file name: '#', '%' and '?' are file name characters,
+    not a fragment, an escape or a query in the read-only URI."""
+    if name == "rubrica?.db" and sys.platform == "win32":
+        pytest.skip("'?' is not allowed in Windows file names")
+    db = tmp_path / name
+    _make_db(db)
+
+    assert rubrica_import.parse_rubrica_file(str(db), gid="101")["sga"] == "55001"
 
 
 def test_missing_file_raises_rubrica_import_error(tmp_path):

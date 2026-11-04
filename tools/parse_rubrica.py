@@ -32,6 +32,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ICON_MAP = {"DOOR": "door", "LIGHT": "light", "SWITCH": "switch"}
 
@@ -57,7 +58,8 @@ def _connect_ro(path: str) -> sqlite3.Connection:
     p = Path(path)
     if not p.exists():
         sys.exit(f"File non trovato: {path}")
-    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    # quote(): '#', '?' and '%' in a path are not URI syntax for SQLite
+    con = sqlite3.connect(f"file:{quote(p.as_posix(), safe='/:')}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     return con
 

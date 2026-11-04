@@ -113,6 +113,18 @@ def test_the_database_is_opened_read_only(db):
         con.close()
 
 
+@pytest.mark.parametrize("folder", ["rubrica #2", "copia 100%41"])
+def test_uri_characters_in_the_path_are_not_read_as_uri_syntax(tmp_path, folder):
+    (tmp_path / folder).mkdir()
+    path = tmp_path / folder / "rubrica.db"
+    _make_db(path)
+    con = _open(path)
+    try:
+        assert pr.extract_system(con)["MAGIC_APT_INTERCOM"] == "55001"
+    finally:
+        con.close()
+
+
 def test_a_missing_file_stops_with_a_message(tmp_path):
     with pytest.raises(SystemExit, match="File non trovato"):
         pr._connect_ro(str(tmp_path / "missing.db"))

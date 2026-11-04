@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from urllib.parse import quote
 
 from .runtime import door_from_actuators
 
@@ -30,7 +31,8 @@ def _connect_ro(path: str) -> sqlite3.Connection:
         raise RubricaImportError(f"File not found: {path}")
     con = None
     try:
-        con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+        # quote(): '#', '?' and '%' in a file name are not URI syntax for SQLite
+        con = sqlite3.connect(f"file:{quote(p.as_posix(), safe='/:')}?mode=ro", uri=True)
         con.execute("SELECT 1")  # verifica che sia davvero un database SQLite leggibile
     except sqlite3.Error as exc:
         if con is not None:

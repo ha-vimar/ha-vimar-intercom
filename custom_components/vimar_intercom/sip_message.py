@@ -148,6 +148,9 @@ def _host_of(uri_or_via: str) -> str:
     («SIP/2.0/UDP 192.168.0.5:5060;branch=…»)."""
     s = uri_or_via.split(";")[0].strip()
     s = s.rsplit("@", 1)[-1].split()[-1]
+    # Without a user part (`sip:192.168.0.5:5060`) the scheme is still in front of the host.
+    if s.lower().startswith(("sip:", "sips:")):
+        s = s.split(":", 1)[1]
     return s.rsplit(":", 1)[0] if s.count(":") == 1 else s
 
 

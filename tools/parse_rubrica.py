@@ -8,7 +8,7 @@ in sola lettura, ciò che serve all'integrazione HA:
   - altri parametri SYSTEM utili (VM_PREFIX, VM_WM_*, MAX_TVCC_TIME);
   - riepilogo PHONEBOOK.
 
-Lo schema è quello ricavato dall'APK (docs/PROTOCOL.md §5):
+Lo schema è quello ricavato dall'APK (docs/RUBRICA.md §2):
   ACTUATOR_LIST(ID, NAME, GID_PE, ATT_ID, MSG, DTMF, ICON, CMD)
   ACTUATOR_RULES(ID, ACTUATOR_ID, GA_GID)
   ICON_LIST(ID, NAME ∈ DOOR|LIGHT|SWITCH)

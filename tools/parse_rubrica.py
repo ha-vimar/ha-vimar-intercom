@@ -60,6 +60,12 @@ def _connect_ro(path: str) -> sqlite3.Connection:
         sys.exit(f"File non trovato: {path}")
     # quote(): '#', '?' and '%' in a path are not URI syntax for SQLite
     con = sqlite3.connect(f"file:{quote(p.as_posix(), safe='/:')}?mode=ro", uri=True)
+    try:
+        # connect() is lazy: read the schema now, so a wrong file gets a message, not a traceback
+        con.execute("SELECT name FROM sqlite_master LIMIT 1").fetchall()
+    except sqlite3.Error as e:
+        con.close()
+        sys.exit(f"Non è un database SQLite leggibile: {path} ({e})")
     con.row_factory = sqlite3.Row
     return con
 

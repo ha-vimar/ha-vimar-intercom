@@ -130,6 +130,13 @@ def test_a_missing_file_stops_with_a_message(tmp_path):
         pr._connect_ro(str(tmp_path / "missing.db"))
 
 
+def test_a_file_that_is_not_sqlite_stops_with_a_message(tmp_path):
+    path = tmp_path / "rubrica.db"
+    path.write_bytes(b"not a database, just text " * 10)
+    with pytest.raises(SystemExit, match="Non è un database SQLite"):
+        pr._connect_ro(str(path))
+
+
 @pytest.mark.parametrize(("value", "icon"), [
     (None, "switch"), ("DOOR", "door"), (" light ", "light"), ("Switch", "switch"), ("FAN", "switch"),
 ])

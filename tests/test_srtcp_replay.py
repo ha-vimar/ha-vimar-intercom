@@ -6,7 +6,9 @@ again and again, and every copy made the doorbell resend its packets.
 import base64
 import struct
 
-from custom_components.vimar_intercom.srtp import SRTCPContext
+import pytest
+
+from custom_components.vimar_intercom.srtp import SRTCPContext, _truncated_hmac
 
 KEY = base64.b64encode(bytes(range(30))).decode()
 
@@ -78,3 +80,33 @@ def test_a_huge_jump_forgets_the_window_without_a_huge_integer():
     assert peak < 1 << 20, peak
     assert rx._rx_seen == 1
     assert rx.unprotect(far) is None, "and it is still a replay"
+
+
+def test_a_key_shorter_than_30_bytes_is_refused():
+    with pytest.raises(ValueError, match="SRTCP key too short: 20 bytes"):
+        SRTCPContext(base64.b64encode(bytes(20)).decode())
+
+
+@pytest.mark.parametrize("length", [0, 8, 21])
+def test_a_packet_too_short_for_header_index_and_tag_is_dropped(length):
+    _, rx = sender_and_receiver()
+    assert rx.unprotect(bytes(length)) is None
+    assert rx._rx_max is None, "a runt must not touch the replay window"
+
+
+def test_an_unencrypted_packet_is_authenticated_and_returned_as_is():
+    # E bit clear (RFC 3711 §3.4): the payload travels in clear, still signed.
+    tx, rx = sender_and_receiver()
+    body = rr(7) + struct.pack("!I", 3)
+    pkt = body + _truncated_hmac(tx._hmac, body, SRTCPContext.AUTH_TAG_LEN)
+    assert rx.unprotect(pkt) == rr(7)
+    assert rx.unprotect(pkt) is None, "the replay check applies to it too"
+
+
+def test_an_unencrypted_packet_with_a_bad_tag_is_dropped():
+    tx, rx = sender_and_receiver()
+    body = rr(7) + struct.pack("!I", 3)
+    tag = bytearray(_truncated_hmac(tx._hmac, body, SRTCPContext.AUTH_TAG_LEN))
+    tag[0] ^= 1
+    assert rx.unprotect(body + bytes(tag)) is None
+    assert rx._rx_max is None

@@ -8,7 +8,7 @@ in sola lettura, ciò che serve all'integrazione HA:
   - altri parametri SYSTEM utili (VM_PREFIX, VM_WM_*, MAX_TVCC_TIME);
   - riepilogo PHONEBOOK.
 
-Lo schema è quello ricavato dall'APK (docs/PROTOCOL.md §5):
+Lo schema è quello ricavato dall'APK (docs/RUBRICA.md §2):
   ACTUATOR_LIST(ID, NAME, GID_PE, ATT_ID, MSG, DTMF, ICON, CMD)
   ACTUATOR_RULES(ID, ACTUATOR_ID, GA_GID)
   ICON_LIST(ID, NAME ∈ DOOR|LIGHT|SWITCH)
@@ -32,6 +32,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ICON_MAP = {"DOOR": "door", "LIGHT": "light", "SWITCH": "switch"}
 
@@ -57,7 +58,14 @@ def _connect_ro(path: str) -> sqlite3.Connection:
     p = Path(path)
     if not p.exists():
         sys.exit(f"File non trovato: {path}")
-    con = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    # quote(): '#', '?' and '%' in a path are not URI syntax for SQLite
+    con = sqlite3.connect(f"file:{quote(p.as_posix(), safe='/:')}?mode=ro", uri=True)
+    try:
+        # connect() is lazy: read the schema now, so a wrong file gets a message, not a traceback
+        con.execute("SELECT name FROM sqlite_master LIMIT 1").fetchall()
+    except sqlite3.Error as e:
+        con.close()
+        sys.exit(f"Non è un database SQLite leggibile: {path} ({e})")
     con.row_factory = sqlite3.Row
     return con
 

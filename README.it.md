@@ -29,7 +29,9 @@ K40955) non sono supportati: per quanto ne sappiamo non hanno questo QR ([#167](
 kit ci sono due integrazioni separate e sperimentali della community, che non fanno parte di questo progetto:
 [zepedropaixao/vimar-viewdoor](https://github.com/zepedropaixao/vimar-viewdoor) (configurazione con IP del monitor e
 password di View Door) e [italo1983/ha-vimar-viewdoor](https://github.com/italo1983/ha-vimar-viewdoor) (pulsanti
-del cancello, chiavi da inserire a mano). Usano tutte e due il dominio `vimar_viewdoor`: installane una sola. Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
+del cancello, chiavi da inserire a mano). Usano tutte e due il dominio `vimar_viewdoor`: installane una sola. Sul firmware
+V401R001B002 (segnalato su un K40955) il monitor non espone la chiave dello stream in locale: la configurazione
+automatica della prima lì non avvia il video e la chiave va presa dal cloud, come nella seconda. Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 Cosa cambia da un impianto all'altro: [Configurazione](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.it.md#cosa-cambia-da-impianto-a-impianto).
 
 ## Installazione

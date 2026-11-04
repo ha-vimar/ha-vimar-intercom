@@ -8,6 +8,7 @@ errori su file mancante o non-SQLite.
 from __future__ import annotations
 
 import sqlite3
+import sys
 
 import pytest
 
@@ -79,6 +80,18 @@ def test_parse_rubrica_file_no_system_table(tmp_path):
 
     assert result["system"] == {}
     assert result["sga"] is None
+
+
+@pytest.mark.parametrize("name", ["rubrica #2.db", "rubrica 100%41.db", "rubrica?.db"])
+def test_uri_characters_in_the_file_name_are_not_read_as_uri_syntax(tmp_path, name):
+    """The upload keeps the user's file name: '#', '%' and '?' are file name characters,
+    not a fragment, an escape or a query in the read-only URI."""
+    if name == "rubrica?.db" and sys.platform == "win32":
+        pytest.skip("'?' is not allowed in Windows file names")
+    db = tmp_path / name
+    _make_db(db)
+
+    assert rubrica_import.parse_rubrica_file(str(db), gid="101")["sga"] == "55001"
 
 
 def test_missing_file_raises_rubrica_import_error(tmp_path):
@@ -231,3 +244,36 @@ def test_a_phonebook_without_plates_gives_no_camera(tmp_path):
     con.commit()
     con.close()
     assert rubrica_import.parse_rubrica_file(str(db), gid="101")["camera"] is None
+
+
+@pytest.mark.parametrize("schema", [
+    # The rules table is there but without the column the join needs.
+    ["CREATE TABLE ACTUATOR_LIST (ID INTEGER, NAME TEXT)", "CREATE TABLE ACTUATOR_RULES (ID INTEGER)"],
+    # A phonebook without ID: the fallback to the first plate sorts by it.
+    ["CREATE TABLE PHONEBOOK (GID TEXT, TYPE TEXT)"],
+])
+def test_a_query_that_fails_is_an_import_error_and_closes_the_file(tmp_path, monkeypatch, schema):
+    db = tmp_path / "rubrica.db"
+    con = sqlite3.connect(db)
+    for sql in schema:
+        con.execute(sql)
+    con.commit()
+    con.close()
+    opened = []
+    connect = sqlite3.connect
+
+    def _connect(*a, **k):
+        opened.append(connect(*a, **k))
+        return opened[-1]
+
+    monkeypatch.setattr(sqlite3, "connect", _connect)
+    with pytest.raises(rubrica_import.RubricaImportError, match="Database read error: no such column"):
+        rubrica_import.parse_rubrica_file(str(db), gid="101")
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        opened[0].execute("SELECT 1")
+
+
+def test_the_apartment_gid_is_matched_without_surrounding_spaces(tmp_path):
+    db = tmp_path / "rubrica.db"
+    _make_phonebook(db, [(1, 101, "GA", 55002), (2, 55001, "PE", None)])
+    assert rubrica_import.parse_rubrica_file(str(db), gid=" 101 ")["camera"] == "55002"

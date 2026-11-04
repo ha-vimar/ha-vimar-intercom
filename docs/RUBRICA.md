@@ -44,7 +44,8 @@ riscaricarla. Lo stesso endpoint serve anche la segreteria: `get_file.php?name=m
 ## 0-bis. Dal cloud, con il `token` — solo impianti che lo mandano [VERIFICATO 17/09/2026]
 
 Se il tuo impianto risponde al `GET_INIT_STATUS` in **forma lunga** (con `token` e `rubrica_ver` fra i
-PARAM — vedi `docs/PROTOCOL.md` §4-bis), la rubrica si scarica con una sola richiesta autenticata,
+PARAM — il parsing è in `plant_messages.py`, il download in `cloud_phonebook.py`), la rubrica si scarica
+con una sola richiesta autenticata,
 **senza telefono rootato, senza WSA, senza adb**:
 
 ```bash
@@ -195,6 +196,10 @@ crea i bottoni dinamici (`button.py` → `VimarActuatorButton`), inviati con `hu
 - ~~Auto‑detect `sga_target` da `SYSTEM.MAGIC_APT_INTERCOM`.~~ **Fatto** (applicato alla conferma).
 - ~~Scaricare la rubrica senza estrarla a mano.~~ **Fatto**: «Scarica la rubrica dal citofono», con il PICG
   dichiarato dall'impianto.
-- Mappatura `ICON_LIST` → device_class HA; supporto `TIME`. (La colonna `DTMF` c'è, ma l'app non la usa mai.)
+- ~~Mappatura `ICON_LIST` → icona HA.~~ **Fatto**: `door`/`light`/`switch` diventano icone mdi sui bottoni
+  attuatore (`button.py`). Un device_class vero non c'è: quelli dei bottoni HA (identify, restart, update)
+  non c'entrano.
+- Supporto `TIME`. (La colonna `DTMF` c'è, ma l'app non la usa mai.)
 - Entità derivate dal `PHONEBOOK` (targhe/camere 551xx, centralino, appartamento) + supporto `TVCC_LIST` dove presente.
-- Import cloud phonebook quando il `token` è disponibile (impianti con SIP reply o home HTTP).
+- ~~Import cloud phonebook quando il `token` è disponibile.~~ **Fatto** dalla 1.0.12: «Scarica la rubrica dal
+  cloud Vimar» (§0-bis).

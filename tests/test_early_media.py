@@ -336,6 +336,11 @@ def test_parse_sdp_direzione_e_formati():
     ("sip:55001@192.168.0.5:5060;transport=udp", "192.168.0.5"),
     ("sip:55001@192.168.0.5", "192.168.0.5"),
     ("SIP/2.0/UDP 192.168.0.7:5060;branch=z9hG4bKx;rport", "192.168.0.7"),
+    # A Contact without a user part is valid (RFC 3261 §19.1.1): the scheme is not the host.
+    ("sip:192.168.0.5:5060;transport=udp", "192.168.0.5"),
+    ("sip:192.168.0.5", "192.168.0.5"),
+    ("sips:192.168.0.5:5061", "192.168.0.5"),
+    ("SIP:55001@192.168.0.5", "192.168.0.5"),
 ])
 def test_host_of(testo, host):
     assert sip._host_of(testo) == host

@@ -6,7 +6,9 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
-## [1.0.27] - 2026-11-05
+## [1.0.28] - 2026-11-05
+
+The same changes as 1.0.27, released again: the `v1.0.27` tag points to the commit before the version bump, so its release asset could not be built.
 
 ### Bug fixes
 
@@ -22,6 +24,10 @@ Italian and are kept as they were written.
 
 - tools/parse_rubrica.py explains when the file is not a directory database ([#228](https://github.com/ha-vimar/ha-vimar-intercom/pull/228))
 - New tests for SIP headers, SRTCP, away-mode uploads and directory import ([#228](https://github.com/ha-vimar/ha-vimar-intercom/pull/228))
+
+## [1.0.27] - 2026-11-05 [YANKED]
+
+Not released: the tag points to the commit before the version bump. Use 1.0.28.
 
 ## [1.0.26] - 2026-10-23
 

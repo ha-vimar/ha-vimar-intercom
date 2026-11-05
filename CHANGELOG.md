@@ -6,6 +6,23 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
+## [1.0.27] - 2026-11-05
+
+### Bug fixes
+
+- Calls answered over local UDP use the right host when the intercom's Contact has no user part ([#228](https://github.com/ha-vimar/ha-vimar-intercom/pull/228))
+- Directory import works with files whose path contains #, % or ? ([#228](https://github.com/ha-vimar/ha-vimar-intercom/pull/228))
+
+### Documentation
+
+- The compatibility section links the community integrations for View Door Wi-Fi kits ([#167](https://github.com/ha-vimar/ha-vimar-intercom/pull/167)) ([#223](https://github.com/ha-vimar/ha-vimar-intercom/pull/223))
+- The compatibility section notes that on View Door firmware V401R001B002 the stream key is not available locally ([#167](https://github.com/ha-vimar/ha-vimar-intercom/pull/167)) ([#224](https://github.com/ha-vimar/ha-vimar-intercom/pull/224))
+
+### Other changes
+
+- tools/parse_rubrica.py explains when the file is not a directory database ([#228](https://github.com/ha-vimar/ha-vimar-intercom/pull/228))
+- New tests for SIP headers, SRTCP, away-mode uploads and directory import ([#228](https://github.com/ha-vimar/ha-vimar-intercom/pull/228))
+
 ## [1.0.26] - 2026-10-23
 
 ### Bug fixes

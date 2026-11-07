@@ -31,7 +31,10 @@ kits there are two separate, experimental community integrations, not part of th
 View Door password) and [italo1983/ha-vimar-viewdoor](https://github.com/italo1983/ha-vimar-viewdoor) (gate
 buttons, keys entered by hand). Both use the `vimar_viewdoor` domain, so install only one. On firmware
 V401R001B002 (reported on a K40955) the monitor does not expose the stream key locally, so the first one's
-self-service setup cannot start video there and the key has to come from the cloud, as in the second. Got it
+self-service setup cannot start video there and the key has to come from the cloud, as in the second.
+[xaer981/quii-helper](https://github.com/xaer981/quii-helper) is not a Home Assistant integration but a Python
+library for QUII/Qualvision devices, the same maker as these kits: it serves the video over RTSP and has been
+reported working on a K40955. Got it
 running, or not? Please open a [compatibility report](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 What changes from one plant to another: [Configuration](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.md#what-differs-between-plants).
 

@@ -31,7 +31,10 @@ kit ci sono due integrazioni separate e sperimentali della community, che non fa
 password di View Door) e [italo1983/ha-vimar-viewdoor](https://github.com/italo1983/ha-vimar-viewdoor) (pulsanti
 del cancello, chiavi da inserire a mano). Usano tutte e due il dominio `vimar_viewdoor`: installane una sola. Sul firmware
 V401R001B002 (segnalato su un K40955) il monitor non espone la chiave dello stream in locale: la configurazione
-automatica della prima lì non avvia il video e la chiave va presa dal cloud, come nella seconda. Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
+automatica della prima lì non avvia il video e la chiave va presa dal cloud, come nella seconda.
+[xaer981/quii-helper](https://github.com/xaer981/quii-helper) non è un'integrazione di Home Assistant ma una libreria
+Python per i dispositivi QUII/Qualvision, lo stesso produttore di questi kit: offre il video in RTSP ed è stata
+segnalata funzionante su un K40955. Funziona da te, o no? Apri una [segnalazione di compatibilità](https://github.com/ha-vimar/ha-vimar-intercom/issues/new?template=compatibility_report.yml).
 Cosa cambia da un impianto all'altro: [Configurazione](https://github.com/ha-vimar/ha-vimar-intercom/blob/main/docs/CONFIGURATION.it.md#cosa-cambia-da-impianto-a-impianto).
 
 ## Installazione

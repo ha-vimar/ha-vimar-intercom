@@ -18,7 +18,7 @@ import pytest
 from harness import peer as peer_mod
 from harness.peer import DOMAIN, Msg, answer_200, check_digest, is_, response
 from harness.rig import Rig, run, wait_until
-from harness.web import Request, load_views, make_hass, open_av
+from harness.web import Request, fake_ws, load_views, make_hass, open_av
 
 from custom_components.vimar_intercom import away_tts, frame_grabber, ring_log
 from custom_components.vimar_intercom import media_handler as media
@@ -65,8 +65,7 @@ def mic_ws(monkeypatch, rig, admin=False):
     views = load_views(monkeypatch)
     hass = make_hass(rig)
     view = views.VimarAudioWSView(hass)
-    ws = views.web.WebSocketResponse()
-    monkeypatch.setattr(views.web, "WebSocketResponse", lambda: ws)
+    ws = fake_ws(monkeypatch, views)
     return ws, asyncio.create_task(view.get(Request(admin=admin))), views, hass
 
 
@@ -430,16 +429,16 @@ def test_cloud_sordo_al_bye_squillo_e_risposta_mentre_il_bye_aspetta(monkeypatch
 
 
 def test_squillo_cloud_record_route_rispondi_keyframe_riaggancia_niente_scartato(monkeypatch):
-    """Cloud (proxy con Record-Route e routing rigido): squillo → INFO di keyframe già
-    nell'anteprima (dialogo early: foto e card non aspettano l'IDR della targa) → risposta
-    → INFO → BYE nostro. Il proxy non deve scartare niente (Route e Contact giusti)."""
+    """Cloud (proxy con Record-Route e routing rigido): squillo → nessun INFO di keyframe
+    nell'anteprima (dialogo early: la 40515 risponde sempre 491/501) → risposta → INFO →
+    BYE nostro. Il proxy non deve scartare niente (Route e Contact giusti)."""
     async def s():
         async with Rig(monkeypatch, "tls") as rig:
             await rig.register()
             rig.ring("ring-rr")
             await rig.peer.wait_for(is_(code=183))
-            early = await rig.peer.wait_for(is_("INFO", cid="ring-rr"))
-            assert "picture_fast_update" in early.body and not sip.in_call
+            await asyncio.sleep(0.3)
+            assert not rig.peer.got(is_("INFO", cid="ring-rr")) and not sip.in_call
             n = len(rig.peer.log)
             assert (await rig.hub.async_answer())[0]
             ok200 = await rig.peer.wait_for(is_(code=200, cid="ring-rr"))
@@ -699,8 +698,7 @@ def _voice_answer(monkeypatch, query, before=None, ring="ring-v", frames=10):
             await rig.register()
             views = load_views(monkeypatch)
             view = views.VimarAudioWSView(make_hass(rig))
-            ws = views.web.WebSocketResponse()
-            monkeypatch.setattr(views.web, "WebSocketResponse", lambda: ws)
+            ws = fake_ws(monkeypatch, views)
             wst = asyncio.create_task(view.get(Request(admin=False, query=query)))
             if before:
                 await before(rig, ws)

@@ -230,6 +230,7 @@ def _fresh_sip_state(monkeypatch):
     from custom_components.vimar_intercom.inventory import DeviceInventory
 
     monkeypatch.setattr(sip, "DEVICES", DeviceInventory())
+    monkeypatch.setattr(sip.SM, "_nonce_count", {})
     for name in ("reader", "writer", "_udp_sock", "_state_change_callback", "MY_IP"):
         monkeypatch.setattr(sip, name, getattr(sip, name))
     yield

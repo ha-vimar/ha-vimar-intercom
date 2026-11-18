@@ -473,7 +473,8 @@ def reset_state() -> None:
     is woken with _CANCEL instead of waiting for a queue nobody fills.
     """
     global _last_sweep
-    global _state_change_callback, reader, writer, _udp_sock
+    global _keyframe_lock, _state_change_callback, reader, writer, _udp_sock
+    _keyframe_lock = asyncio.Lock()  # never bound to the old event loop
     global granted_expiry, registered_at, last_register_code
     cancel_reconnect()
     # A refusal from the previous session would raise the repair again before
@@ -1490,7 +1491,24 @@ def _spawn(coro, failed: str = "Background SIP task failed") -> asyncio.Task:
     return t
 
 
+_keyframe_lock = asyncio.Lock()  # an INFO picture_fast_update waits for its answer
+
+
 async def send_keyframe_request():
+    """One picture_fast_update at a time: concurrent ones read the same dialog queue
+    and took each other's 407. A request made while one is in flight is dropped;
+    media_handler asks again a second later if the IDR does not come. In the ring
+    preview only on local UDP: the cloud 40515 answers every INFO there 491 or 501."""
+    if _keyframe_lock.locked():
+        _LOGGER.debug("Keyframe request dropped: one is in flight")
+        return
+    if not (in_call and call_state["call_id"]) and not (R.USE_LOCAL_UDP and early_media()):
+        return
+    async with _keyframe_lock:
+        await _send_keyframe_request()
+
+
+async def _send_keyframe_request():
     """Send SIP INFO picture_fast_update to get a video keyframe (SPS/PPS).
 
     L'INFO è in-dialog: request-URI = Contact del peer (55100/targa), non
@@ -1557,7 +1575,7 @@ async def send_keyframe_request():
     # alla scadenza — Home Assistant fermo 3 secondi, ogni 5 secondi, per tutta la
     # chiamata (misurato: 0,01 s su 3.11, 3,01 s su 3.12 e 3.13).
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + 3
+    deadline = loop.time() + 1.5
     foreign: list[str] = []
     try:
         while loop.time() < deadline:
@@ -1772,6 +1790,7 @@ async def handle_incoming_invite(raw):
             call_state["remote_sdp"] = remote
             await media.setup_media(remote, SDP._local_crypto_key, SDP._local_video_crypto_key,
                                     silence_limit=call_state["silence_limit"])
+            _spawn(send_keyframe_request(), "Keyframe request")
         return
 
     if cid == pending_incoming["cid"]:

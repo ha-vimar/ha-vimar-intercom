@@ -3,7 +3,7 @@ import asyncio
 import types
 
 import pytest
-from harness.web import Request, load_views, make_hass
+from harness.web import Request, fake_ws, load_views, make_hass
 
 from custom_components.vimar_intercom import runtime
 from custom_components.vimar_intercom import views as views_mod
@@ -50,8 +50,7 @@ def test_audio_ws_e_av_chiusi_a_chi_non_e_ammesso(monkeypatch, hub):
     monkeypatch.setattr(runtime, "AV_KEY", "placeholder-av-key")
     rig = types.SimpleNamespace(hub=hub)
     hass = make_hass(rig)
-    ws = views.web.WebSocketResponse()
-    monkeypatch.setattr(views.web, "WebSocketResponse", lambda: ws)
+    ws = fake_ws(monkeypatch, views)
 
     async def run():
         await views.VimarAudioWSView(hass).get(_req(uid="u2"))

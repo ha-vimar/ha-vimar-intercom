@@ -36,6 +36,8 @@ _SCALE = f"scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:-1:-1"
 # Answering a cloud ring closes the ring before the 200 OK goes out and sets
 # in_call only after it: the video looks gone for a moment while it goes on.
 _DEAD_GRACE = 1.0  # s without video before the decoder is stopped
+# A decoder restarted in a loop asked for a keyframe each time: one per this many s.
+_KEYFRAME_EVERY = 3.0
 _STANDBY_PNG = os.path.join(os.path.dirname(__file__), "standby.png")
 
 _standby: bytes | None = None
@@ -235,6 +237,8 @@ async def _pump(stdout) -> None:
 async def _decode(is_live, on_live) -> None:
     """Finché c'è video: client del fan-out di av_stream → ffmpeg → fotogrammi WxH in _live."""
     global _live
+    loop = asyncio.get_running_loop()
+    asked = None  # loop time of the last keyframe request
     try:
         while is_live():
             q = await av_stream.av_subscribe()
@@ -242,7 +246,9 @@ async def _decode(is_live, on_live) -> None:
                 await asyncio.sleep(1)
                 continue
             try:
-                on_live()  # IDR subito: si decodifica dal primo fotogramma, non al prossimo
+                if asked is None or loop.time() - asked >= _KEYFRAME_EVERY:
+                    asked = loop.time()
+                    on_live()  # IDR subito: si decodifica dal primo fotogramma, non al prossimo
                 # analyzeduration 1 µs: il TS di /av porta anche l'AAC, e senza un tetto
                 # ffmpeg sondava fino a probesize (~1,5 s in più al primo fotogramma live).
                 dec = await asyncio.create_subprocess_exec(

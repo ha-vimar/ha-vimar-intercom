@@ -149,13 +149,17 @@ def test_sequenza_che_torna_indietro_non_esce_fuori_ordine():
     assert len(calls) < 100            # niente giro di 65 000 sequenze
 
 
-def test_nuovo_ssrc_risincronizza():
+def test_nuovo_ssrc_risincronizza_dal_suo_idr():
+    """A new SSRC is a new stream: its P frames refer to an IDR we never had, and on
+    the card they smeared until the next IDR. Nothing goes out until its first IDR."""
     p, got, _ = _video_rx()
     for seq in range(40000, 40010):
         p.datagram_received(_pkt(seq, 1), p.remote_addr)
-    for seq in range(5, 10):
+    for seq in range(5, 8):
         p.datagram_received(_pkt(seq, 2), p.remote_addr)
-    assert got == list(range(40000, 40010)) + list(range(5, 10))
+    p.datagram_received(_pkt(8, 2, nal=0x65), p.remote_addr)
+    p.datagram_received(_pkt(9, 2), p.remote_addr)
+    assert got == list(range(40000, 40010)) + [8, 9]
 
 
 def test_buco_nella_sequenza_si_salta():
@@ -449,8 +453,8 @@ def test_copies_of_one_stray_do_not_move_the_stream():
 
 
 def test_a_packet_late_for_the_reorder_buffer_still_reaches_av(monkeypatch):
-    """/av's ffmpeg waits up to -max_delay (300 ms) for a late packet, longer
-    than our REORDER_WAIT: it still gets one we gave up on. The sinks do not.
+    """/av's ffmpeg waits up to -max_delay (300 ms) for a late packet, on its own
+    clock: it still gets one we gave up on. The sinks do not.
     One older than FAR_AHEAD (an old keyframe resent) ffmpeg drops anyway."""
     now = [100.0]
     monkeypatch.setattr(mh.time, "monotonic", lambda: now[0])
@@ -771,3 +775,92 @@ def test_a_duplicate_waiting_in_the_reorder_buffer_is_cached_once():
     p.datagram_received(_pkt(22), p.remote_addr)      # 21 late: 22 waits
     p.datagram_received(_pkt(22), p.remote_addr)      # a copy of 22, still waiting
     assert [_seq_of(r) for r in p._gop].count(22) == 1
+
+
+def test_a_packet_200_ms_late_on_the_cloud_is_waited_for_not_lost(monkeypatch):
+    """40515 over the cloud: a packet given up after 80 ms came later, and the P
+    frames were dropped until the next IDR (5 s once). A gap waits as long as ffmpeg."""
+    now = [100.0]
+    monkeypatch.setattr(mh.time, "monotonic", lambda: now[0])
+    p, got, _ = _video_rx()
+    p.datagram_received(_pkt(20), p.remote_addr)
+    for seq in range(22, 30):                       # 21 is late
+        now[0] += 0.025
+        p.datagram_received(_pkt(seq), p.remote_addr)
+    p.datagram_received(_pkt(21), p.remote_addr)    # 200 ms after the gap opened
+    assert not p._drop_until_idr
+    assert got == list(range(20, 30))
+
+
+def test_while_waiting_for_an_idr_the_keyframe_is_asked_again_every_second(monkeypatch):
+    """A loss within a second of the last request was never asked for again (2 s
+    frozen in the field). Every P dropped while waiting repeats it once the second is
+    up; the IDR ends it."""
+    p, out = _mk_proto()
+    p._sps_pps_sent = True
+    p._keyframe_at = 0.0
+    asked: list[int] = []
+    monkeypatch.setattr(mh, "request_keyframe", lambda: asked.append(1))
+    mono = [1000.0]
+    monkeypatch.setattr(mh.time, "monotonic", lambda: mono[0])
+    pf = bytes([0x41, 0xAA])
+    p._lost("seq 1 persa")
+    mono[0] += 0.5
+    p._emit_nal(pf)
+    assert asked == [1] and out == []
+    mono[0] += 0.5
+    p._emit_nal(pf)
+    assert asked == [1, 1] and out == []
+    p._emit_nal(bytes([0x65, 1]))                   # the IDR
+    mono[0] += 5
+    p._emit_nal(pf)
+    assert asked == [1, 1] and [n[0] & 0x1F for n in out] == [5, 1]
+
+
+def test_after_setup_media_no_p_frame_goes_out_before_an_idr_of_this_stream(monkeypatch):
+    """A PPS in band with the SPS cached from the call before let the P frames through
+    when the call's first IDR was lost: P frames on a reference the card never had,
+    smeared until the next IDR. Now only SPS/PPS until an IDR of this stream."""
+    async def s():
+        vp, _ = _media_rig(monkeypatch)
+        vp._ps_by_panel[""] = (_SPS, _PPS)          # from the call before
+        await mh.setup_media({"conn": "192.0.2.1", "audio": {"port": 4000}, "video": {"port": 4002}})
+        pf = bytes([0x41, 1])
+        for seq, nal in enumerate((_PPS, pf, pf, _IDR, pf), 1):
+            vp.datagram_received(struct.pack("!BBHII", 0x80, 96, seq, 0, 7) + nal, ("192.0.2.1", 4002))
+        sent = [vp._nal_queue.get_nowait()[5:] for _ in range(vp._nal_queue.qsize())]
+        assert sent == [_SPS, _PPS, _SPS, _PPS, _IDR, pf]
+        _stop_tasks()
+    asyncio.run(s())
+
+
+def test_a_packet_350_ms_late_is_given_up_on(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(mh.time, "monotonic", lambda: now[0])
+    p, got, _ = _video_rx()
+    p.datagram_received(_pkt(20), p.remote_addr)
+    for seq in range(22, 36):                       # 21 is late
+        now[0] += 0.025
+        p.datagram_received(_pkt(seq), p.remote_addr)
+    p.datagram_received(_pkt(21), p.remote_addr)    # 350 ms after the gap opened
+    assert p._drop_until_idr and got == [20]        # lost: P frames dropped until an IDR
+
+
+def test_losses_in_a_row_hold_a_packet_reorder_wait_once_not_once_each(monkeypatch):
+    """The wait restarted at each gap: ten real losses 60 ms apart held packets 1.7 s.
+    The clock is the oldest packet waiting, as in ffmpeg's -max_delay."""
+    now = [100.0]
+    monkeypatch.setattr(mh.time, "monotonic", lambda: now[0])
+    p, got, _ = _video_rx()
+    emitted_at = {}
+    p.frame_sink = lambda nal: emitted_at.setdefault(int.from_bytes(nal[1:3], "big"), now[0])
+    arrived = {}
+    lost = set(range(30, 130, 10))
+    for seq in range(20, 400):
+        now[0] += 0.006                             # ~170 packets/s, 1.9 Mbit/s
+        if seq not in lost:
+            arrived[seq] = now[0]
+            p.datagram_received(_pkt(seq, nal=0x65), p.remote_addr)
+    held = max(emitted_at[s] - arrived[s] for s in emitted_at)
+    assert held <= p.REORDER_WAIT + 0.007, held
+    assert len(emitted_at) == len(arrived)

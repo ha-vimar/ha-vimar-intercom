@@ -352,20 +352,20 @@ def test_a_truncated_stap_a_emits_only_the_whole_nals():
     assert nals == [SPS]
 
 
-def test_a_new_fu_a_start_drops_the_incomplete_one():
+def test_a_new_fu_a_start_after_an_unended_one_is_a_loss():
     vp, nals = _proto_with_sink()
     vp.pkt_count = vp._nal_count = 100  # past the first packets: quieter logging
     vp._depacketize(bytes([0x5C, 0x81]) + b"lost", 1)       # P start, never ended
     vp._depacketize(bytes([0x5C, 0x81]) + b"a", 5)          # new start
     vp._depacketize(bytes([0x5C, 0x41]) + b"b", 6)          # end
-    assert nals == [bytes([0x41]) + b"ab"]
+    assert nals == [] and vp._drop_until_idr  # the P after the hole waits for an IDR
 
 
 def test_a_fu_a_continuation_without_its_start_is_dropped():
     vp, nals = _proto_with_sink()
     vp.pkt_count = 100
     vp._depacketize(bytes([0x5C, 0x41]) + b"tail", 1)
-    assert nals == []
+    assert nals == [] and vp._drop_until_idr
 
 
 # ─── NAL order and the WebSocket queue ───────────────────────────────────────

@@ -870,6 +870,8 @@ class VimarIntercomHub(PlantMessages, RingMedia):
         """Pacchetto video perso (media_handler): keyframe subito, non al prossimo IDR."""
         # _spawn holds it until done (a new request used to overwrite the only
         # reference) and async_stop cancels it with the rest of _background.
+        if sip._keyframe_lock.locked():
+            return False  # media_handler keeps its retry timer and asks again
         self._spawn(sip.send_keyframe_request(), "Keyframe request")
 
     def _start_keyframe_loop(self):
@@ -883,7 +885,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
             self._keyframe_task = None
 
     async def _keyframe_loop(self):
-        """Keyframe burst at call start, and nothing after it.
+        """Keyframe burst at call start (up to 9 requests), and nothing after it.
 
         Il burst serve a ottenere SPS/PPS+IDR appena parte il video, e si ferma
         appena i pacchetti video arrivano.
@@ -902,7 +904,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
             # Immediate first request — no delay
             if sip.in_call:
                 await sip.send_keyframe_request()
-            # Rapid burst: 8 requests at 150ms intervals to grab the first IDR
+            # Rapid burst: up to 8 more requests at 150ms intervals to grab the first IDR
             for _ in range(8):
                 await asyncio.sleep(0.15)
                 if not sip.in_call:
@@ -1370,7 +1372,7 @@ class VimarIntercomHub(PlantMessages, RingMedia):
                 self.fire_ring_callbacks()
             self._was_ringing = True
             # IDR subito (INFO nel dialogo early del 183), non al giro della targa (~3 s):
-            # foto, clip e card partono prima.
+            # foto, clip e card partono prima. send_keyframe_request lo salta sul cloud.
             self._request_keyframe()
 
             if R.SNAPSHOT_DIR:

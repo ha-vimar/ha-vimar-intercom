@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from pathlib import Path
 
 from aiohttp import web
@@ -217,13 +218,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     resync: set[web.WebSocketResponse] = set()  # backlog dropped: no video until a keyframe
     # ?only=audio|video (views.py): the one media type a socket wants, b"\x01" or b"\x03".
     wants: dict[web.WebSocketResponse, bytes] = {}
+    # ?ts=1 (views.py): a {"type": "video_ts"} text before each IDR, so a client behind
+    # a buffering proxy (send_bytes returns at once, the backlog grows there) can tell
+    # it is late. Opt-in: an older client may not expect a new text message type.
+    ts_clients: set[web.WebSocketResponse] = set()
     hass.data[DOMAIN][entry.entry_id]["ws_senders"] = senders
     hass.data[DOMAIN][entry.entry_id]["ws_wants"] = wants
+    hass.data[DOMAIN][entry.entry_id]["ws_ts"] = ts_clients
+
+    def _nal_type(data: bytes) -> int:
+        """NAL type of a video message (b"\\x03" + start code + NAL), -1 for anything else."""
+        return data[5] & 0x1F if data[:1] == b"\x03" and len(data) > 5 else -1
 
     async def _drain(ws, queue: asyncio.Queue):
         try:
             while True:
-                await ws.send_bytes(await queue.get())
+                msg = await queue.get()
+                await (ws.send_str(msg) if isinstance(msg, str) else ws.send_bytes(msg))
         except Exception:  # noqa: BLE001 - a failing send drops the client, as before
             audio_ws_clients.discard(ws)
 
@@ -247,9 +258,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     queue.get_nowait()
                 resync.add(ws)
             if ws in resync and data[:1] == b"\x03":
-                if data[5] & 0x1F != 7:
+                if _nal_type(data) != 7:
                     continue
                 resync.discard(ws)
+            # Live IDRs only: a replayed one is old, and would set the card's baseline early.
+            # Monotonic: the card compares intervals, a clock step must not look like lag.
+            if (only is None and ws in ts_clients and _nal_type(data) == 5
+                    and queue.qsize() < WS_CLIENT_QUEUE - 1):
+                queue.put_nowait(json.dumps({"type": "video_ts", "t": int(time.monotonic() * 1000)}))
             queue.put_nowait(data)
 
     async def _broadcast(data: dict):

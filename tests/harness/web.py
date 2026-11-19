@@ -209,7 +209,8 @@ async def start(rig):
 
     async def state(r):  # come i sensori: stato, e foto/clip dell'ultimo squillo (attributi)
         return web.json_response({"status": rig.state_override or hub.status, "last_ring": hub.ring_media(),
-                                  "last_ring_time": (t := hub.stats.get("last_ring_time")) and t.isoformat()})
+                                  "last_ring_time": "unavailable" if rig.state_override == "unavailable"  # HA reconnecting: every entity
+                                  else (t := hub.stats.get("last_ring_time")) and t.isoformat()})
 
     async def ring_photo(r):
         return await photo.get(r, r.match_info["name"])

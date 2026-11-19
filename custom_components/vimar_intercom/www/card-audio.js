@@ -66,6 +66,11 @@ const CardAudio = (Base) => class extends Base {
       mic = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
       });
+      if (this._popup && !this._pop.open) {  // popup closed during the mic prompt: no answer, no call
+        mic.getTracks().forEach((t) => t.stop());
+        ctx.close();
+        return;
+      }
       if (this._state === "ringing") {
         this._mine = true;
         await this._call("answer", this._talk);

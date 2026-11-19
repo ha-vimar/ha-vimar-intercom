@@ -1546,6 +1546,96 @@ def test_layout_popup_opens_when_card_starts_in_call(monkeypatch, engine):  # no
 
 
 @pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+@pytest.mark.parametrize("answered", [False, True])
+def test_layout_popup_x_during_a_state_flap_stays_closed(monkeypatch, engine, answered):  # noqa: F811
+    """The notification opens the app on #citofono with the popup already up. If X lands while the
+    status is momentarily not live (the iOS app reconnecting its WebSocket), the popup closed but
+    came back as soon as the same call showed up live again: "X does not close it"."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.ring("ring-n")
+            live = "in_call" if answered else None
+            rig.state_override = live
+            async with Card(rig, engine, layout="popup") as c:
+                await c.open("citofono")
+                await c.until("info().pop")
+                rig.state_override = "unavailable"
+                await asyncio.sleep(0.5)
+                await c.tap("x")
+                await c.until("!info().pop")
+                rig.state_override = live
+                await asyncio.sleep(1)
+                assert not (await c.info())["pop"] and not rig.services, rig.services
+                assert not (await c.T())["errors"]
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_layout_popup_x_hangs_up_a_call_answered_by_the_notification(monkeypatch, engine):  # noqa: F811
+    """Notification "Answer": the automation answered, the app opens on #citofono and the audio
+    attaches by itself. X must hang up: before, the popup closed but the call stayed up with the
+    audio still going both ways (the call was not "the card's")."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.answer(media_on=True)
+            async with Card(rig, engine, layout="popup", webcodecs=False) as c:
+                await c.tap("view")  # a live call, then a fresh page: the card did not answer it
+                await c.until("info().pill === 'In chiamata'")
+                await c.page.goto("about:blank")  # a real reload: a hash-only goto keeps the same card
+                await c.open(hash="citofono")
+                await c.until("info().pop && info().audio === 'on'")
+                rig.services.clear()
+                await c.tap("x")
+                await c.until(IDLE)
+                assert "vimar_intercom.hangup" in rig.services, rig.services
+                assert (await c.info())["audio"] == "off" and not (await c.T())["errors"]
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_layout_popup_x_during_the_mic_prompt_does_not_answer(monkeypatch, engine):  # noqa: F811
+    """"Answer" at the ring, then X while the mic permission is still up: once granted, the card
+    neither answers nor hangs up, and no audio opens with the popup closed."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            async with Card(rig, engine, layout="popup", webcodecs=False) as c:
+                rig.ring()
+                await c.until("info().pop && info().talk === 'Rispondi'")
+                await c.page.evaluate("T.gumDelay = 1000")
+                await c.tap("talk")
+                await c.tap("x")
+                await c.until("!info().pop")
+                await asyncio.sleep(1.5)
+                assert not rig.services, rig.services
+                assert (await c.info())["audio"] == "off" and not (await c.T())["errors"]
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
+def test_layout_popup_closed_at_idle_still_opens_for_that_ring_answered(monkeypatch, engine):  # noqa: F811
+    """A popup opened and closed by hand at idle dismisses nothing: the notification "Answer" for
+    the last ring (idle -> in_call, same last_ring) still opens it."""
+    async def s():
+        async with Rig(monkeypatch, http=True) as rig:
+            await rig.register()
+            rig.ring("ring-n")
+            rig.state_override = "idle"
+            async with Card(rig, engine, layout="popup", webcodecs=False) as c:
+                await c.until(IDLE)
+                await c.page.evaluate("card._openPop()")
+                await c.until("info().pop")
+                await c.tap("x")
+                await c.until("!info().pop")
+                await asyncio.sleep(1)  # past the close guard (CLOSE_GUARD_MS)
+                rig.state_override = "in_call"
+                await c.until("info().pop")
+    run(s())
+
+
+@pytest.mark.parametrize("engine", ["chromium"], indirect=True)
 def test_shortcut_names_and_icons_cannot_inject_markup(monkeypatch, engine):  # noqa: F811
     """A button entity's friendly_name and icon go into the shortcut tile: a name with markup or
     a quote-breaking one must stay text, and a malformed icon falls back to the default."""

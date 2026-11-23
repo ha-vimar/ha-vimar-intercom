@@ -260,6 +260,7 @@ class VimarIntercomCard extends CardPage(CardAudio(HTMLElement)) {
     }
     if (state !== "calling") this._cancelled = false;
     const lr = hass.states[this._ent("last_ring")], last = lr?.state, a = lr?.attributes || {};
+    if (Date.parse(last)) this._ringSeen = last;  // the last real ring, kept while HA reconnects
     this._last.textContent = isNaN(Date.parse(last)) ? "" : t("last_ring", { when: when(last) });
     // La lista si ricarica anche quando arrivano la foto (subito, poi quella migliore) e il clip.
     const key = `${last}|${this._live}|${a.foto_url}|${a.clip_url}`;
@@ -321,6 +322,7 @@ class VimarIntercomCard extends CardPage(CardAudio(HTMLElement)) {
     // durante ringing/calling — altrimenti un blocco vero (iOS) sparirebbe e riproverebbe
     // ad ogni aggiornamento di `hass`, anche senza alcun cambio di stato.
     if (!live) { this._audioBlocked = false; this._muted = false; }
+    if (state === "idle") this._popLive = false;  // call over: a later X dismisses nothing
     if (LIVE.includes(was) && !live) this._mine = false;  // chiamata finita: non più "della card"  // il muto vale una sessione dal vivo sola
 
     // `listen_on_ring`: si sente il visitatore già a video (ringing/calling/in_call in
@@ -341,9 +343,9 @@ class VimarIntercomCard extends CardPage(CardAudio(HTMLElement)) {
     if (!live) this._liveFrom = null;
     else if (!this._liveFrom) this._liveFrom = state;
     if (!live) this._popTried = false;
-    else if (this._pop.open) this._popTried = true;
+    else if (this._pop.open) this._popTried = this._popLive = true;
     else if (this._popup && !this._popTried && this.isConnected && !this._preview
-        && last !== dismissedRing
+        && (this._ringSeen ?? last) !== dismissedRing  // last_ring may come back after the status
         && (this._liveFrom !== "calling" || (this._cfg.anchor && location.hash === `#${this._cfg.anchor}`))) {
       this._popTried = true;
       this._openPop();
@@ -412,19 +414,25 @@ class VimarIntercomCard extends CardPage(CardAudio(HTMLElement)) {
     this._pop.onclick = (e) => e.target === this._pop && this._pop.close();
     this._pop.onclose = () => {
       this._closedAt = performance.now();
-      if (this.isConnected && LIVE.includes(this._state)) {  // not when the card leaves the page
-        const ring = this._hass.states[this._ent("last_ring")]?.state;
-        dismissedRing = Date.parse(ring) ? ring : null;  // "unknown": no ring yet
-      }
+      // X on a popup that showed a live call dismisses its ring, even if the status flaps right now
+      // (the app reconnecting): the same call must not reopen it. Not when the card leaves the page.
+      if (this.isConnected && this._popLive && this._ringSeen) dismissedRing = this._ringSeen;
+      this._popLive = false;
       lockPageScroll(false);
       this._card.classList.remove("pop");
       this._root.insertBefore(this._card, this._pop);
       this._armCard();
+      // Audio open (or opening) = the user is in this call, whoever answered it (the notification
+      // "Answer"): closing hangs up, or the call stays up with nobody on it. Also during a status flap.
+      const mine = this._mine || !!this._ws || !!this._starting, answered = this._mine;
       this._stopAudio();
       this._stopListen();
-      const mine = this._mine;
       this._mine = false;
-      if (mine && ["calling", "in_call"].includes(this._state)) this._call("hangup", this._hangup).catch(() => {});
+      // At "ringing" only after our own "Answer" (status not updated yet): "Decline" already did its job.
+      if (mine && this._state !== "idle" && (this._state !== "ringing" || answered)) this._call("hangup", this._hangup).catch(() => {});
+      // Drop the notification anchor: it must not re-attach the audio when the status comes back.
+      if (this.isConnected && this._cfg.anchor && location.hash === `#${this._cfg.anchor}`)
+        history.replaceState(history.state, "", location.pathname + location.search);
       this._render();
     };
     this._err = $(".err");

@@ -6,6 +6,28 @@ Italian and are kept as they were written.
 
 ## [Unreleased]
 
+## [1.0.29] - 2026-11-23
+
+### Bug fixes
+
+- Live video freezes far less over the cloud: a video packet up to 300 ms late is no longer treated as lost, and keyframe requests no longer collide ([#181](https://github.com/ha-vimar/ha-vimar-intercom/pull/181))
+- No more smeared frames after the panel restarts its video stream or at the start of a call ([#181](https://github.com/ha-vimar/ha-vimar-intercom/pull/181))
+- A phone that drops off without closing the connection is disconnected from the live audio and video in about 45 s ([#181](https://github.com/ha-vimar/ha-vimar-intercom/pull/181))
+- The card's live video no longer shows smeared frames when a reference frame is lost on the way ([#182](https://github.com/ha-vimar/ha-vimar-intercom/pull/182))
+- The card's live video plays at a steady pace, and reconnects by itself when it stalls for 8 s or falls more than 1.5 s behind (for example behind a tunnel on mobile data) ([#182](https://github.com/ha-vimar/ha-vimar-intercom/pull/182))
+- On phones and tablets the card closes video and microphone when the app goes to the background and reopens the video when you come back ([#182](https://github.com/ha-vimar/ha-vimar-intercom/pull/182))
+- The card's live video no longer starts one keyframe late when the browser's video decoder is slow to warm up ([#130](https://github.com/ha-vimar/ha-vimar-intercom/pull/130)) ([#182](https://github.com/ha-vimar/ha-vimar-intercom/pull/182))
+- Closing the card popup with X after answering from the ring notification now hangs up the call, and the popup no longer reopens by itself while the app reconnects ([#233](https://github.com/ha-vimar/ha-vimar-intercom/pull/233))
+
+### Documentation
+
+- The compatibility section also links quii-helper, a Python library reported working with View Door kits ([#232](https://github.com/ha-vimar/ha-vimar-intercom/pull/232))
+
+### Other changes
+
+- ci: bump home-assistant/actions/hassfest from cd6f3635a740c84d8a14f6121a90068b8ece6bf6 to 86d4564712fa02543c808e3a693dd04f9d3f8361 ([#226](https://github.com/ha-vimar/ha-vimar-intercom/pull/226))
+- chore: bump the dev-tools group with 3 updates ([#227](https://github.com/ha-vimar/ha-vimar-intercom/pull/227))
+
 ## [1.0.28] - 2026-11-05
 
 The same changes as 1.0.27, released again: the `v1.0.27` tag points to the commit before the version bump, so its release asset could not be built.

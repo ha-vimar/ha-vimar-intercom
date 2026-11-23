@@ -641,3 +641,23 @@ def test_the_feeder_stops_quietly_on_a_broken_pipe():
     stdin = _Stdin(broken=True)
     asyncio.run(av_passive._feed(q, stdin))
     assert stdin.closed
+
+
+def test_a_decoder_restarting_in_a_loop_asks_for_one_keyframe_not_one_each_time(monkeypatch):
+    """A passive decoder restarting in a loop asked for a keyframe each time (15 INFO
+    in 3 s in the field). One per _KEYFRAME_EVERY."""
+    procs = [_Proc() for _ in range(5)]             # each exits without a frame
+    _spawner(monkeypatch, *procs)
+
+    async def av_subscribe():
+        return asyncio.Queue()
+
+    async def av_unsubscribe(queue):
+        pass
+
+    monkeypatch.setattr(av_stream, "av_subscribe", av_subscribe)
+    monkeypatch.setattr(av_stream, "av_unsubscribe", av_unsubscribe)
+    live = iter([True] * 5)
+    keyframes = []
+    asyncio.run(av_passive._decode(lambda: next(live, False), lambda: keyframes.append(1)))
+    assert all(p.killed for p in procs) and keyframes == [1]

@@ -124,6 +124,13 @@ def load_views(monkeypatch, web=WEB):
     return mod
 
 
+def fake_ws(monkeypatch, views, ws=None):
+    """The socket the view's next /audio_ws request gets (a new fake one by default)."""
+    ws = views.web.WebSocketResponse() if ws is None else ws
+    monkeypatch.setattr(views.web, "WebSocketResponse", lambda **_: ws)
+    return ws
+
+
 def make_hass(rig) -> types.SimpleNamespace:
     """hass.data come lo prepara async_setup_entry, con i WS audio collegati al media."""
     clients: set = set()
@@ -139,7 +146,7 @@ def make_hass(rig) -> types.SimpleNamespace:
     media.ws_send_bytes = ws_send_bytes
     rig.hub._has_ws_clients = lambda: len(clients) > 0
     return types.SimpleNamespace(
-        data={C.DOMAIN: {"e1": {"hub": rig.hub, "audio_ws_clients": clients}}},
+        data={C.DOMAIN: {"e1": {"hub": rig.hub, "audio_ws_clients": clients, "ws_ts": set()}}},
         async_create_background_task=lambda coro, name: asyncio.create_task(coro),
         async_add_executor_job=lambda f, *a: asyncio.get_running_loop().run_in_executor(None, f, *a))
 

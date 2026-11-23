@@ -86,7 +86,7 @@ def test_a_reinvite_that_drops_video_gets_a_new_answer(monkeypatch):
                 "From: <sip:55001@x>;tag=abc\r\nTo: <sip:60902@x>;tag=t\r\nCall-ID: c1\r\n"
                 "CSeq: 5 INVITE\r\nContent-Type: application/sdp\r\n\r\n" + AUDIO_ONLY_OFFER)
     asyncio.run(sip.handle_incoming_invite(reinvite))
-    assert len(sent) == 1 and sent[0].startswith("SIP/2.0 200 OK")
+    assert len(sent) == 2 and sent[0].startswith("SIP/2.0 200 OK") and sent[1].startswith("INFO ")  # + keyframe request
     assert "m=audio" in sent[0] and "m=video" not in sent[0]
     assert "m=video" not in sip.call_state["local_sdp"]
 

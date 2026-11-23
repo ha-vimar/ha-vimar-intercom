@@ -78,15 +78,16 @@ def test_the_stop_sets_the_stopping_flag(monkeypatch):
     assert av_stream._av_stopping is True
 
 
-def test_a_fu_a_fragment_without_start_is_debug(caplog):
-
+def test_a_broken_fu_a_counts_as_a_loss():
     p = mh.RTPVideoProtocol.__new__(mh.RTPVideoProtocol)
     p._fua_buf = bytearray()
     p._fua_started = False
     p._fua_expected_seq = None
     p.pkt_count = 1
-    payload = bytes([0x7C, 0x05]) + b"\x00" * 10  # FU-A, middle fragment of an IDR
-    with caplog.at_level(logging.DEBUG, logger=mh.__name__):
-        p._depacketize(payload, 7)
-    rec = [r for r in caplog.records if "without start" in r.getMessage()]
-    assert rec and rec[0].levelno == logging.DEBUG
+    losses = []
+    p._lost = losses.append
+    p._depacketize(bytes([0x7C, 0x05]) + b"\x00" * 10, 7)  # middle fragment, start lost
+    assert len(losses) == 1
+    p._depacketize(bytes([0x7C, 0x85]) + b"\x00" * 10, 8)  # IDR start ...
+    p._depacketize(bytes([0x7C, 0x85]) + b"\x00" * 10, 9)  # ... then a new start: end lost
+    assert len(losses) == 2
